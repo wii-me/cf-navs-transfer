@@ -17,6 +17,7 @@ import installRoutes from './routes/install'
 import { iconRoutes } from './routes/icon'
 import publicRoutes from './routes/public'
 import settingsRoutes from './routes/settings'
+import { transfersRoutes } from './routes/transfers'
 import type { HonoEnv } from './types'
 
 const app = new Hono<HonoEnv>()
@@ -70,6 +71,10 @@ app.route('/api/settings', settingsRoutes)
 
 app.use('/api/import', authRequired)
 app.route('/api', dataRoutes)
+
+app.use('/api/transfers', authRequired)
+app.use('/api/transfers/*', authRequired)
+app.route('/api/transfers', transfersRoutes)
 
 app.onError((err, c) => {
   console.error(err)
