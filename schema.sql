@@ -83,3 +83,19 @@ INSERT OR IGNORE INTO settings (key, value) VALUES
   ('content_layout', '{"max_width":1200,"max_width_unit":"px","margin_x":0,"margin_top":0,"margin_bottom":0}'),
   ('navigation', '{"position":"left","always_expanded":false,"top_layout":"scroll"}'),
   ('footer_html', '""');
+
+-- 跨设备传输与便笺记录表
+CREATE TABLE IF NOT EXISTS transfer_notes (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    content TEXT,
+    file_key TEXT,
+    file_name TEXT,
+    file_size INTEGER,
+    mime_type TEXT,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_transfer_notes_created_at ON transfer_notes(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_transfer_notes_expires_at ON transfer_notes(expires_at);

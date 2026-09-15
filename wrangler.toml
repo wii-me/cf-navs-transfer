@@ -37,3 +37,7 @@ database_name = "cf-navs-db"
 binding = "SESSION"
 # Cloudflare Git deployments automatically provision the KV namespace when the
 # id is omitted. Local CLI deployments use wrangler.local.toml.
+
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "cf-navs-storage"

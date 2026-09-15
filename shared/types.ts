@@ -467,3 +467,34 @@ export interface BatchDeleteCategoriesResp {
 
 // PUT /api/settings  —— 部分更新，传哪些 key 改哪些
 export type SettingsUpdateReq = Partial<Settings>
+
+// ========== 便笺与文件传输助手 ==========
+
+export type TransferType = 'text' | 'image' | 'file'
+
+export interface TransferNote {
+  id: string
+  type: TransferType
+  content: string | null
+  file_key: string | null
+  file_name: string | null
+  file_size: number | null
+  mime_type: string | null
+  created_at: number
+  expires_at: number | null
+}
+
+export interface TransferTextReq {
+  content: string
+  ttlDays?: number
+}
+
+export interface TransferNotesResp {
+  items: TransferNote[]
+  hasMore: boolean
+}
+
+export interface TransferClearResp {
+  success: boolean
+  deletedCount: number
+}

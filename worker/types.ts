@@ -5,6 +5,7 @@ export interface Env {
   DB: D1Database
   SESSION: KVNamespace
   ASSETS: Fetcher
+  STORAGE?: R2Bucket
   // vars / secrets
   INIT_ADMIN_USER: string
   INIT_ADMIN_PASSWORD: string
