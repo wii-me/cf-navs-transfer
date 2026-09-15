@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import type { ThemeMode } from '../../shared/types'
+  import { transferStore } from '../lib/stores/transferStore'
 
   type AsyncVoid<T = void> = T | Promise<T>
   const BACK_TO_TOP_VISIBILITY_OFFSET = 320
@@ -53,6 +54,11 @@
   function handleSwitchToAdmin() {
     closeMenu()
     void onSwitchToAdmin?.()
+  }
+
+  function handleOpenTransfer() {
+    closeMenu()
+    transferStore.openDrawer()
   }
 
   function handleLogout() {
@@ -135,6 +141,19 @@
       {themeToggleIcon}
     </button>
     {#if isAuthenticated}
+      <button
+        type="button"
+        class="icon-button transfer-button"
+        data-testid="home-transfer-button"
+        on:click={handleOpenTransfer}
+        title="便笺传输助手 (Ctrl+J)"
+        aria-label="便笺传输助手"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m22 2-7 20-4-9-9-4Z" />
+          <path d="M22 2 11 13" />
+        </svg>
+      </button>
       <button
         type="button"
         class="icon-button"
@@ -266,6 +285,16 @@
     fill: none;
     stroke: currentColor;
     stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .transfer-button svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
     stroke-linecap: round;
     stroke-linejoin: round;
   }

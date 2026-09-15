@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { transferStore } from '../../lib/stores/transferStore'
   type AsyncVoid<T = void> = T | Promise<T>
 
   export let isAuthenticated = false
@@ -43,6 +44,19 @@
       </button>
     {/if}
     {#if isAuthenticated}
+      <button
+        type="button"
+        class="icon-button"
+        data-testid="admin-transfer-button"
+        on:click={() => transferStore.openDrawer()}
+        title="便笺传输助手 (Ctrl+J)"
+        aria-label="便笺传输助手"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="1.2em" height="1.2em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m22 2-7 20-4-9-9-4Z"/>
+          <path d="M22 2 11 13"/>
+        </svg>
+      </button>
       <button
         type="button"
         class="icon-button"

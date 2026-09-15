@@ -12,6 +12,8 @@
   } from '../shared/types'
   import ConfirmDialog from './components/ConfirmDialog.svelte'
   import Toast from './components/Toast.svelte'
+  import TransferDrawer from './components/TransferDrawer.svelte'
+  import { transferStore } from './lib/stores/transferStore'
   import Home from './views/Home.svelte'
   import Install from './views/Install.svelte'
   import { api, getErrorMessage, isUnauthorizedError } from './lib/api'
@@ -972,9 +974,25 @@
 
     void initializeApp()
     scheduleBookmarkIconCachePrune()
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', handleGlobalKeyDown)
+    }
   })
 
+  function handleGlobalKeyDown(event: KeyboardEvent) {
+    if ((event.ctrlKey || event.metaKey) && (event.key === 'j' || event.key === 'J')) {
+      if (isLoggedIn()) {
+        event.preventDefault()
+        transferStore.toggleDrawer()
+      }
+    }
+  }
+
   onDestroy(() => {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('keydown', handleGlobalKeyDown)
+    }
     if (mediaQuery && handleSystemThemeChange) {
       mediaQuery.removeEventListener('change', handleSystemThemeChange)
     }
@@ -1208,5 +1226,7 @@
       onConfirm={handleConfirmDialogConfirm}
       onCancel={handleConfirmDialogCancel}
     />
+
+    <TransferDrawer />
   </div>
 {/if}
