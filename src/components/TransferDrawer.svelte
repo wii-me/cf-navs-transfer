@@ -19,15 +19,44 @@
   $: currentToken = $authStore.session?.token || getAuthToken() || ''
 
   function getFileUrl(id: string, isDownload = false): string {
+    const token = currentToken || $authStore.session?.token || getAuthToken() || ''
     const params = new URLSearchParams()
-    if (currentToken) {
-      params.set('token', currentToken)
+    if (token) {
+      params.set('token', token)
     }
     if (isDownload) {
       params.set('download', '1')
     }
     const qs = params.toString()
     return `/api/transfers/file/${id}${qs ? `?${qs}` : ''}`
+  }
+
+  async function handleDownload(event: MouseEvent, id: string, filename: string) {
+    event.preventDefault()
+    const token = currentToken || $authStore.session?.token || getAuthToken() || ''
+    const url = getFileUrl(id, true)
+    try {
+      toastStore.addToast(`正在下载 ${filename}...`, 'info')
+      const response = await fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.status}`)
+      }
+      const blob = await response.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = blobUrl
+      a.download = filename || 'download'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 2000)
+      toastStore.addToast('下载完成', 'success')
+    } catch (err) {
+      console.error('Download error:', err)
+      window.open(url, '_blank')
+    }
   }
 
   function handleImageError(id: string) {
@@ -351,7 +380,7 @@
                       <img
                         src={getFileUrl(note.id)}
                         alt={note.file_name || '图片'}
-                        loading="lazy"
+                        loading="eager"
                         on:error={() => handleImageError(note.id)}
                       />
                     </button>
@@ -368,6 +397,7 @@
                     class="btn-copy"
                     target="_blank"
                     rel="noopener noreferrer"
+                    on:click={(e) => handleDownload(e, note.id, note.file_name || 'image.png')}
                   >
                     <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -393,6 +423,7 @@
                     class="btn-copy"
                     target="_blank"
                     rel="noopener noreferrer"
+                    on:click={(e) => handleDownload(e, note.id, note.file_name || 'file')}
                   >
                     <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -568,22 +599,29 @@
     width: 2rem;
     height: 2rem;
     border-radius: 0.5rem;
-    border: 1px solid rgba(148, 163, 184, 0.25);
+    border: 1px solid rgba(148, 163, 184, 0.35);
     background: transparent;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: inherit;
+    color: #475569 !important;
     transition: background var(--transition-base), color var(--transition-base);
   }
 
   .btn-icon:hover {
     background: rgba(0, 0, 0, 0.05);
+    color: #0f172a !important;
+  }
+
+  :global([data-theme='dark']) .btn-icon {
+    border-color: rgba(148, 163, 184, 0.25);
+    color: #cbd5e1 !important;
   }
 
   :global([data-theme='dark']) .btn-icon:hover {
     background: rgba(255, 255, 255, 0.1);
+    color: #f8fafc !important;
   }
 
   .close-btn {
@@ -847,12 +885,12 @@
 
   .input-container textarea {
     width: 100%;
-    border: 1px solid rgba(148, 163, 184, 0.35);
+    border: 1px solid rgba(148, 163, 184, 0.4);
     border-radius: 0.5rem;
     padding: 0.6rem 0.75rem;
-    font-size: 0.9rem;
-    background: #ffffff;
-    color: #0f172a;
+    font-size: 0.95rem;
+    background: #ffffff !important;
+    color: #0f172a !important;
     resize: none;
     outline: none;
     box-sizing: border-box;
@@ -862,17 +900,18 @@
   }
 
   .input-container textarea::placeholder {
-    color: #94a3b8;
+    color: #94a3b8 !important;
+    opacity: 1;
   }
 
   :global([data-theme='dark']) .input-container textarea {
-    background: #1e293b;
-    color: #f8fafc;
-    border-color: rgba(148, 163, 184, 0.25);
+    background: #1e293b !important;
+    color: #f8fafc !important;
+    border-color: rgba(148, 163, 184, 0.3);
   }
 
   :global([data-theme='dark']) .input-container textarea::placeholder {
-    color: #64748b;
+    color: #64748b !important;
   }
 
   .input-container textarea:focus {
@@ -898,39 +937,41 @@
   }
 
   .btn-tool {
-    border: 1px solid rgba(148, 163, 184, 0.35);
-    background: #ffffff;
-    padding: 0.3rem 0.6rem;
+    border: 1px solid rgba(148, 163, 184, 0.4);
+    background: #ffffff !important;
+    padding: 0.35rem 0.65rem;
     border-radius: 0.375rem;
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     cursor: pointer;
-    color: #334155;
+    color: #0f172a !important;
+    font-weight: 500;
     transition: background var(--transition-base), color var(--transition-base), border-color var(--transition-base);
   }
 
   .btn-tool:hover:not(:disabled) {
-    background: #f1f5f9;
-    color: #0f172a;
+    background: #f1f5f9 !important;
+    color: #0f172a !important;
   }
 
   :global([data-theme='dark']) .btn-tool {
-    background: #1e293b;
-    border-color: rgba(148, 163, 184, 0.25);
-    color: #cbd5e1;
+    background: #1e293b !important;
+    border-color: rgba(148, 163, 184, 0.3);
+    color: #f8fafc !important;
   }
 
   :global([data-theme='dark']) .btn-tool:hover:not(:disabled) {
-    background: #334155;
-    color: #f8fafc;
+    background: #334155 !important;
+    color: #ffffff !important;
   }
 
   .select-ttl {
-    border: 1px solid rgba(148, 163, 184, 0.35);
-    background: #ffffff;
-    padding: 0.3rem 0.5rem;
+    border: 1px solid rgba(148, 163, 184, 0.4);
+    background: #ffffff !important;
+    padding: 0.35rem 0.6rem;
     border-radius: 0.375rem;
-    font-size: 0.8rem;
-    color: #334155;
+    font-size: 0.85rem;
+    color: #0f172a !important;
+    font-weight: 500;
     outline: none;
     transition: border-color var(--transition-base);
   }
@@ -940,9 +981,19 @@
   }
 
   :global([data-theme='dark']) .select-ttl {
+    background: #1e293b !important;
+    border-color: rgba(148, 163, 184, 0.3);
+    color: #f8fafc !important;
+  }
+
+  .select-ttl option {
+    background: #ffffff;
+    color: #0f172a;
+  }
+
+  :global([data-theme='dark']) .select-ttl option {
     background: #1e293b;
-    border-color: rgba(148, 163, 184, 0.25);
-    color: #cbd5e1;
+    color: #f8fafc;
   }
 
   .btn-send {

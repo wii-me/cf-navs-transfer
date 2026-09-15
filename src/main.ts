@@ -15,8 +15,25 @@ const app = mount(App, {
   target: document.getElementById('app')!,
 })
 
-// PWA：仅在生产构建中注册 Service Worker（开发模式下避免缓存干扰热更新）
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+// PWA：本地与局域网测试时不保留 Service Worker 缓存，避免干扰；公网生产环境下正常注册
+const isLocalDevHost =
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1' ||
+    window.location.hostname.startsWith('192.168.') ||
+    window.location.hostname.startsWith('10.') ||
+    window.location.hostname === '[::1]')
+
+if (isLocalDevHost && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+  void navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (const r of registrations) void r.unregister()
+  })
+  if (typeof caches !== 'undefined') {
+    void caches.keys().then((keys) => {
+      for (const k of keys) void caches.delete(k)
+    })
+  }
+} else if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   // shell-updated 消息在后台重校验完成时发出，可能早于 window load。
   // 监听同步挂上，别等到 load 里，否则会漏掉这条消息、提示不弹。
   // 导航请求改成缓存优先后，部署新版本时用户这一次看到的仍是旧版；
