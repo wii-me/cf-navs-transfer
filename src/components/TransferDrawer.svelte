@@ -542,7 +542,7 @@
     align-items: center;
     justify-content: center;
     color: inherit;
-    transition: all 0.15s ease;
+    transition: background var(--transition-base), color var(--transition-base);
   }
 
   .btn-icon:hover {
@@ -619,7 +619,7 @@
     border-radius: 0.75rem;
     padding: 0.75rem;
     box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
-    transition: border-color 0.15s ease;
+    transition: border-color var(--transition-base);
   }
 
   :global([data-theme='dark']) .note-card {
@@ -862,7 +862,7 @@
     font-size: 0.85rem;
     font-weight: 500;
     cursor: pointer;
-    transition: background 0.15s ease;
+    transition: background var(--transition-base);
   }
 
   .btn-send:hover:not(:disabled) {
