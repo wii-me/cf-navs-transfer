@@ -55,6 +55,10 @@
 
 ### 跨设备便笺与文件传输助手 (Transfer Notes)
 
+<p align="center">
+  <img src="docs/screenshots/cf-navs-transfer-assistant.png" alt="CF-Navs Transfer 便笺传输助手界面" width="360">
+</p>
+
 - **轻量便笺 & 随手记**：随时记录文字、链接、备忘指令或代码片段，支持多端即时查阅。
 - **剪贴板即贴即传 (Ctrl+V)**：在传输窗口内直接按下快捷键 `Ctrl+V`（或移动端粘贴），自动识别纯文本或将剪贴板中的截屏图片直接上传发送，无需手动另存为文件。
 - **大文件极速传输 (R2 存储)**：原生深度集成 Cloudflare R2 对象存储，支持常见文档、压缩包、媒体及安装包等任意格式拖拽或点击上传，单文件最高支持 **50 MB**，完全不消耗 D1 数据库或 KV 的行数与存储配额。
@@ -73,6 +77,11 @@
 - **浏览器书签同步**：在后台“设置 → 站点设置”开启“浏览器书签同步”后，会自动创建“浏览器新增收藏”分类。安装 [`browser-extension`](browser-extension/) 中的 Chrome/Edge 扩展并登录后，浏览器之后新增的网页书签会统一同步到该分类，并按默认图标策略保存 `https://favicon.im/<hostname>?larger=true` 图标候选。扩展不按浏览器收藏夹文件夹创建导航分类，只做“浏览器 → 导航页”单向新增，不删除或反向覆盖导航页已有书签；整理时可直接在首页排序模式中拖到其他分类。
 
 ## 界面预览
+
+<p align="center">
+  <strong>便笺与文件传输助手（跨设备极速中转）</strong><br>
+  <img src="docs/screenshots/cf-navs-transfer-assistant.png" alt="CF-Navs Transfer 便笺传输助手：文件下载、图片缩略与文本随手记" width="360">
+</p>
 
 <table>
   <tr>
