@@ -28,6 +28,7 @@ export function createTransferStore(service = transferService) {
 
   return {
     subscribe,
+    set,
 
     async fetchNotes(cursor?: number): Promise<void> {
       update((s) => ({ ...s, loading: true, error: null }))
