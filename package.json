@@ -27,7 +27,8 @@
     "products": [
       "Workers",
       "D1",
-      "KV"
+      "KV",
+      "R2"
     ],
     "bindings": {
       "DB": {
@@ -35,6 +36,9 @@
       },
       "SESSION": {
         "description": "KV namespace for HttpOnly administrator sessions; the installer also verifies this required binding before setup."
+      },
+      "STORAGE": {
+        "description": "R2 bucket for cross-device file transfer and attachments."
       }
     }
   },

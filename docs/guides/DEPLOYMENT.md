@@ -4,27 +4,28 @@
 
 ## 部署方式
 
-### 方式一：Wrangler CLI
+#### 方式一：Wrangler CLI
 
-适合本地命令行部署。需要创建 D1/KV、生成 `wrangler.local.toml`，先运行 `npm run deploy` 创建 Worker，再设置加密 `SETUP_TOKEN` 并重新部署，最后访问 `/install` 初始化 schema 和管理员。
+适合本地命令行部署。需要创建 D1、KV 与 R2 存储桶，生成 `wrangler.local.toml`，先运行 `npm run deploy` 创建 Worker，再设置加密 `SETUP_TOKEN`，执行 `npm run db:init:remote` 初始化数据表（含书签与便笺传输数据表），最后重新部署并访问 `/install` 创建管理员。
 
 ### 方式二：Cloudflare 控制台导入 GitHub
 
 适合 Fork 项目后在线部署。
 
-1. 在 GitHub 上 Fork 仓库。
+1. 在 GitHub 上 Fork 仓库（`https://github.com/wii-me/cf-navs-transfer`）。
 2. 进入 **Workers & Pages → Create application → Import a repository**，关联 GitHub 并选择 fork。不要使用通用 Deploy Button：它会新建 GitHub 仓库，不能指定已有 Fork。
 3. 生产分支选择 `main`，Build command 填写 `npm run build`，Deploy command 填写 `npx wrangler deploy`。
-4. 保存并完成首轮生产部署。Cloudflare 的 Git 引导流程会根据 `wrangler.toml` 中不带 ID 的声明创建并绑定 `DB` D1 数据库与 `SESSION` KV 命名空间。
+4. 保存并完成首轮生产部署。Cloudflare 的 Git 引导流程会根据 `wrangler.toml` 中声明创建并绑定 `DB` D1 数据库、`SESSION` KV 命名空间与 `STORAGE` R2 存储桶。
 
+   若未自动创建或绑定 R2 存储桶，可在控制台 **R2** 中新建桶 `cf-navs-storage`，并在该 Worker 的 **设置 → 变量和绑定** 中添加 R2 存储桶绑定，绑定名称填 `STORAGE`。
 
 5. 首轮部署完成后，进入该 Worker 的 **设置 → 变量和密钥**，选择**生产环境**，添加一个类型为**密钥**的变量，变量名填写 `SETUP_TOKEN`，值填写一段足够长且随机的字符串。
 6. 保存 Secret 后重新触发生产分支部署。打开部署后的 Workers URL，并访问 `/install`。输入 `SETUP_TOKEN`，再设置管理员用户名和密码；安装器会初始化数据库 schema 和管理员账号。
 7. 进入该 Worker 的 **域和路由** 页面，关闭两个 Workers URL，然后添加并启用你的自定义域名。
 
-> `package.json` 的 Cloudflare Git 元数据只声明 D1/KV 资源，不声明 `SETUP_TOKEN` 或旧版恢复 Secret，因此 GitHub 导入不会自动生成或填充 Secret 参数。正常在线安装不需要 Cloudflare API Token、GitHub Actions 或手动 SQL。只有 `/install` 报 schema 初始化错误时，才在 D1 SQL Console 执行一次 [schema.sql](../../schema.sql) 作为恢复步骤。
+> 💡 **提示**：若访问 `/install` 提示 schema 错误或缺少数据表，可直接在控制台的 D1 SQL 控制台执行一次 [schema.sql](../../schema.sql)，或在本地终端运行一次 `npm run db:init:remote` 初始化远端表。
 
-> 在线部署命令不要使用 `npm run deploy`：该命令读取本地生成的 `wrangler.local.toml`，适用于 Wrangler CLI 部署。Git 自动部署请使用 Build command `npm run build` 和 Deploy command `npx wrangler deploy`，然后通过 `/install` 完成初始化。
+> `package.json` 的 Cloudflare Git 元数据声明 D1/KV/R2 资源，不声明 `SETUP_TOKEN` 或旧版恢复 Secret，因此 GitHub 导入不会自动生成或填充 Secret 参数。正常在线安装不需要 Cloudflare API Token、GitHub Actions 或手动 SQL。
 
 首次资源创建请从生产分支 `main` 触发。资源创建完成前，建议关闭预览分支自动部署；预览分支可能使用 `wrangler versions upload`，不适合作为首次资源初始化流程。
 
@@ -40,17 +41,7 @@
 npx wrangler d1 create cf-navs-db
 ```
 
-预期输出：
-```
-✅ Successfully created DB 'cf-navs-db'!
-
-[[d1_databases]]
-binding = "DB"
-database_name = "cf-navs-db"
-database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-```
-
-- [ ] 已创建 D1 数据库
+- [ ] 已创建 D1 数据库 `cf-navs-db`
 - [ ] 稍后使用 `npm run setup:wrangler` 写入本地 `wrangler.local.toml`
 
 ### 3. 创建 KV 命名空间
@@ -59,21 +50,18 @@ database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 npx wrangler kv namespace create SESSION
 ```
 
-预期输出：
-```
-🌀 Creating namespace with title "cf-navs-SESSION"
-✨ Success!
-Add the following to your wrangler.toml:
-
-[[kv_namespaces]]
-binding = "SESSION"
-id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-```
-
-- [ ] 已创建 KV 命名空间
+- [ ] 已创建 KV 命名空间 `SESSION`
 - [ ] 稍后使用 `npm run setup:wrangler` 写入本地 `wrangler.local.toml`
 
-### 4. 生成本地 Wrangler 配置
+### 4. 创建 R2 存储桶
+
+```bash
+npx wrangler r2 bucket create cf-navs-storage
+```
+
+- [ ] 已创建 R2 存储桶 `cf-navs-storage`（用于跨设备便笺与文件传输大文件存储）
+
+### 5. 生成本地 Wrangler 配置
 
 ```bash
 npm run setup:wrangler
@@ -82,7 +70,7 @@ npm run setup:wrangler
 - [ ] 已生成 `wrangler.local.toml`
 - [ ] 确认 `wrangler.local.toml` 未被 Git 跟踪
 
-### 5. 构建前端
+### 6. 构建前端
 
 ```bash
 npm run build
@@ -90,22 +78,20 @@ npm run build
 
 - [ ] 构建成功
 - [ ] `dist/` 目录已生成
-- [ ] 如需检查 TypeScript/Svelte 类型，另运行 `npm run type-check`；`npm run build` 本身只执行 Vite 构建（`package.json:7-8`）。
+- [ ] 如需检查 TypeScript/Svelte 类型，另运行 `npm run type-check`
 
 ## 🚀 开始部署
 
-### 首轮部署
+### 1. 首轮部署 Worker
 
 ```bash
 npm run deploy
 ```
 
-部署命令成功退出并显示部署 URL。具体 Wrangler 输出格式和耗时由当前 Wrangler 版本及 Cloudflare 环境决定，不把固定日志样例当作验收证据。
-
-- [ ] 部署成功
+- [ ] 部署成功，Worker 基础服务创建完成
 - [ ] 获得访问 URL
 
-### 6. 设置一次性安装令牌
+### 2. 设置一次性安装令牌
 
 首轮部署完成后再设置 Secret；Worker 尚未创建时，不能用 `wrangler secret put` 提前写入。
 
@@ -116,11 +102,21 @@ npx wrangler secret put SETUP_TOKEN
 - [ ] 已设置足够长的随机安装令牌
 - [ ] 令牌已安全保存到完成 `/install`
 
-### 7. Secret 生效后重新部署
+### 3. 初始化远端 D1 数据库
+
+```bash
+npm run db:init:remote
+```
+
+- [ ] 执行成功，14 条 SQL 执行完毕（创建分类、书签、设置以及 `transfer_notes` 便笺传输表）
+
+### 4. 重新部署使配置生效
 
 ```bash
 npm run deploy
 ```
+
+- [ ] 重新部署成功，所有环境变量与存储绑定生效
 
 ## ✅ 部署后验证
 
@@ -170,7 +166,17 @@ Cloudflare Git 和 Wrangler CLI 全新安装都先访问 `/install`，输入 `SE
 - [ ] 登录后首次进入后台可请求 `/api/admin/data`；之后刷新页面、前后台切换优先读取浏览器本地快照，除新增、后台修改、导入、排序保存失败回滚或认证失败外不重复拉取；直接刷新 `/admin` 时保持加载界面并直接进入后台，不短暂显示首页
 - [ ] Iconify 失败时显示文字 fallback；普通 HTTP(S) 书签图标代理失败时可回退原始 URL，若原始 URL 也失败则显示书签文字 fallback
 
-### 4. 测试公开模式
+### 4. 测试跨设备便笺与文件传输助手 (Transfer Notes)
+
+- [ ] 点击右上角传输助手图标或按下快捷键 `Ctrl+J` / `Cmd+J`，能快速呼出/隐藏半浮动传输面板
+- [ ] 在输入框中输入文字或代码，点击发送，卡片即时出现在列表中
+- [ ] 在传输面板内直接按下 `Ctrl+V`（或在移动端粘贴），可直接发送剪贴板纯文本或截屏图片
+- [ ] 拖拽或选择文件（支持常见全格式，最大 50MB），进度条提示上传成功
+- [ ] 图片文件在卡片中正常显示高清缩略图，点击呼出全屏灯箱无损放大预览
+- [ ] 点击附件下载按钮，能正常下载到本地，文件名和扩展名与上传时一致
+- [ ] 测试生命周期选择（1 小时、1 天、7 天、永久），以及手动点击删除便笺后 R2 资源同步释放
+
+### 5. 测试公开模式
 
 1. 在设置中开启"公开模式"
 2. 退出登录
