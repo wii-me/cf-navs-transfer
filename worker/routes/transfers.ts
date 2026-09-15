@@ -253,6 +253,16 @@ transfersRoutes.get('/file/:id', async (c) => {
       return new Response('File Object Not Found', { status: 404 })
     }
 
+    const SAFE_INLINE_IMAGE_TYPES = new Set([
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'image/avif',
+      'image/bmp',
+      'image/x-icon',
+    ])
+
     const headers = new Headers()
     headers.set('Content-Type', note.mime_type || 'application/octet-stream')
     if (note.file_size) {
@@ -260,12 +270,17 @@ transfersRoutes.get('/file/:id', async (c) => {
     }
 
     const forceDownload = c.req.query('download') === '1'
+    const isSafeInline = note.type === 'image' && !!note.mime_type && SAFE_INLINE_IMAGE_TYPES.has(note.mime_type)
     const encodedName = encodeURIComponent(note.file_name || 'file')
-    if (forceDownload || note.type !== 'image') {
+
+    if (forceDownload || !isSafeInline) {
       headers.set('Content-Disposition', `attachment; filename="${encodedName}"; filename*=UTF-8''${encodedName}`)
     } else {
       headers.set('Content-Disposition', `inline; filename="${encodedName}"; filename*=UTF-8''${encodedName}`)
     }
+
+    headers.set('X-Content-Type-Options', 'nosniff')
+    headers.set('Content-Security-Policy', "default-src 'none'; sandbox")
     headers.set('Cache-Control', 'private, max-age=3600')
 
     return new Response(object.body, { headers })

@@ -224,8 +224,10 @@
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
-    const urlPattern = /(https?:\/\/[^\s]+)/g
-    return escaped.replace(urlPattern, '<a href="$1" target="_blank" rel="noopener noreferrer" class="link-url">$1</a>')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+    const urlPattern = /(https?:\/\/[^\s<>&"']+)/g
+    return escaped.replace(urlPattern, (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer" class="link-url">${url}</a>`)
   }
 
   onMount(() => {
