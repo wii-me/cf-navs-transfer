@@ -58,6 +58,43 @@ describe('TransferDrawer Component', () => {
     expect(screen.getByTestId('copy-text-t1')).toBeDefined()
   })
 
+  it('renders image note with preview img and download button', () => {
+    transferStore.openDrawer()
+    const state = {
+      notes: [
+        {
+          id: 'img_1',
+          type: 'image' as const,
+          content: null,
+          file_key: 'transfers/test.png',
+          file_name: 'test.png',
+          file_size: 1024,
+          mime_type: 'image/png',
+          created_at: Date.now(),
+          expires_at: null,
+        },
+      ],
+      loading: false,
+      uploading: false,
+      hasMore: false,
+      drawerOpen: true,
+      activeLightboxImage: null,
+      error: null,
+    }
+    // @ts-ignore
+    transferStore.set ? transferStore.set(state) : null
+
+    render(TransferDrawer)
+    const img = screen.getByAltText('test.png') as HTMLImageElement
+    expect(img).toBeDefined()
+    expect(img.src).toContain('/api/transfers/file/img_1')
+
+    const downloadLink = screen.getByText('下载原图').closest('a') as HTMLAnchorElement
+    expect(downloadLink).toBeDefined()
+    expect(downloadLink.href).toContain('/api/transfers/file/img_1')
+    expect(downloadLink.href).toContain('download=1')
+  })
+
   it('closes when close button is clicked', async () => {
     transferStore.openDrawer()
     render(TransferDrawer)

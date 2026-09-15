@@ -226,6 +226,11 @@ describe('Transfer Routes', () => {
     expect(downloadRes.status).toBe(200)
     expect(downloadRes.headers.get('Content-Type')).toBe('image/png')
     expect(downloadRes.headers.get('Content-Disposition')).toContain('inline')
+
+    const forceDownloadRes = await app.request(`/api/transfers/file/${noteId}?download=1`)
+    expect(forceDownloadRes.status).toBe(200)
+    expect(forceDownloadRes.headers.get('Content-Disposition')).toContain('attachment')
+    expect(forceDownloadRes.headers.get('Content-Disposition')).toContain("filename*=UTF-8''photo.png")
   })
 
   it('deletes note with DELETE /api/transfers/:id', async () => {

@@ -1,18 +1,39 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte'
   import { transferStore } from '../lib/stores/transferStore'
+  import { authStore } from '../lib/stores'
+  import { getAuthToken } from '../lib/api'
   import { toastStore } from '../lib/toast'
 
   let textContent = ''
   let selectedTtlDays = 7
   let fileInput: HTMLInputElement | null = null
   let isDragging = false
+  let imageErrorMap = new Set<string>()
 
   $: isOpen = $transferStore.drawerOpen
   $: notes = $transferStore.notes
   $: loading = $transferStore.loading
   $: uploading = $transferStore.uploading
   $: lightboxImage = $transferStore.activeLightboxImage
+  $: currentToken = $authStore.session?.token || getAuthToken() || ''
+
+  function getFileUrl(id: string, isDownload = false): string {
+    const params = new URLSearchParams()
+    if (currentToken) {
+      params.set('token', currentToken)
+    }
+    if (isDownload) {
+      params.set('download', '1')
+    }
+    const qs = params.toString()
+    return `/api/transfers/file/${id}${qs ? `?${qs}` : ''}`
+  }
+
+  function handleImageError(id: string) {
+    imageErrorMap.add(id)
+    imageErrorMap = imageErrorMap
+  }
 
   // 当抽屉打开时，拉取最新的记录
   $: if (isOpen) {
@@ -316,18 +337,25 @@
                 </div>
               {:else if note.type === 'image'}
                 <div class="image-box">
-                  <button
-                    type="button"
-                    class="image-thumb-btn"
-                    on:click={() => transferStore.openLightbox(`/api/transfers/file/${note.id}`)}
-                    title="点击放大预览"
-                  >
-                    <img
-                      src={`/api/transfers/file/${note.id}`}
-                      alt={note.file_name || '图片'}
-                      loading="lazy"
-                    />
-                  </button>
+                  {#if imageErrorMap.has(note.id)}
+                    <div class="image-error-fallback">
+                      <span>⚠️ 图片加载失败</span>
+                    </div>
+                  {:else}
+                    <button
+                      type="button"
+                      class="image-thumb-btn"
+                      on:click={() => transferStore.openLightbox(getFileUrl(note.id))}
+                      title="点击放大预览"
+                    >
+                      <img
+                        src={getFileUrl(note.id)}
+                        alt={note.file_name || '图片'}
+                        loading="lazy"
+                        on:error={() => handleImageError(note.id)}
+                      />
+                    </button>
+                  {/if}
                 </div>
                 <div class="file-meta">
                   <span class="filename" title={note.file_name}>{note.file_name}</span>
@@ -335,9 +363,11 @@
                 </div>
                 <div class="card-footer">
                   <a
-                    href={`/api/transfers/file/${note.id}`}
+                    href={getFileUrl(note.id, true)}
                     download={note.file_name || 'image'}
                     class="btn-copy"
+                    target="_blank"
+                    rel="noopener noreferrer"
                   >
                     <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -358,9 +388,11 @@
                 </div>
                 <div class="card-footer">
                   <a
-                    href={`/api/transfers/file/${note.id}`}
+                    href={getFileUrl(note.id, true)}
                     download={note.file_name || 'file'}
                     class="btn-copy"
+                    target="_blank"
+                    rel="noopener noreferrer"
                   >
                     <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -464,6 +496,7 @@
     display: flex;
     flex-direction: column;
     animation: slideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    color: #0f172a;
   }
 
   :global([data-theme='dark']) .drawer-panel {
@@ -704,6 +737,24 @@
     object-fit: contain;
   }
 
+  .image-error-fallback {
+    width: 100%;
+    padding: 1.5rem 1rem;
+    text-align: center;
+    background: rgba(239, 68, 68, 0.06);
+    color: #ef4444;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+  }
+
+  :global([data-theme='dark']) .image-error-fallback {
+    background: rgba(239, 68, 68, 0.12);
+    color: #fca5a5;
+  }
+
   .file-meta {
     display: flex;
     align-items: center;
@@ -796,25 +847,42 @@
 
   .input-container textarea {
     width: 100%;
-    border: 1px solid rgba(148, 163, 184, 0.3);
+    border: 1px solid rgba(148, 163, 184, 0.35);
     border-radius: 0.5rem;
-    padding: 0.5rem 0.75rem;
+    padding: 0.6rem 0.75rem;
     font-size: 0.9rem;
-    background: white;
-    color: inherit;
+    background: #ffffff;
+    color: #0f172a;
     resize: none;
     outline: none;
     box-sizing: border-box;
     font-family: inherit;
+    line-height: 1.5;
+    transition: border-color var(--transition-base), box-shadow var(--transition-base);
+  }
+
+  .input-container textarea::placeholder {
+    color: #94a3b8;
   }
 
   :global([data-theme='dark']) .input-container textarea {
     background: #1e293b;
-    border-color: rgba(148, 163, 184, 0.2);
+    color: #f8fafc;
+    border-color: rgba(148, 163, 184, 0.25);
+  }
+
+  :global([data-theme='dark']) .input-container textarea::placeholder {
+    color: #64748b;
   }
 
   .input-container textarea:focus {
     border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+  }
+
+  :global([data-theme='dark']) .input-container textarea:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
   }
 
   .footer-bar {
@@ -830,27 +898,51 @@
   }
 
   .btn-tool {
-    border: 1px solid rgba(148, 163, 184, 0.3);
-    background: transparent;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    background: #ffffff;
     padding: 0.3rem 0.6rem;
     border-radius: 0.375rem;
     font-size: 0.8rem;
     cursor: pointer;
-    color: inherit;
+    color: #334155;
+    transition: background var(--transition-base), color var(--transition-base), border-color var(--transition-base);
+  }
+
+  .btn-tool:hover:not(:disabled) {
+    background: #f1f5f9;
+    color: #0f172a;
+  }
+
+  :global([data-theme='dark']) .btn-tool {
+    background: #1e293b;
+    border-color: rgba(148, 163, 184, 0.25);
+    color: #cbd5e1;
+  }
+
+  :global([data-theme='dark']) .btn-tool:hover:not(:disabled) {
+    background: #334155;
+    color: #f8fafc;
   }
 
   .select-ttl {
-    border: 1px solid rgba(148, 163, 184, 0.3);
-    background: transparent;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    background: #ffffff;
     padding: 0.3rem 0.5rem;
     border-radius: 0.375rem;
     font-size: 0.8rem;
-    color: inherit;
+    color: #334155;
     outline: none;
+    transition: border-color var(--transition-base);
+  }
+
+  .select-ttl:focus {
+    border-color: #2563eb;
   }
 
   :global([data-theme='dark']) .select-ttl {
     background: #1e293b;
+    border-color: rgba(148, 163, 184, 0.25);
+    color: #cbd5e1;
   }
 
   .btn-send {

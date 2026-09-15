@@ -259,11 +259,12 @@ transfersRoutes.get('/file/:id', async (c) => {
       headers.set('Content-Length', String(note.file_size))
     }
 
+    const forceDownload = c.req.query('download') === '1'
     const encodedName = encodeURIComponent(note.file_name || 'file')
-    if (note.type === 'image') {
-      headers.set('Content-Disposition', `inline; filename="${encodedName}"`)
+    if (forceDownload || note.type !== 'image') {
+      headers.set('Content-Disposition', `attachment; filename="${encodedName}"; filename*=UTF-8''${encodedName}`)
     } else {
-      headers.set('Content-Disposition', `attachment; filename="${encodedName}"`)
+      headers.set('Content-Disposition', `inline; filename="${encodedName}"; filename*=UTF-8''${encodedName}`)
     }
     headers.set('Cache-Control', 'private, max-age=3600')
 
