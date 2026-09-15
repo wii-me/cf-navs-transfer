@@ -1,14 +1,12 @@
 # 跨设备便笺与文件传输助手实现计划 (Transfer Notes Implementation Plan)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
-**Goal:** 为 CF-Navs 构建已登录状态下的跨设备便笺与文件/图片传输助手，支持流式中转文本、Ctrl+V 粘贴截图、拖拽上传小文件、自动过期清理与右侧抽屉式交互。
+**Goal:** 为 CF-Navs 构建已登录状态下的跨设备便笺与文件/图片传输助手，支持流式中转文本、Ctrl+V 粘贴截图、拖拽上传文件、自动过期清理与右侧抽屉式交互。
 
 **Architecture:** 后端利用 Cloudflare D1 存储便笺元数据与纯文本，利用 Cloudflare R2 对象存储托管图片与文件流，通过 Hono 路由与 `authRequired` 鉴权保护 API；前端使用 Svelte 5 构建响应式抽屉组件 `TransferDrawer`，集成剪贴板监听、拖拽上传、一键复制与大图预览。
 
 **Tech Stack:** Svelte 5, TypeScript, Vite 7, Hono, Cloudflare Workers, Cloudflare D1 (SQLite), Cloudflare R2, Vitest
 
-**Spec:** `docs/superpowers/specs/2026-09-15-transfer-notes-design.md`
+**Spec:** [`docs/plans/TRANSFER_NOTES_DESIGN.md`](TRANSFER_NOTES_DESIGN.md)
 
 ## Global Constraints
 

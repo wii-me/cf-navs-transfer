@@ -4,11 +4,22 @@ dist/
 .wrangler/
 
 # Local environment and deployment configuration
+.env
+.env.*
+!.dev.vars.example
 .dev.vars
 wrangler.local.toml
+*.local.json
+*.local.toml
 
 # Local-only verification target: real domains and browser settings stay here
 verify.local.json
+
+# Certificates, keys, and credentials
+*.pem
+*.key
+*.crt
+.git-credentials
 
 # Local agent/tool configuration
 .agents/
@@ -19,6 +30,7 @@ AGENTS.md
 # Logs and operating-system files
 *.log
 .DS_Store
+Thumbs.db
 
 # Temporary and archived development artifacts
 tmp/
@@ -34,3 +46,4 @@ docs/screenshots/test-*
 
 # IDE configuration
 .idea/
+.vscode/

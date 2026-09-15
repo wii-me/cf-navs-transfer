@@ -68,6 +68,8 @@
 - [开发任务规划（R-01～R-08 Issue 需求）](plans/DEV_TASK_BREAKDOWN_GITHUB_ISSUES.md)
 - [前端体验与自用效率优化（需求评估）](plans/FRONTEND_EXPERIENCE_OPTIMIZATION_REQUIREMENTS.md)
 - [设置页 UI/UX 改造规范（原始草案，已被 `SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md` 取代）](plans/UI_UX_Plan.md)
+- [跨设备便笺与文件传输助手实现计划](plans/TRANSFER_NOTES_PLAN.md)
+- [跨设备便笺与文件传输助手设计方案](plans/TRANSFER_NOTES_DESIGN.md)
 
 ### 待办与决策记录
 
