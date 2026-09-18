@@ -208,21 +208,25 @@
    - **Deploy command**：`npx wrangler deploy`
    - **环境变量**：添加 `NODE_VERSION` = `24`
 4. **检查并绑定 D1、KV 与 R2 资源**：
-   部署完成后，在 Worker 的 **Settings (设置)** → **Bindings (绑定)** 中确认：
-   - D1 绑定：变量名 `DB` 指向 `cf-navs-db`
-   - KV 绑定：变量名 `SESSION` 指向 `cf-navs-session`
-   - R2 绑定：变量名 `STORAGE` 指向 `cf-navs-storage`（若未自动绑定，点击添加并选择对应桶）
+   部署完成后，在 Worker 的 **Settings (设置)** → **Bindings (绑定)** 中确认三大资源绑定：
+   - **D1 数据库**：变量名 `DB` 指向 `cf-navs-db`
+   - **KV 命名空间**：变量名 `SESSION` 指向 `cf-navs-session`
+   - **R2 存储桶**：变量名 `STORAGE` 指向 `cf-navs-storage`
+   > 💡 **特别提示（关于 R2）**：传输助手需要 R2 存储上传的文件与图片。如果控制台下拉菜单未自动找到存储桶，只需在 Cloudflare 左侧导航栏进入 **R2 对象存储**（首次使用点击开通免费计划），创建一个名为 `cf-navs-storage` 的桶，再回到 Worker 绑定中选择即可。
 5. **添加初始化密钥**：
-   在 **Settings (设置)** → **Variables and Secrets (变量与机密)** 中添加类型为 **Secret** 的 `SETUP_TOKEN`，填写一段自定义强密码。
+   在 **Settings (设置)** → **Variables and Secrets (变量与机密)** 中添加类型为 **Secret** 的 `SETUP_TOKEN`，填写一段自定义强密码（用于首次初始化认证）。
    <p align="center">
      <img src="docs/screenshots/cf-deploy3.jpg" alt="Cloudflare 控制台变量和密钥设置示意" width="700">
    </p>
-   保存后对最新部署点击 **Retry deployment (重新部署)** 使其生效。
+   保存后对最新部署点击 **Retry deployment (重新部署)** 使密钥生效。
 6. **初始化数据库与账号**：
    > [!IMPORTANT]
    > 首次运行前需初始化数据库：
-   > 进入 Cloudflare 控制台 **D1** → 选择你的数据库 → **Console**，将仓库根目录的 [`schema.sql`](schema.sql) 内容完整复制并执行。
-   > 随后访问你的站点域名末尾加上 `/install`（如 `https://your-nav.workers.dev/install`），输入 `SETUP_TOKEN` 设置管理员账号密码即可！
+   > 1. 进入 Cloudflare 控制台 **D1** → 选择 `cf-navs-db` → **Console**，将仓库根目录的 [`schema.sql`](schema.sql) 内容完整复制并执行（包含书签与传输助手的全部数据表）。
+   > 2. 随后访问你的站点域名末尾加上 `/install`（如 `https://your-nav.workers.dev/install`），输入 `SETUP_TOKEN`，设置管理员账号与密码即可！
+   > 3. 初始化成功后，建议在 **变量与机密** 中删除或轮换 `SETUP_TOKEN`，保障站点安全。
+7. **绑定自定义域名（可选）**：
+   站点默认生成的 `*.workers.dev` 域名开箱即可正常使用。如果需要绑定个性化独立域名，可在 Worker 的 **Settings (设置)** → **Domains & Routes (域和路由)** 中添加并启用你的自定义域名。
 
 ---
 
@@ -236,14 +240,14 @@ git clone https://github.com/wii-me/cf-navs-transfer.git
 cd cf-navs-transfer
 npm install
 
-# 2. 登录 Cloudflare 账号
+# 2. 登录 Cloudflare 账号并确认身份
 npx wrangler login
 npx wrangler whoami
 
-# 3. 创建所需边缘资源
+# 3. 创建所需边缘资源（如云端已有同名资源可跳过对应创建命令）
 npx wrangler d1 create cf-navs-db
 npx wrangler kv namespace create SESSION
-npx wrangler r2 bucket create cf-navs-storage
+npx wrangler r2 bucket create cf-navs-storage # 首次使用 R2 请确认控制台已开通 R2 免费额度
 
 # 4. 自动识别真实资源 ID 并写入本地 wrangler.local.toml
 npm run setup:wrangler
@@ -251,17 +255,17 @@ npm run setup:wrangler
 # 5. 首次部署创建 Worker 实例
 npm run deploy
 
-# 6. 设置安装授权密钥
+# 6. 设置安装授权密钥 Secret
 npx wrangler secret put SETUP_TOKEN
 
-# 7. 一键初始化远程 D1 数据库完整表结构
+# 7. 一键初始化远程 D1 数据库完整表结构（含导航与传输助手数据表）
 npm run db:init:remote
 
-# 8. 再次部署使所有绑定完全就绪
+# 8. 重新部署使所有绑定与配置完全就绪
 npm run deploy
 ```
 
-部署完成后访问 `https://<your-worker>.workers.dev/install` 完成初始化。
+部署完成后访问 `https://<your-worker>.workers.dev/install`，输入 `SETUP_TOKEN` 设置管理员账号密码即可完成初始化。安装成功后，可运行 `npx wrangler secret delete SETUP_TOKEN` 删除一次性安装令牌。
 
 ---
 

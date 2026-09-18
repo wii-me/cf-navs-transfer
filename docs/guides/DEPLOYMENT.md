@@ -21,9 +21,9 @@
 
 5. 首轮部署完成后，进入该 Worker 的 **设置 → 变量和密钥**，选择**生产环境**，添加一个类型为**密钥**的变量，变量名填写 `SETUP_TOKEN`，值填写一段足够长且随机的字符串。
 6. 保存 Secret 后重新触发生产分支部署。打开部署后的 Workers URL，并访问 `/install`。输入 `SETUP_TOKEN`，再设置管理员用户名和密码；安装器会初始化数据库 schema 和管理员账号。
-7. 进入该 Worker 的 **域和路由** 页面，关闭两个 Workers URL，然后添加并启用你的自定义域名。
+7. （可选）如果需要绑定个性化独立域名，可在 Worker 的 **设置 → 域和路由** 页面添加并启用自定义域名；若无独立域名，保留默认的 `workers.dev` 访问地址即可。
 
-> 💡 **提示**：若访问 `/install` 提示 schema 错误或缺少数据表，可直接在控制台的 D1 SQL 控制台执行一次 [schema.sql](../../schema.sql)，或在本地终端运行一次 `npm run db:init:remote` 初始化远端表。
+> 💡 **提示**：为确保最稳妥的初始化，建议首次在控制台 D1 的 Console 执行一次 [schema.sql](../../schema.sql)（包含书签与传输助手的全部数据表），或在本地终端运行一次 `npm run db:init:remote` 初始化远端表。随后在 `/install` 创建管理员账号，安装完成后建议在 **变量与机密** 中删除 `SETUP_TOKEN`。
 
 > `package.json` 的 Cloudflare Git 元数据声明 D1/KV/R2 资源，不声明 `SETUP_TOKEN` 或旧版恢复 Secret，因此 GitHub 导入不会自动生成或填充 Secret 参数。正常在线安装不需要 Cloudflare API Token、GitHub Actions 或手动 SQL。
 
