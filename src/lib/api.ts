@@ -395,7 +395,10 @@ export const bookmarksApi = {
 }
 
 export const iconifyApi = {
-  search: (query: string) => request<IconifySearchResp>(`/iconify-search?query=${encodeURIComponent(query)}`, { auth: true }),
+  search: (query: string, signal?: AbortSignal) => request<IconifySearchResp>(
+    `/iconify-search?query=${encodeURIComponent(query)}`,
+    { auth: true, signal },
+  ),
 }
 
 export const settingsApi = {

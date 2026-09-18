@@ -8,6 +8,7 @@
     type BookmarkReorganizeReq,
     type Category,
     type ChangePasswordReq,
+    type Settings,
     type ThemeMode,
   } from '../shared/types'
   import ConfirmDialog from './components/ConfirmDialog.svelte'
@@ -545,14 +546,15 @@
     savingBookmark = false
   }
 
-  async function handleOpenLogin(): Promise<void> {
+  async function openLoginUseCase(): Promise<void> {
     rootError = ''
     authStore.resetError()
     await ensureLoginModalComponent()
     loginModalOpen = true
-    if (!canSeeHome) {
-      currentView = 'login'
-    }
+    if (!canSeeHome) currentView = 'login'
+  }
+  async function handleOpenLogin(): Promise<void> {
+    await openLoginUseCase()
   }
 
   async function handleCloseLogin(): Promise<void> {
@@ -567,6 +569,69 @@
   }
 
   async function handleSwitchToAdmin(): Promise<void> {
+    await openAdminUseCase()
+  }
+
+  async function completeLoginUseCase(payload: { username: string; password: string }): Promise<void> {
+    await authStore.login(payload.username, payload.password)
+    loginModalOpen = false
+    rootError = ''
+    await refreshLoggedInData(true)
+    if (isAdminPath()) {
+      await ensureAdminComponent()
+      currentView = 'admin'
+      return
+    }
+    currentView = 'home'
+  }
+  async function handleLogin(payload: { username: string; password: string }): Promise<void> {
+    try {
+      await completeLoginUseCase(payload)
+    } catch {
+      // authStore 已经记录错误
+    }
+  }
+
+  async function completeLogoutUseCase(previousSettings: Settings | null): Promise<string | null> {
+    const revocationWarning = logoutRevocationWarning(await authStore.logout())
+    resetCategoryState()
+    resetSettingsState()
+    resetBookmarkState()
+    adminStore.reset()
+    await clearCachedAdminData()
+    if (previousSettings) {
+      applyConfigFromSettings(previousSettings)
+    }
+    await refreshPublicData()
+    return revocationWarning
+  }
+
+  async function handleLogout(): Promise<void> {
+    rootError = ''
+    const previousSettings = get(adminStore).data.settings
+
+    try {
+      const revocationWarning = await completeLogoutUseCase(previousSettings)
+
+      const homeGate = createHomeGateState({
+        publicMode: get(configStore).data?.public_mode,
+        authenticated: false,
+      })
+      if (homeGate.loginModalOpen) {
+        await ensureLoginModalComponent()
+      }
+      loginModalOpen = homeGate.loginModalOpen
+      currentView = homeGate.view
+      // 视图先切换，确保全局 Toast 不被登出后的页面切换影响。
+      if (revocationWarning) {
+        toastStore.addToast(revocationWarning, 'error', { duration: 12000 })
+      }
+    } catch (error) {
+      rootError = getErrorMessage(error)
+    }
+  }
+
+  async function openAdminUseCase(): Promise<void> {
     if (!isLoggedIn()) {
       await handleOpenLogin()
       return
@@ -580,71 +645,25 @@
     replaceBrowserPath('/admin')
     currentView = 'admin'
   }
-
-  async function handleLogin(payload: { username: string; password: string }): Promise<void> {
-    try {
-      await authStore.login(payload.username, payload.password)
-      loginModalOpen = false
-      rootError = ''
-      await refreshLoggedInData(true)
-      if (isAdminPath()) {
-        await ensureAdminComponent()
-        currentView = 'admin'
-      } else {
-        currentView = 'home'
-      }
-    } catch {
-      // authStore 已经记录错误
-    }
-  }
-
-  async function handleLogout(): Promise<void> {
-    rootError = ''
-    const previousSettings = get(adminStore).data.settings
-
-    try {
-      const revocationWarning = logoutRevocationWarning(await authStore.logout())
-      resetCategoryState()
-      resetSettingsState()
-      resetBookmarkState()
-      adminStore.reset()
-      await clearCachedAdminData()
-      if (previousSettings) {
-        applyConfigFromSettings(previousSettings)
-      }
-      await refreshPublicData()
-      const homeGate = createHomeGateState({
-        publicMode: get(configStore).data?.public_mode,
-        authenticated: false,
-      })
-      if (homeGate.loginModalOpen) {
-        await ensureLoginModalComponent()
-      }
-      loginModalOpen = homeGate.loginModalOpen
-      currentView = homeGate.view
-      // 放在视图切换之后：Toast 是全局层，不受这次视图切换影响，而先切视图能让
-      // 「已退出」这件事先于警告可见。
-      if (revocationWarning) {
-        toastStore.addToast(revocationWarning, 'error', { duration: 12000 })
-      }
-    } catch (error) {
-      rootError = getErrorMessage(error)
-    }
-  }
-
-  async function handleOpenCreateCategory(parentId: string | number | null = null, returnToHomeOverride: boolean | undefined = undefined): Promise<void> {
+  async function openCreateCategoryUseCase(returnToHome: boolean): Promise<boolean> {
     if (!isLoggedIn()) {
       await handleOpenLogin()
-      return
+      return false
     }
 
-    categoryError = ''
     if (!await ensureLoggedInDataLoaded()) {
-      return
+      return false
     }
-    const returnToHome = returnToHomeOverride ?? parentId != null
+
     if (returnToHome) await ensureCategoryEditModalComponent()
     else await ensureAdminComponent()
+    return true
+  }
+  async function handleOpenCreateCategory(parentId: string | number | null = null, returnToHomeOverride: boolean | undefined = undefined): Promise<void> {
+    const returnToHome = returnToHomeOverride ?? parentId != null
+    if (!await openCreateCategoryUseCase(returnToHome)) return
+
+    categoryError = ''
     categoryCreateReturnToHome = returnToHome
     categoryModalMode = 'create'
     activeCategory = createCategoryDraft(parentId)
@@ -655,7 +674,7 @@
     await handleOpenCreateCategory(null, true)
   }
 
-  async function handleEditCategory(category: { id: string | number }): Promise<void> {
+  async function openEditCategoryUseCase(category: { id: string | number }): Promise<void> {
     const current = adminData.categories.find((item) => item.id === Number(category.id))
     if (!current) return
 
@@ -664,19 +683,25 @@
     activeCategory = toCategoryForm(current)
     categoryModalOpen = true
   }
+  async function handleEditCategory(category: { id: string | number }): Promise<void> {
+    await openEditCategoryUseCase(category)
+  }
 
   async function handleCloseCategoryModal(): Promise<void> {
     resetCategoryState()
   }
 
-  async function handleSubmitCategory(form: CategoryFormValue): Promise<void> {
+  async function submitCategoryUseCase(form: CategoryFormValue): Promise<void> {
     const returnToHome = categoryCreateReturnToHome
+    // 提交意图只看表单本身。`resetCategoryState()` 会把 categoryModalMode 改回 'create'，
+    // 在它之后再读 mode 就会让编辑也提示「已创建」——这条提示语曾经一直是「已创建」。
+    const isEdit = form.id != null
     savingCategory = true
     categoryError = ''
 
     try {
       let category: Category
-      if (categoryModalMode === 'edit' && form.id != null) {
+      if (isEdit) {
         category = await api.categories.update(Number(form.id), toCategoryPayload(form))
       } else {
         category = await api.categories.create(toCategoryPayload(form))
@@ -693,7 +718,7 @@
         await tick()
       }
       toastStore.addToast(
-        categoryModalMode === 'edit' ? `分类「${category.title}」已更新` : `分类「${category.title}」已创建`,
+        isEdit ? `分类「${category.title}」已更新` : `分类「${category.title}」已创建`,
         'success',
       )
     } catch (error) {
@@ -701,6 +726,9 @@
     } finally {
       savingCategory = false
     }
+  }
+  async function handleSubmitCategory(form: CategoryFormValue): Promise<void> {
+    await submitCategoryUseCase(form)
   }
 
   async function handleDeleteCategory(category: { id: string | number; title: string }): Promise<void> {
@@ -776,12 +804,14 @@
   }
 
   async function handleSubmitBookmark(form: BookmarkFormValue): Promise<void> {
+    // 同 handleSubmitCategory：意图只看表单，resetBookmarkState() 之后 mode 已经变回 'create'。
+    const isEdit = form.id != null
     savingBookmark = true
     bookmarkError = ''
 
     try {
       let bookmark: Bookmark
-      if (bookmarkModalMode === 'edit' && form.id != null) {
+      if (isEdit) {
         bookmark = await api.bookmarks.update(Number(form.id), toBookmarkPayload(form))
       } else {
         bookmark = await api.bookmarks.create(toBookmarkPayload(form))
@@ -792,7 +822,7 @@
       await refreshAdminDataAfterMutation()
      refreshBookmarkIconCacheInBackground(bookmark.id)
       toastStore.addToast(
-        bookmarkModalMode === 'edit' ? `书签「${bookmark.title}」已更新` : `书签「${bookmark.title}」已创建`,
+        isEdit ? `书签「${bookmark.title}」已更新` : `书签「${bookmark.title}」已创建`,
         'success',
       )
    } catch (error) {

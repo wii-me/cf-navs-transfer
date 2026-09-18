@@ -125,6 +125,9 @@ describe('refactored helper modules', () => {
       icon: 'tool',
       parent_id: null,
     })
+    expect(toCategoryPayload({ parent_id: null, title: 'Home', icon: ' mdi/home ' }).icon).toBe(
+      'https://api.iconify.design/mdi/home.svg',
+    )
 
     expect(toBookmarkPayload({
       category_id: '2',
@@ -149,6 +152,8 @@ describe('refactored helper modules', () => {
 
     expect(form.category_id).toBe(9)
     expect(getIconifySearchQuery(' mdi:home ')).toBe('mdi:home')
+    expect(getIconifySearchQuery(' image upload ')).toBe('image upload')
+    expect(getIconifySearchQuery(' h o m e ')).toBe('home')
     expect(getIconifySearchQuery('x')).toBe('')
     expect(buildBookmarkSubmitPayload(form, '')).toMatchObject({
       title: 'Site',

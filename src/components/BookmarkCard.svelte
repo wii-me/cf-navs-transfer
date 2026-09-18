@@ -24,6 +24,7 @@
   } from '../lib/bookmarkCardIconState'
   import { observeIconVisibility } from '../lib/iconVisibility'
   import {
+    fetchAndCacheBookmarkIconUrl,
     fetchCachedBookmarkIconUrl,
     readCachedBookmarkIconDataUri,
     revokeLocalIconUrl,
@@ -37,7 +38,7 @@
   export let showDescription: boolean = true
   export let descriptionMode: DescriptionDisplayMode = showDescription ? 'always' : 'hidden'
   export let showIconTitle: boolean = true
-  export let width: number = 200
+  export let width: number = 160
   export let height: number = 0
   export let canEdit = false
   export let sortMode = false
@@ -52,7 +53,7 @@
   let localCachedIconUrl = ''
   let syncLocalCachedIconUrl = ''
   let localCachePending = false
-  let localCacheRequestId = 0
+  const localCacheRequest = { current: 0 }
   let iconInView = false
   let shellElement: HTMLDivElement | null = null
   let stopIconVisibilityObserver: (() => void) | null = null
@@ -72,8 +73,8 @@
   $: iconBaseState = deriveBookmarkCardIconBase({
     bookmark,
     iconInView,
+    shouldWaitForLocalIconCache: true,
   })
-  $: cachedIcon = iconBaseState.cachedIcon
   $: iconText = iconBaseState.iconText
   $: nextIconStateKey = iconBaseState.nextIconStateKey
   $: localCacheKey = iconBaseState.localCacheKey
@@ -118,8 +119,13 @@
     fallbackFailed = false
     resetLocalCachedIconUrl()
     if (shouldReadLocalIconCache) {
-      void loadLocalCachedIcon(localCacheKey, shouldWaitForLocalIconCache)
+      void loadLocalCachedIcon(
+        localCacheKey,
+        shouldWaitForLocalIconCache,
+        iconBaseState.shouldUseIconProxy ? iconBaseState.proxiedHttpIconUrl : '',
+      )
     } else {
+      localCacheRequest.current += 1
       localCachePending = false
     }
   }
@@ -132,17 +138,35 @@
     }
   }
 
-  async function loadLocalCachedIcon(cacheKey: string, waitForLocalCache: boolean) {
+  async function loadLocalCachedIcon(cacheKey: string, waitForLocalCache: boolean, remoteUrl: string) {
     if (waitForLocalCache) {
       localCachePending = true
     }
 
-    const result = await fetchCachedBookmarkIconUrl(cacheKey, { current: localCacheRequestId })
+    const result = await fetchCachedBookmarkIconUrl(cacheKey, localCacheRequest)
     if (result.stale) return
+    const requestSequence = localCacheRequest.current
     if (result.url) {
       resetLocalCachedIconUrl()
       localCachedIconUrl = result.url
+      localCachePending = false
+      return
     }
+
+    if (remoteUrl) {
+      const cachedRemoteUrl = await fetchAndCacheBookmarkIconUrl(cacheKey, remoteUrl)
+      if (requestSequence !== localCacheRequest.current) {
+        if (cachedRemoteUrl) revokeLocalIconUrl(cachedRemoteUrl)
+        return
+      }
+      if (cachedRemoteUrl) {
+        resetLocalCachedIconUrl()
+        localCachedIconUrl = cachedRemoteUrl
+        localCachePending = false
+        return
+      }
+    }
+
     localCachePending = false
   }
 
@@ -152,7 +176,7 @@
       return
     }
 
-    if (!cachedIconFailed && /^data:image\//i.test(cachedIcon)) {
+    if (!cachedIconFailed && (iconBaseState.hasEmbeddedIcon || iconBaseState.shouldUseIconProxy)) {
       cachedIconFailed = true
       return
     }
@@ -353,7 +377,7 @@
   })
 
   onDestroy(() => {
-    localCacheRequestId += 1
+    localCacheRequest.current += 1
     disconnectIconObserver()
     resetLocalCachedIconUrl()
     syncWindowListeners(false)
@@ -509,7 +533,7 @@
 
   .bookmark-card-shell.is-info {
     width: 100%;
-    min-width: var(--card-configured-min-width, 200px);
+    min-width: var(--card-configured-min-width, 160px);
   }
 
   .bookmark-card-shell.is-icon {

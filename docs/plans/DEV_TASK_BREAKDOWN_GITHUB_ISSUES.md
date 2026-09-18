@@ -1,6 +1,6 @@
 # 开发任务规划：Open Issue 需求实现（R-01 ～ R-08）
 
-> **文档状态：本地实现与验收反馈修复通过；T9 外部同步未完成，云端 Issue 仍 Open，R-08 部署/原作者预期待同步。**
+> **文档状态：R-01～R-08 的历史开发与验收记录。** 下文 Tn 台账中的「仍 Open / 待同步 / 待部署」保留当时语境，不是当前待办；v0.4.0 闭环依据见 [Issue 需求记录](../reference/GITHUB_ISSUES_REQUIREMENTS.md)，新一轮开放需求见 [开启 Issue 任务清单](OPEN_ISSUES_TASK_LIST.md)。
 >
 > 本文基于 `docs/reference/GITHUB_ISSUES_REQUIREMENTS.md` 的 R-01～R-08，负责把需求整理成可执行、可并行、可验收的开发任务。本文不修改源码、数据库、API 或云端 Issue，不把 Open Issue 自动视为已完成。
 >

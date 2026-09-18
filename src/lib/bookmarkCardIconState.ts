@@ -155,7 +155,7 @@ export function deriveBookmarkCardIconUrl(input: BookmarkCardIconUrlInput): Book
     if ((!rawIcon && !hasCachedRemoteIcon) || customTextIcon) return ''
     if (iconifyRemoteUrl) return iconifyRemoteUrl
     if (/^data:image\//i.test(rawIcon)) return rawIcon
-    if (shouldUseIconProxy) return proxiedHttpIconUrl
+    if (shouldUseIconProxy && !cachedIconFailed) return proxiedHttpIconUrl
     if (baseState.canUseRawHttpIconFallback) return rawIcon
     return ''
   })()

@@ -13,8 +13,8 @@
     getAdminSortIds,
     reorderAdminSortDraft,
   } from '../../lib/adminListState'
-  import { createIconVersion } from '../../lib/bookmarkIconDisplay'
-  import { iconAccessKey, withIconAccessKey } from '../../lib/iconAccessKey'
+  import CategoryIcon from '../CategoryIcon.svelte'
+  import { iconAccessKey } from '../../lib/iconAccessKey'
   import { sortableList } from '../../lib/sortableList'
   import './adminListPanels.css'
 
@@ -150,14 +150,12 @@
     }
   }
 
-  // 后台预览私密分类的真实图标需要短期授权 key（PROB-20b）；key 未就绪时 URL 不带参数，
-  // 服务端按匿名口径返回兜底图标。$iconAccessKey 变化会让这里重新求值。
-  function getCategoryIconUrl(category: AdminCategory, accessKey: string): string {
-    const icon = category.icon?.trim()
-    if (!icon || (!/^https?:\/\//i.test(icon) && !icon.startsWith('data:image/'))) return ''
-
-    const url = `/api/category-icon/${category.id}?v=${createIconVersion(`${category.id}:${icon}:${category.title}`)}`
-    return withIconAccessKey(url, accessKey)
+  function toCategoryIconValue(category: AdminCategory) {
+    return {
+      id: Number(category.id),
+      title: category.title,
+      icon: category.icon ?? '',
+    }
   }
 </script>
 
@@ -240,13 +238,11 @@
             {#each displayCategories as category (category.id)}
               <article class="admin-compact-card sortable" data-sortable-item data-sort-id={category.id}>
                 <span class="admin-drag-handle" aria-hidden="true">⋮⋮</span>
-                <span class="admin-icon-badge">
-                  {#if getCategoryIconUrl(category, $iconAccessKey)}
-                    <img src={getCategoryIconUrl(category, $iconAccessKey)} alt="" loading="lazy" />
-                  {:else}
-                    {category.icon || '📁'}
-                  {/if}
-                </span>
+                {#if category.icon?.trim()}
+                  <CategoryIcon category={toCategoryIconValue(category)} size={28} className="admin-icon-badge" iconAccessKey={$iconAccessKey} imageLoading="eager" />
+                {:else}
+                  <span class="admin-icon-badge">📁</span>
+                {/if}
                 <div class="admin-compact-info">
                   <h3>{category.title}</h3>
                   <span class="admin-count-badge">{getAdminCategoryBookmarkCount(category, bookmarks)} 个直属书签</span>
@@ -274,13 +270,11 @@
                 {:else}
                   <span class="admin-tree-toggle-spacer" aria-hidden="true"></span>
                 {/if}
-                <span class="admin-icon-badge">
-                  {#if getCategoryIconUrl(group.root, $iconAccessKey)}
-                    <img src={getCategoryIconUrl(group.root, $iconAccessKey)} alt="" loading="lazy" />
-                  {:else}
-                    {group.root.icon || '📁'}
-                  {/if}
-                </span>
+                {#if group.root.icon?.trim()}
+                  <CategoryIcon category={toCategoryIconValue(group.root)} size={28} className="admin-icon-badge" iconAccessKey={$iconAccessKey} imageLoading="eager" />
+                {:else}
+                  <span class="admin-icon-badge">📁</span>
+                {/if}
                 <div class="admin-compact-info">
                   <h3>{group.root.title}</h3>
                   <span class="admin-count-badge">{getAdminCategoryBookmarkCount(group.root, bookmarks)} 个直属书签</span>
@@ -307,13 +301,11 @@
                     <article class="admin-compact-card admin-child-category-card" data-category-id={category.id}>
                       <input type="checkbox" aria-label={`选择分类 ${category.title}`} checked={selectedIds.has(Number(category.id))} on:change={(event) => toggleCategorySelection(event, Number(category.id))} />
                       <span class="admin-hierarchy-connector" aria-hidden="true">↳</span>
-                      <span class="admin-icon-badge">
-                        {#if getCategoryIconUrl(category, $iconAccessKey)}
-                          <img src={getCategoryIconUrl(category, $iconAccessKey)} alt="" loading="lazy" />
-                        {:else}
-                          {category.icon || '📁'}
-                        {/if}
-                      </span>
+                      {#if category.icon?.trim()}
+                        <CategoryIcon category={toCategoryIconValue(category)} size={28} className="admin-icon-badge" iconAccessKey={$iconAccessKey} imageLoading="eager" />
+                      {:else}
+                        <span class="admin-icon-badge">📁</span>
+                      {/if}
                       <div class="admin-compact-info">
                         <h3>{category.title}</h3>
                         <span class="admin-parent-path">{group.root.title} / {category.title}</span>
@@ -599,12 +591,6 @@
     opacity: 0.6;
   }
 
-  .admin-icon-badge img {
-    width: 18px;
-    height: 18px;
-    object-fit: contain;
-    display: block;
-  }
 
   @media (max-width: 960px) {
     .admin-compact-card {

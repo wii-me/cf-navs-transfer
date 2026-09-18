@@ -21,6 +21,13 @@ describe('category icon display', () => {
     expect(getCategoryTextIcon(category)).toBe('')
   })
 
+  it('recognizes bare Iconify names as image sources', () => {
+    const category = { id: 12, title: 'Home', icon: 'mdi:home' }
+
+    expect(getCategoryImageIconUrl(category)).toMatch(/^\/api\/category-icon\/12\?v=[a-z0-9]+$/)
+    expect(getCategoryTextIcon(category)).toBe('')
+  })
+
   it('renders data images directly and preserves custom text or emoji icons', () => {
     const dataCategory = { id: 8, title: 'Design', icon: 'data:image/svg+xml,test' }
     const textCategory = { id: 9, title: 'Reading', icon: '📚' }

@@ -15,6 +15,13 @@ describe('bookmark card layout helpers', () => {
     expect(getInfoCardTrackWidth(401)).toBe(400)
   })
 
+  it('falls back to the shared 160px default for non-finite widths', () => {
+    // 缺失/非有限宽度回落，与 CARD_SIZE_DEFAULTS.width 一致（refs #22）
+    expect(getInfoCardTrackWidth(Number.NaN)).toBe(160)
+    expect(getInfoCardTrackWidth(Number.POSITIVE_INFINITY)).toBe(160)
+    expect(getInfoCardMobileTrackWidth(Number.NaN)).toBe(160)
+  })
+
   it('keeps mobile info card tracks readable while following larger widths', () => {
     // 移动端安全下限仍是 150，不随桌面下限下调
     expect(getInfoCardMobileTrackWidth(40)).toBe(150)

@@ -1,4 +1,5 @@
 const CACHE_NAME = 'cf-navs-bookmark-icons-v1'
+const MAX_LOCAL_ICON_CACHE_BYTES = 512 * 1024
 const CACHE_ORIGIN = 'https://cf-navs.local'
 const CACHE_PATH_PREFIX = '/bookmark-icon/'
 const STORAGE_PREFIX = 'cf-navs.bookmark-icon.'
@@ -114,6 +115,7 @@ function responseToObjectUrl(response: Response): Promise<string | null> {
   })
 }
 
+
 export function createBookmarkIconCacheKey(input: BookmarkIconCacheInput): string {
   return `${input.id}-${createHash(`${input.iconSource ?? ''}:${input.icon}`)}`
 }
@@ -147,8 +149,15 @@ export async function readCachedBookmarkIconUrl(cacheKey: string): Promise<strin
 
   try {
     const cache = await caches.open(CACHE_NAME)
-    const cached = await cache.match(cacheRequest(cacheKey))
-    return cached ? await responseToObjectUrl(cached) : null
+    const request = cacheRequest(cacheKey)
+    const cached = await cache.match(request)
+    const cacheControl = cached?.headers.get('cache-control')?.toLowerCase() ?? ''
+    const canPersist = cached !== undefined && cached.headers.get('X-Icon-Fallback') !== '1' && !/\bno-store\b/.test(cacheControl)
+    if (!canPersist) {
+      if (cached) await cache.delete(request)
+      return null
+    }
+    return await responseToObjectUrl(cached)
   } catch {
     return null
   }
@@ -247,7 +256,16 @@ export async function fetchAndCacheBookmarkIconUrl(cacheKey: string, url: string
     const contentType = response.headers.get('content-type') ?? ''
     if (!contentType.toLowerCase().startsWith('image/')) return null
 
-    if (canUseCacheStorage()) {
+    const cacheControl = response.headers.get('cache-control')?.toLowerCase() ?? ''
+    const contentLengthHeader = response.headers.get('content-length')
+    const contentLength = contentLengthHeader === null ? Number.NaN : Number(contentLengthHeader)
+    const canPersist =
+      Number.isFinite(contentLength) &&
+      contentLength >= 0 &&
+      contentLength <= MAX_LOCAL_ICON_CACHE_BYTES &&
+      response.headers.get('X-Icon-Fallback') !== '1' &&
+      !/\bno-store\b/.test(cacheControl)
+    if (canUseCacheStorage() && canPersist) {
       const cache = await caches.open(CACHE_NAME)
       await deleteStaleCacheStorageEntries(cache, cacheKey)
       await cache.put(cacheRequest(cacheKey), response.clone())

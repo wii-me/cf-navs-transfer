@@ -113,6 +113,34 @@ describe('bookmark card icon state', () => {
     expect(result.shouldUseIconProxy).toBe(true)
   })
 
+
+  it('falls back to the saved HTTP icon after the bookmark proxy fails', () => {
+    const result = state({
+      icon: 'https://example.com/icon.png',
+      icon_source: 'custom',
+      icon_cached: true,
+    }, {
+      cachedIconFailed: true,
+    })
+
+    expect(result.iconUrl).toBe('https://example.com/icon.png')
+    expect(result.hasRenderableIcon).toBe(true)
+  })
+
+  it('waits for the persistent cache lookup before using the remote proxy', () => {
+    const result = state({
+      icon: 'https://example.com/icon.png',
+      icon_source: 'custom',
+      icon_cached: true,
+    }, {
+      localCachePending: true,
+      shouldWaitForLocalIconCache: true,
+    })
+
+    expect(result.shouldWaitForLocalIconCache).toBe(true)
+    expect(result.iconUrl).toBe('')
+  })
+
   it('proxies Iconify names and Iconify URLs through the Iconify endpoint', () => {
     expect(state({ icon: 'mdi:home', icon_source: 'iconify' }).iconUrl).toBe('/api/iconify/mdi/home.svg')
     expect(state({

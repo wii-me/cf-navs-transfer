@@ -58,7 +58,7 @@ PROB-29、PROB-30 是 2026-09-03 轮实现 PROB-01 与 REQ-08 时新发现并登
 | 已定策略 | 用户 2026-09-03 选定「可选 + 逐项后果警告」：不硬禁用服务端允许的管理员操作，改为逐项标注后果并在确认弹层重申一次 |
 | 处理结果 | `src/lib/categorySelect.ts` `CategoryTreeOption` 新增 `notice`；`src/components/CategoryTreeSelect.svelte` 在一级/二级选项内渲染该文案并接入 `aria-describedby`，选项保持可选；`src/lib/adminListState.ts` 新增 `getHiddenCategoryIds`，`getAdminBookmarkCategoryOptions` 改为接收当前选中书签，只在「选中集合含**当前对匿名访客可见的**公开书签」且目标会被隐藏时标注「移入后会从公开首页隐藏 N 个公开书签」——已经躺在私密分类里的公开书签换到另一个私密分类是「保持隐藏」，不计入 N；`src/components/admin/BookmarkListPanel.svelte` 确认弹层重申后果并说明私密书签不受影响、分类可改回公开。服务端校验保持不变，仍是最终防线 |
 | 验证 | `tests/unit/adminListState.test.ts` 覆盖私密根 / 私密后代 / 环形数据 / 计数 / 四种无需提示情形；`tests/unit/publicVisibility.test.ts` 交叉断言前端镜像与服务端 `getPublicCategoryIds` 逐项一致，防止两侧漂移；`tests/unit/adminBookmarkLayout.test.ts` 锁定逐项文案、无障碍描述与「不引入 `aria-disabled`」。`npm run type-check` 0 errors / 0 warnings；`npm test` 100 files / 680 passed；`npm run build` 成功。未运行浏览器套件（`AGENTS.md` 禁止未经要求启动本地服务） |
-| 遗留 | `:205`/`:209`/`:218` 的「禁用非法目标」表述与当前数据模型不符，应改写为「逐项后果提示」并说明无非法目标；该文档修正尚未执行，需与 PROB-11/PROB-12 的口径回写一起裁定 |
+| 遗留 | 该条旧文档表述已由 PROB-29 的回写处理；当前契约口径为「无非法目标 + 逐项后果提示」，后续只需避免恢复旧措辞。 |
 
 ### PROB-02（P2，已完成）批量移动默认目标是首个选中项，不是「多数书签所在分类」
 
@@ -83,19 +83,15 @@ PROB-29、PROB-30 是 2026-09-03 轮实现 PROB-01 与 REQ-08 时新发现并登
 | 验证 | 隔离 Chrome 键盘打开分类树，记录 `document.activeElement` 的 `aria-selected` |
 | 裁定与处理结果 | 用户 2026-09-04 选 b) **保持现状，回写文档**。已在 `GITHUB_ISSUES_REQUIREMENTS.md` 的 R-04 验收标准与「已确认决策」写明：定位只保证当前项滚动可见，**不自动把焦点移到当前项**；键盘可达由「下箭头进首项 / 上箭头进末项 + 方向键逐项移动 + Esc 关闭并把焦点还给触发器」保证。`CategoryTreeSelect.svelte` 未改动 |
 
-### PROB-04（P3，已裁定待实现）配色分区仍渲染模块顶层大段说明，分组名与 FR-B2 不一致
+### PROB-04（P3，已完成）配色分区说明已按裁定收敛
 
 | 项 | 内容 |
 | --- | --- |
-| 来源映射 | `FR-B1`、`FR-B2`；`docs/plans/SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md:102-103`；`docs/plans/UI_UX_Plan.md:30-31` |
-| 已满足部分 | `FR-B1` 指向的 `BackgroundSettingsSection.svelte` 已无副标段落（当前该文件仅 `legend` + 子组件，见全文 39 行）；每套预设的文学性描述已移入 `GradientPresetSelector.svelte:45-46` 的 `title`/`aria-label`，符合 `FR-B2` 的 hover 要求 |
-| 未满足部分 | `GradientPresetSelector.svelte:25-26` 仍渲染 `内置配色方案` + 「每套方案包含浅色/深色两种背景，选中后会一并套用遮罩和推荐的卡片透明度、文字颜色。」——即 `UI_UX_Plan.md:30` 要求直接删除的「模块顶层说明」；`FR-B2` 要求分组名精简为「毛玻璃」「护眼纯色」，源码为 `毛玻璃氛围`（`:15`）且分组 hint 仍内联渲染（`:16`、`:38`） |
-| 事实边界 | `FR-B1` 逐字只点名 `BackgroundSettingsSection.svelte:34`（实施前行号）。说明文案是否随组件下移而出界，属范围裁定，不是已证缺陷 |
-| 处理动作 | 裁定后二选一：a) 删除 `GradientPresetSelector.svelte:26` 段落、分组名收敛为「毛玻璃」「护眼纯色」并把 hint 移入 hover；b) 在 `SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md` FR-B1/FR-B2 明确保留该说明与现用分组名 |
-| 验证 | `tests/unit/adminSettingsLayout.test.ts` 追加源码文本断言（符合仓库既有测试通例） |
-| 裁定结果 | 用户 2026-09-05 定为**方案 a**：模块顶层说明算 `FR-B1` 范围，分组名收敛成「毛玻璃」 |
-| 待实现的具体动作 | 按内容定位，不用行号（PROB-26 已被漂移的行号坑过一次）：① 删掉 `GradientPresetSelector.svelte` 里 `.gradient-preset-header` 的 `内置配色方案` 标题与紧随的说明段落「每套方案包含浅色/深色两种背景，选中后会一并套用遮罩和推荐的卡片透明度、文字颜色。」；② `presetGroups` 的分组名 `毛玻璃氛围` → `毛玻璃`，`护眼纯色` 保持不变（`FR-B2` 逐字要求这两个名字）；③ 两组的 `hint`（`渐变背景、半透明卡片与柔和光晕` / `低饱和纯色背景与不透明卡片`）从 `.gradient-preset-group-title` 的内联 `<span>` 移进 hover 可见的 `title`，与每套预设描述已有的做法一致；④ header 右侧的「自定义 / 已选方案」是选中态反馈而非模块说明，保留 |
-| 验证方式更正 | 原处理动作写「`adminSettingsLayout.test.ts` 追加源码文本断言」。这几条都是可观察的 DOM 与文案变化：分组名、说明段落是否存在、hint 是否只在 `title` 里。按 `CONTRIBUTING.md` §4 的现行纪律应挂载 `GradientPresetSelector` 写组件测试（断言渲染文本里不再有那段说明、分组名为「毛玻璃」、hint 不在可见文本中但在 `title` 里），不要新增源码文本断言 |
+| 来源映射 | `FR-B1`、`FR-B2`；`docs/plans/SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md`；`docs/plans/UI_UX_Plan.md` |
+| 实施前事实 | 配色选择器曾显示模块级「内置配色方案」长说明，分组名为「毛玻璃氛围」，两组 hint 以内联文字呈现。用户 2026-09-05 裁定采用方案 a。 |
+| 处理结果 | 删除模块级标题与长说明；分组名收敛为「毛玻璃」和「护眼纯色」；两组 hint 移入分组标题 `title`；保留右侧「自定义 / 已选方案」状态反馈。 |
+| 验证结果 | `tests/unit/gradientPresetSelectorBehavior.test.ts` 覆盖可观察 DOM 文案、分组 hover 语义和状态反馈；`npm run type-check` 通过，`npm test` 112 files / 819 passed，`npm run build` 成功，`git diff --check` 通过。 |
+| 残余边界 | 生产/L2 视觉复核不属于本地实现完成证据，仍按发布验收边界处理；本条不再是当前待实现事项。 |
 
 ---
 
@@ -120,7 +116,7 @@ PROB-29、PROB-30 是 2026-09-03 轮实现 PROB-01 与 REQ-08 时新发现并登
 | --- | --- |
 | 来源映射 | `docs/reference/GITHUB_ISSUES_REQUIREMENTS.md:5-7`、`:18-24`；Issue #15 |
 | 文档事实 | `:5` 快照 2026-08-31；`:7`「当前 Open 数量：5 个，#9、#10、#11、#12、#13」；`:24`「本次 Open 查询返回的正式范围只有 #9—#13」 |
-| 云端事实 | 现有 **6 个 Open**：#9、#10、#11、#12、#13、**#15**。`gh issue view 15` 精确时间：创建 2026-09-02 13:34 UTC、更新 2026-09-02 14:24 UTC，作者 `wztx`，标签 `enhancement`，标题仍是模板占位「[Feature]: 简短描述你的新功能想法」，正文实际诉求是 **EdgeOne 部署兼容**；维护者 2026-09-02 评论「目前没计划…下一个大版本纳入排期」，未承诺实现 |
+| 云端事实（2026-09-03 历史快照） | 当时 Open 列表为 #9、#10、#11、#12、#13、#15；#15 标题仍是模板占位「[Feature]: 简短描述你的新功能想法」，正文实际诉求是 EdgeOne 部署兼容。当前标题已更新为「[Feature]: 兼容EdgeOne部署版本」，正文诉求和未承诺排期事实不变。 |
 | 处理动作 | 更新 `:5` 快照日期、`:7` Open 列表与 `:18-24` 表格；按 PROB-25 裁定后决定 #15 是否立项（需求侧对应 `REQ-12`） |
 | 验证 | 重新读取 `issue://lbjxr/CF-Navs/?state=open` 并与表格逐行对照 |
 | 处理结果 | 快照日期改为 2026-09-03，Open 数量 5 → 6，表格补入 #15 行（用上面 `gh` 核到的精确 UTC 时间），范围句改为「#9—#13 与 #15」，并新增一段说明 #15 未获实现承诺、未分配 R 编号、兼容边界待澄清，指向 PROB-25 与 REQ-12 |
@@ -477,21 +473,18 @@ PROB-29、PROB-30 是 2026-09-03 轮实现 PROB-01 与 REQ-08 时新发现并登
 
 ### PROB-25（P2）Issue #15 的 EdgeOne 兼容范围未定义
 
-- 云端事实：#15 OPEN / `enhancement`，标题为未替换的模板占位「简短描述你的新功能想法」，正文诉求「开发兼容 EdgeOne 部署版本」；维护者已评论「目前没计划…下一个大版本纳入排期」
+- 云端事实：#15 OPEN / `enhancement`，当前标题为「[Feature]: 兼容EdgeOne部署版本」；正文诉求是开发兼容 EdgeOne 部署版本。旧核对记录曾记为模板占位标题；维护者已评论「目前没计划…下一个大版本纳入排期」。
 - 缺口：兼容边界未定义 —— Workers 运行时 API 差异、D1/KV 等价存储、部署配置、`wrangler.toml` 之外的构建产物、CI、文档，都不知道要不要覆盖
 - 处理动作：向 #15 报告者澄清目标形态与最小可用范围后再决定立项。需求侧占位见 `REQ-12`。**向 Issue 回帖需单独授权**
 
-### PROB-26（P2，已裁定待实现）已关闭 #8 的「顶部导航分行」缺本地编号，R-08 来源未列 #8
+### PROB-26（P2，已完成）已关闭 Issue #8 的本地追溯
 
-- 云端事实：#8 CLOSED COMPLETED / `bug`+`bug-fixed`。正文两条诉求是**部分导出备份**与**顶部导航分行**；评论另报 Chrome 侧栏白色原生滚动条，维护者称该 bug 已修复，导出与顶部导航属独立后续建议
-- 本地事实：`GITHUB_ISSUES_REQUIREMENTS.md:28` 明确排除 Closed #8/#5；`:91` 的 R-08 来源只列 #9。两项功能实际都已实现（部分导出见 PROB-14 证据；顶部导航分行见 `src/components/Sidebar.svelte:63-65,682-718,1212-1242`）
-- 缺口：已实现的功能缺少到原始 Issue 的追溯链，`bug-fixed` 标签实际只对应侧栏滚动条这一条
-- 处理动作：裁定追溯口径 —— 在 R-08 来源补 #8，并为顶部导航分行补一条追溯记录（指向 `PARTIAL_EXPORT_AND_TOP_NAV_WRAP_REQUIREMENTS.md`），或明确「Closed Issue 不建立追溯」并接受该缺口
-- 裁定结果：用户 2026-09-05 定为**建立追溯**，不接受「Closed Issue 不建立追溯」的缺口
-- 待实现的具体动作（2026-09-05 复核后按内容定位，**不用行号**——原条目引用的 `:28` / `:91` 已随文档改动漂移，现在分别落在空行和 R-05 那一行）：① §1.2「明确排除的内容」里那句「Closed Issue 不属于本文件的正式需求范围，包括已关闭的 #8、#5」改成「Closed Issue 不新立 R 编号，但其中已实现的诉求要在 §8 建立追溯」；② §3 需求总表 R-08 行的来源列由 `#9` 补成 `#9`、`#8`；③ §8「追溯与数据来源」新增一条 #8 追溯，写明两项诉求（部分导出备份 → R-08；顶部导航分行 → `docs/plans/PARTIAL_EXPORT_AND_TOP_NAV_WRAP_REQUIREMENTS.md`，实现位置 `src/components/Sidebar.svelte`）；④ 同处注明 #8 的 `bug-fixed` 标签实际只对应「Chrome 侧栏白色原生滚动条」，另两项是后续独立实现，避免读者以为标签覆盖三项
-- 边界：只改本地追溯文档。**不动云端 #8 的状态、标签或评论**——它已 CLOSED COMPLETED，写 Issue 需单独授权，且本次裁定没有要求回帖
-- 待确认的实现前提：#5 与 #8 在 §1.2 那句排除里是并列的。本轮裁定只点名 #8；实现时若发现 #5 也有已实现却无追溯的诉求，先回来确认，不要顺手扩大范围
-
+- 云端事实：#8 为 `CLOSED / COMPLETED`；其已实现诉求中的部分导出对应 R-08，顶部导航分行对应独立计划；`bug-fixed` 标签只对应 Chrome 侧栏白色原生滚动条。
+- 历史缺口：原需求追溯曾把 Closed Issue #8 排除在正式需求范围外，R-08 来源也只列 #9。
+- 裁定结果：用户 2026-09-05 选择建立追溯，不新立 R 编号，也不修改云端 #8 状态、标签或评论。
+- 处理结果：`GITHUB_ISSUES_REQUIREMENTS.md` 已更新 Closed Issue 口径、R-08 来源并补入 §8 的 #8 追溯；实现依据指向 `PARTIAL_EXPORT_AND_TOP_NAV_WRAP_REQUIREMENTS.md` 与 `src/components/Sidebar.svelte`。
+- 验证结果：`git diff --check` 通过，追溯文档与实现链接存在；本条已完成，不再列入 BACKLOG 当前待办。
+- 边界：#5 与 #8 的历史排除语句仍需按各自已有证据解释；本次没有扩大到 #5，也没有执行云端写操作。
 ### PROB-27（P2，已完成）R-04 的「当前项焦点」是验收标准还是建议
 
 - 关联：PROB-03
@@ -499,7 +492,7 @@ PROB-29、PROB-30 是 2026-09-03 轮实现 PROB-01 与 REQ-08 时新发现并登
 - 处理动作：裁定后按 PROB-03 的 a/b 分支执行
 - 裁定结果：用户 2026-09-04 定为**建议而非验收标准**。R-04 验收标准已明确写成「定位只保证当前项滚动可见，不要求当前项自动获得焦点」，实现不改。详见 PROB-03
 
-### PROB-28（P3，已完成）R-07 卡片最小宽度是否已满足诉求未确认
+### PROB-28（P3，已完成）R-07 卡片最小宽度裁定与验证
 
 - 云端事实：#13 只问「最小宽度能否下调 / 为何限制 80」，**没给目标值**
 - 源码事实：`shared/settings.ts:33-51` 现为 `min 44 / max 400` 归一化；`src/lib/bookmarkCardLayout.ts:1-12` 另有移动端安全下限 150；`src/components/settings/AdvancedSettingsSection.svelte:121-130` 在低值时给出信息提示
@@ -521,30 +514,21 @@ PROB-29、PROB-30 是 2026-09-03 轮实现 PROB-01 与 REQ-08 时新发现并登
 - 顺带退役一条测试断言：`tests/unit/adminSettingsLayout.test.ts` 里 `expect(advanced).toContain('可能无法保证页面美观')` 钉的是提示文案字面量，属 `CONTRIBUTING.md` 第 4 节禁止的「源码文本断言当行为证明」。文案本轮被证明是错的，重新钉新文案只会重复同一个错误，故删除；控件契约仍由同用例的 `min={40}` 与 `disabled={form.card_style !== 'info'}` 覆盖
 - 未做：40 px 下「只显示图标」是否应当直接改用极简卡片风格（或在该档自动切换），属产品决策，未擅自改行为
 
-### PROB-29（P2，已完成）R-05 的「禁用非法目标」表述与数据模型不符，尚未改写
+### PROB-29（P2，已完成）R-05 目标选择文档口径已改写
 
-- 来源：PROB-01 完成时自登记的遗留。
-- 冲突：`docs/reference/GITHUB_ISSUES_REQUIREMENTS.md:205`、`:209`、`:218` 仍写「禁用非法目标（不存在、越权、跨层级违规）并说明原因」，但 `worker/routes/bookmarks.ts:133-143` 只校验 `category_id` 是正整数、`worker/lib/db/bookmarks.ts:207-213` 只校验「分类存在」；分类最多两层且两层都能挂书签，管理员登录后可见全部分类 —— 三个理由都不成立。
-- 现状：实现已按用户 2026-09-03 决策改为「可选 + 逐项后果警告」，文档未同步。
-- 处理动作：把这三处改写为「无非法目标；对会让公开书签从公开首页消失的目标给出逐项后果提示」，并说明服务端只校验分类存在。与 PROB-11、PROB-12 的口径回写一起做，避免多次改同一段。
-- 处理结果：用户 2026-09-04 选**改写为「无非法目标 + 逐项后果提示」**。`GITHUB_ISSUES_REQUIREMENTS.md` 的 R-05 已改五处：建议交互方案的「排除无效目标」改为「对会产生副作用的目标逐项标注后果」；「目标分类不存在、越权或跨层级非法时拒绝整批请求」改为写明服务端只校验 `category_id` 是正整数且分类存在、不存在「非法目标」这一类；验收标准的「禁用项原因」改为「后果提示且仍然可选」；「已确认决策」补 2026-09-04 改写说明；最佳实践段的「禁用非法目标（不存在、越权、跨层级违规）」改为「不禁用任何目标」。与 PROB-11、PROB-12 的回写在同一轮完成，同一段只改一次
+- 来源：PROB-01 完成时自登记的文档遗留。
+- 历史冲突：旧 R-05 文案要求禁用不存在、越权或跨层级目标，但当前数据模型只校验目标分类存在；真实副作用是公开书签移入私密分类后从公开首页隐藏。
+- 裁定与处理结果：用户 2026-09-04 选择「无非法目标 + 逐项后果提示」。`GITHUB_ISSUES_REQUIREMENTS.md` 已将相关建议、验收、确认决策和最佳实践统一改写为目标可选、显示公开可见性后果，不再写禁用非法目标。
+- 验证结果：文档改写与 PROB-11、PROB-12 的口径回写已完成；本条不再是待改文档事项。
 
-### PROB-30（P3 → 由 REQ-13 承接，已裁定方案 c）无预设时 accent 回退仍是旧的共用冷蓝
+### PROB-30（P3 → 由 REQ-13 承接，已完成）自定义背景 accent 回退已可配置
 
-- 源码事实：`src/lib/appData.ts` 的 `buildHomeBackground` —— 有 `activePreset` 时读预设的 accent，**没有**预设（自定义背景）时回退 `theme === 'dark' ? '#7dd3fc' : '#2563eb'`。
-- 原定性（2026-09-03）：不是功能缺陷，自定义背景没有预设色相可依。**该定性在 2026-09-05 被收紧**：它不是功能缺陷，但是可用性/无障碍风险——`--home-accent-color` 是 hover 描边与 focus 环的唯一来源，用户把自定义背景设成与回退值同色系时焦点环几乎不可见。
-- 原处理动作（已被裁定取代，留档）：裁定回退策略 —— a) 保留并加注释说明它与预设 accent 无关；b) 改为跟随中性色而非蓝色；c) 让自定义背景也能配置 accent（当时标注「属 `FR-4.5` 已驳回范围，需重新决策」）。2026-09-03 那轮未改动，因为 REQ-08 的授权范围只含 13 套毛玻璃预设。
-- 事实更正（2026-09-05 复核源码）：条目原写「正是 REQ-08 从 13 套毛玻璃预设里清掉的那一对旧值」，**只有一半成立**。`src/lib/themePresets.ts` 现有 13 套毛玻璃（`createGradientPreset`）+ 9 套护眼纯色（`createFlatPreset`），共 22 套：`#2563eb` 确实已不在任何预设里；但 `#7dd3fc` 仍是 `ocean-depths`（深海蔚蓝）的 `darkAccent`（`themePresets.ts:329`）。所以「脱节」只发生在浅色档，深色档那个值仍有预设在用
-- **裁定（2026-09-05，最终）：方案 c —— 让自定义背景也能配置 accent。** 用户先按建议选了方案 a，同日改选方案 c。方案 a 的分析仍留档在下面，但**不再执行**
-- 承接编号：**`REQ-13`（P2，已批准待实现）**，详见 `REQUIREMENT_DEVELOPMENT_TASK_LIST.md` 组 D。本条 PROB 不再单独记待实现动作，避免两处状态分叉
-- 优先级变化：`PROB-30` 原为 P3（对应方案 a 的「加注释」）。方案 c 是新增公共设置字段 + 三处回退对齐 + 契约与 UI 同步，因此 `REQ-13` 定为 P2
-- 被推翻的前置决策（必须一并更新，否则文档自相矛盾）：`FRONTEND_EXPERIENCE_OPTIMIZATION_REQUIREMENTS.md` 的 `FR-4.5` 第二条「不新增任何 accent 相关的用户设置项」与 `D-10`，以及该文档 §9「不在本轮实现但需保留为边界的条款」里对 FR-4.5 的整体引用；`REQUIREMENT_DEVELOPMENT_TASK_LIST.md` §5 的 `FR-4.5` 映射行。**四处已于同一轮更新**
-- `FR-4.5` 原顾虑「加设置项会与 22 个预设的调色形成两套真源」的解法：新设置**只在 `background_preset_id === 'custom'` 时生效**。有预设 → 预设的 `accentColor` / `darkAccentColor`；`custom` 且用户已设 → 用户值；`custom` 且未设 → 内置回退。同一时刻只有一个来源生效，不构成两套真源
-- 实现时不能只改一处（复核源码后确认回退值分散在三处）：① `appData.ts` 的 `buildHomeBackground`（输出 `--theme-accent-color`）；② `Home.svelte` 的 `--home-accent-color: var(--theme-accent-color, #2563eb)` 与深色档 `var(--theme-accent-color, #7dd3fc)`；③ `SettingsHomePreview.svelte` 的 6 处 `color-mix(… var(--theme-accent-color, #2563eb) …)`。第 ③ 处深浅色都用浅色值，与第 ② 处的深色回退不一致，属既有缺陷，随 `REQ-13` 一并对齐
-- 方案 a / b 的分析（留档，已不执行）：
-  - 方案 a（保留取值 + 提命名常量 + 注释）成本最低且不改渲染结果，但残余风险不消除——用户把自定义背景也设成同色系蓝时焦点环几乎不可见
-  - 方案 b（改中性色）是无障碍退步：`--home-accent-color` 是 hover 描边与 focus 环的唯一来源（例如 `HomeCategoryScope.svelte` 的 `.scope-action:focus-visible` 用它做 `box-shadow` 焦点环）。中性灰在浅灰背景与深灰卡片上都难辨识
-  - 选方案 c 的直接理由：它是三个选项里唯一真正消除该无障碍风险的，其余两个只是记录或转移风险
+- 源码事实：无内置预设时原先回退到浅色 `#2563eb` / 深色 `#7dd3fc`；自定义背景与回退色同色系时可能削弱 hover 描边与 focus 环可见性。
+- 最终裁定：用户 2026-09-05 选择方案 c——让自定义背景配置浅/深两套 accent，并由 `REQ-13` 承接；方案 a/b 仅作为历史分析保留。
+- 处理结果：已新增并贯通 `custom_accent_color` / `custom_dark_accent_color`，覆盖 `Settings` / `PublicSettings`、公开 key 白名单、D1 seed、Worker 归一化与 PUT 校验、设置表单、`buildHomeBackground`、首页变量和 `SettingsHomePreview`；内置预设仍优先使用自身 accent，自定义背景仅在有用户值时使用用户值。
+- 文档与测试：`API_CONTRACT.md` 和设置页需求记录已同步；设置归一化、首页 accent 优先级、预览表单行为均有测试。
+- 验证结果：`npm run type-check` 通过，`npm test` 112 files / 821 passed，`npm run build` 成功，`git diff --check` 通过；生产/L2 复核仍是发布验收边界，不影响本地实现已完成的状态。
+- 本条不再单独维护待实现动作，后续状态以 `REQ-13` 完成记录和 BACKLOG 中其他真实欠账为准。
 
 ---
 

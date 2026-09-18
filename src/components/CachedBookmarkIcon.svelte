@@ -25,7 +25,7 @@
   let cachePending = false
   let failed = false
   let stateKey = ''
-  let requestId = 0
+  const requestSequence = { current: 0 }
 
   $: trimmedIcon = icon.trim()
   $: trimmedIconBlob = iconBlob.trim()
@@ -62,7 +62,7 @@
 
   async function loadCachedIcon(key: string, dataUri: string, waitForLocalCache: boolean) {
     if (isDataImage(dataUri)) {
-      ++requestId
+      requestSequence.current += 1
       cachePending = false
       await deleteCachedBookmarkIcon(key)
       return
@@ -72,7 +72,7 @@
       cachePending = true
     }
 
-    const result = await fetchCachedBookmarkIconUrl(key, { current: requestId })
+    const result = await fetchCachedBookmarkIconUrl(key, requestSequence)
     if (result.stale) return
     if (result.url) {
       resetLocalUrl()
@@ -93,7 +93,7 @@
   }
 
   onDestroy(() => {
-    requestId += 1
+    requestSequence.current += 1
     resetLocalUrl()
   })
 </script>

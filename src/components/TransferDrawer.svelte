@@ -259,7 +259,7 @@
     on:drop={handleDrop}
     role="dialog"
     aria-modal="true"
-    aria-label="便笺传输助手"
+    aria-label="传输助手"
     tabindex="-1"
   >
     {#if isDragging}
@@ -282,7 +282,7 @@
           <path d="m22 2-7 20-4-9-9-4Z" />
           <path d="M22 2 11 13" />
         </svg>
-        <span>便笺传输助手</span>
+        <span>传输助手</span>
       </div>
       <div class="header-actions">
         {#if notes.length > 0}

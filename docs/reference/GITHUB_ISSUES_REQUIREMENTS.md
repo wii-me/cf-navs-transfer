@@ -1,13 +1,13 @@
 # GitHub Issues 需求与 PC / 移动端规划
 
-> **文档状态：v0.4.0 已发布并完成本版验收；#9～#13 已 Closed / completed，#15、#16 保持 Open。**
+> **文档状态：v0.4.0 需求与闭环历史记录；#9～#13 在本版闭环时已 Closed / completed。**
 >
-> **闭环快照日期：** 2026-09-13；表中 GitHub 时间统一按 UTC 记录。
-> **查询范围：** 本版关联 #9～#13、#15 的实时状态，以及仓库当前 Open Issue 列表；不包含 Pull Request。
-> **当前 Open 数量：** 2 个，#15、#16；#16 为本版范围外的新增需求。
+> **闭环快照日期：** 2026-09-13（v0.4.0 闭环时点）；表中 GitHub 时间统一按 UTC 记录。
+> **历史查询范围：** 本版关联 #9～#13、#15 的状态，以及闭环时的 Open Issue 列表；不包含 Pull Request。
+> **闭环时 Open 数量：** 2 个，#15、#16；#16 为本版范围外的新增需求。后续开放需求与新报告见 [开启 Issue 任务清单](../plans/OPEN_ISSUES_TASK_LIST.md)，不要把本段当作当前开放全集。
 > **文档目的：** 将云端 Issue 的原始问题、重复关系和待确认信息整理为一份可执行的产品与 UI 规划，并明确 PC、移动端边界。
 
-本文保留需求来源、历史建议方案与验收依据，不替后续需求作实现承诺或优先级决策。§1、§3 是本次云端闭环快照，实时状态以 GitHub Issue 为准；§4、§7 的 Tn 记录保留当时进度，不作为当前未完成清单。
+本文保留需求来源、历史建议方案与验收依据，不替后续需求作实现承诺或优先级决策。§1、§3 是 v0.4.0 云端闭环快照，实时状态以 GitHub Issue 为准；§4、§7 的 Tn 记录保留当时进度，不作为当前未完成清单。
 
 ## 1. 范围与状态口径
 
@@ -22,7 +22,7 @@
 | [#13](https://github.com/lbjxr/CF-Navs/issues/13) | 后台管理卡片样式属性阈值调整 | `enhancement` | `lbjxr` | 2026-08-30 01:39 | 2026-09-12 17:04 | Closed / completed；卡片最小宽度评估 |
 | [#15](https://github.com/lbjxr/CF-Navs/issues/15) | [Feature]: 简短描述你的新功能想法 | `enhancement` | `wztx` | 2026-09-02 13:34 | 2026-09-02 14:24 | Open；部署平台兼容请求，范围待澄清 |
 
-GitHub 的 Issue 与 Pull Request 共用编号，因此编号不连续不代表查询遗漏。本版关联范围仍为 #9—#13 与 #15；当前开放列表另含 [#16「跨设备轻量随手记 / 极速便签」](https://github.com/lbjxr/CF-Navs/issues/16)，它未纳入本次 R-01～R-08，不因本次发版被关闭或承诺实现。
+GitHub 的 Issue 与 Pull Request 共用编号，因此编号不连续不代表查询遗漏。本版关联范围仍为 #9—#13 与 #15；闭环时开放列表另含 [#16「跨设备轻量随手记 / 极速便签」](https://github.com/lbjxr/CF-Navs/issues/16)，它未纳入本次 R-01～R-08，不因本次发版被关闭或承诺实现。
 
 #15 的标题仍是未替换的模板占位，正文实际诉求是「开发兼容 EdgeOne 部署版本」；维护者已于 2026-09-02 回复「目前没计划…下一个大版本纳入排期」，因此它**尚未获得实现承诺**，也没有分配 R 编号。兼容边界（Workers 运行时 API 差异、D1/KV 等价存储、部署配置、构建产物、CI、文档范围）需先向报告者澄清，未澄清前不进入 R-01～R-08 的正式需求清单；当前跟踪见 `docs/plans/PROBLEM_HANDLING_TASK_LIST.md` 的 PROB-25 与 `docs/plans/REQUIREMENT_DEVELOPMENT_TASK_LIST.md` 的 REQ-12。
 
@@ -375,4 +375,4 @@ GitHub 的 Issue 与 Pull Request 共用编号，因此编号不连续不代表�
 - **Closed Issue #8 追溯（PROB-26）**：#8 中已实现的“部分导出”诉求对应 R-08；“顶部导航分行”诉求的实现依据为 `docs/plans/PARTIAL_EXPORT_AND_TOP_NAV_WRAP_REQUIREMENTS.md` 与 `src/components/Sidebar.svelte`，不新立 R 编号。#8 的 `bug-fixed` 标签只对应“Chrome 侧栏白色原生滚动条”这一项，不代表上述两项诉求均已由云端关闭确认。
 - 项目现状：`docs/reference/PROJECT_OVERVIEW.md`、`docs/reference/API_CONTRACT.md` 及本文第 2 节列出的源码路径。
 
-每次实现或状态变化后，应更新本文的快照日期、状态标签、验收证据和对应 Issue 链接；不要把“本地已有代码”直接等同于“云端 Issue 已关闭”。
+补充 R-01～R-08 的验收证据时应注明对应时间和来源，保留原有历史语境；新一轮开放需求分析见独立任务清单。不要把“本地已有代码”直接等同于“云端 Issue 已关闭”，也不要将本文维护成另一份实时进度表。

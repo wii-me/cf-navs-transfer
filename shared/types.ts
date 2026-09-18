@@ -468,7 +468,7 @@ export interface BatchDeleteCategoriesResp {
 // PUT /api/settings  —— 部分更新，传哪些 key 改哪些
 export type SettingsUpdateReq = Partial<Settings>
 
-// ========== 便笺与文件传输助手 ==========
+// ========== 传输助手 ==========
 
 export type TransferType = 'text' | 'image' | 'file'
 

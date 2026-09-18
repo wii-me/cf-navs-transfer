@@ -20,7 +20,7 @@ describe('TransferDrawer Component', () => {
     transferStore.openDrawer()
     render(TransferDrawer)
     expect(screen.getByTestId('transfer-drawer-panel')).toBeDefined()
-    expect(screen.getByText('便笺传输助手')).toBeDefined()
+    expect(screen.getByText('传输助手')).toBeDefined()
   })
 
   it('renders text note with copy button', () => {

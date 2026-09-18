@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildIconifyWorkItems,
   iconifyProxyPath,
   iconifyUrlFromParams,
   normalizeIconifyNamePair,
   normalizeIconifySearchQuery,
+  searchIconifyIcons,
 } from '../../worker/lib/iconifySearch'
 
 describe('worker Iconify search helpers', () => {
@@ -15,7 +16,44 @@ describe('worker Iconify search helpers', () => {
       'logos:github-icon',
     )
     expect(normalizeIconifySearchQuery(' h o m e ')).toBe('home')
+    expect(normalizeIconifySearchQuery('image upload')).toBe('image upload')
     expect(normalizeIconifySearchQuery('x')).toBe('')
+  })
+
+  it('keeps search candidates when optional SVG inspection is temporarily unavailable', async () => {
+    let iconFetches = 0
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/search?')) {
+        return new Response(JSON.stringify({
+          icons: ['mdi:home'],
+          collections: { mdi: { name: 'Material Design Icons' } },
+        }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+
+      iconFetches += 1
+      if (iconFetches === 1) return new Response('temporary upstream failure', { status: 503 })
+      return new Response('<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0" /></svg>', {
+        status: 200,
+        headers: { 'content-type': 'image/svg+xml' },
+      })
+    }))
+
+    const writeIconCache = () => undefined
+    const first = await searchIconifyIcons('transient-empty-result', 'https://navs.test/api', writeIconCache)
+    const second = await searchIconifyIcons('transient-empty-result', 'https://navs.test/api', writeIconCache)
+
+    expect(first?.candidates).toHaveLength(1)
+    expect(first?.candidates[0]).toMatchObject({ name: 'mdi:home', colored: false })
+    expect(second?.candidates).toHaveLength(1)
+    expect(iconFetches).toBe(2)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it('validates Iconify route params before building upstream URLs', () => {

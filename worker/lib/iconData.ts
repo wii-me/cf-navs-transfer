@@ -108,7 +108,32 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary)
 }
 
-export async function fetchCacheableIcon(iconUrl: string, timeoutMs = CACHE_TIMEOUT_MS): Promise<FetchedIcon | null> {
+// 抓取失败的两种性质，决定兜底图标能不能进缓存：
+//   - 'missing'：上游明确说这个图标不存在（404/410），或返回的根本不是图片（认证墙、
+//     登录页）。重试没有意义，兜底图沿用 5 分钟短缓存，避免为一个不存在的图标持续打上游。
+//   - 'transient'：超时、网络错误、429/5xx 等瞬时故障。实测页面同时渲染一屏图标时上游会
+//     成批瞬时失败、随后自行恢复；这类兜底图若被缓存（edge、Service Worker、浏览器都是
+//     5 分钟），用户会在整个缓存期内一直看到文字兜底，而网络面板里它是 200 +
+//     image/svg+xml，与真实图标完全一样，看起来「请求成功了却回退成文字」。
+export type IconFetchFailure = 'missing' | 'transient'
+
+export type IconFetchOutcome =
+  | { ok: true; icon: FetchedIcon }
+  | { ok: false; failure: IconFetchFailure }
+
+// 纯函数，便于单测：null 表示网络错误或超时。
+export function classifyIconFailure(status: number | null): IconFetchFailure {
+  return status === 404 || status === 410 ? 'missing' : 'transient'
+}
+
+/**
+ * 抓取一张可缓存的外站图标。
+ *
+ * 刻意不在这里做重试：实测瞬时失败集中在并发抓取的限流窗口里，窗口内紧随其后的第二次
+ * 尝试同样失败，真正恢复要等到窗口过去；调用方按 `failure` 决定能不能缓存兜底图，
+ * 下一个请求（下一次页面加载、下一次渲染）拿到的就是真图标。
+ */
+export async function fetchIcon(iconUrl: string, timeoutMs = CACHE_TIMEOUT_MS): Promise<IconFetchOutcome> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
@@ -122,26 +147,26 @@ export async function fetchCacheableIcon(iconUrl: string, timeoutMs = CACHE_TIME
       },
     })
 
-    if (!response.ok) return null
+    if (!response.ok) return { ok: false, failure: classifyIconFailure(response.status) }
 
     const buffer = await response.arrayBuffer()
-    if (buffer.byteLength === 0 || buffer.byteLength > MAX_ICON_SIZE) {
-      return null
-    }
+    // 空 body 更像被截断，值得让下一次请求重试；超过上限说明这个资源本身不可用。
+    if (buffer.byteLength === 0) return { ok: false, failure: 'transient' }
+    if (buffer.byteLength > MAX_ICON_SIZE) return { ok: false, failure: 'missing' }
 
     const bytes = new Uint8Array(buffer)
     const contentType = sniffImageContentType(bytes, response.headers.get('content-type'))
     // Reject payloads that are not real images (e.g. an auth-gated host that
     // returns an HTML login page instead of the icon). Caching those would
     // store an undecodable blob that renders as the title's first letter.
-    if (!contentType) return null
+    if (!contentType) return { ok: false, failure: 'missing' }
 
     return {
-      bytes,
-      contentType,
+      ok: true,
+      icon: { bytes, contentType },
     }
   } catch {
-    return null
+    return { ok: false, failure: 'transient' }
   } finally {
     clearTimeout(timer)
   }

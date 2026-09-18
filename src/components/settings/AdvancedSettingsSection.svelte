@@ -113,7 +113,7 @@
         <h3>尺寸与密度</h3>
         <div class="settings-grid card-size-grid">
           <label class="field field-number" class:disabled={form.card_style !== 'info'} for="settings-card-width">
-            <span>卡片最小宽度 <Tooltip text="控制一行能容纳的卡片数量，最小值为 {CARD_SIZE_LIMITS.width.min} px。实测：约 68 px 以下详情卡只显示图标，标题与描述的可用宽度为 0；标题要到约 120 px 才完整显示。低于 44 px 时点击区域也会小于触控推荐尺寸。移动端另有 150 px 安全下限，不受此值影响。" /></span>
+            <span>详情卡片列宽下限 <Tooltip text="控制一行能容纳的卡片数量；实际宽度会自动伸缩。最小值为 {CARD_SIZE_LIMITS.width.min} px。实测：约 68 px 以下详情卡只显示图标，标题与描述的可用宽度为 0；标题要到约 120 px 才完整显示。低于 44 px 时点击区域也会小于触控推荐尺寸。移动端另有 150 px 安全下限，不受此值影响。" /></span>
             <InputGroup
               inputId="settings-card-width"
               type="number"
@@ -124,7 +124,7 @@
               placeholder="默认 160"
               disabled={form.card_style !== 'info'}
               bind:value={form.card_size.width}
-              ariaLabel="卡片最小宽度"
+              ariaLabel="详情卡片列宽下限"
               on:input={() => void syncForm()}
             />
             {#if form.card_style === 'info' && form.card_size.width >= CARD_SIZE_LIMITS.width.min && form.card_size.width <= 68}

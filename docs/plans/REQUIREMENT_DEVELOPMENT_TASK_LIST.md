@@ -29,11 +29,11 @@
 | E 图标渲染 | REQ-10、REQ-11 | 2 | `FR-5.1`、`FR-5.2` |
 | F 云端新增需求 | REQ-12 | 1 | Issue #15 |
 
-> `REQ-13` 是唯一来源为「已推翻的 FR-4.5」的条目：其余 `REQ-01`~`REQ-11` 都源自 `FRONTEND_EXPERIENCE_OPTIMIZATION_REQUIREMENTS.md` 里**待实现**的 FR 条款，而 `REQ-13` 来自该文档明确写「不做」、后于 2026-09-05 被 PROB-30 裁定推翻的那一条。它已获用户批准，不需要再走第 5 节的批准流程。
+> `REQ-13` 是唯一来源为「已推翻的 FR-4.5」的条目：其余 `REQ-01`~`REQ-11` 都源自 `FRONTEND_EXPERIENCE_OPTIMIZATION_REQUIREMENTS.md` 里待实现的 FR 条款，而 `REQ-13` 来自该文档明确写「不做」、后于 2026-09-05 被 PROB-30 裁定推翻的那一条。它已获用户批准并已完成实现，不需要再走第 5 节的批准流程。
 
 ### 已闭环的条目
 
-`REQ-08`（13 套毛玻璃预设逐套强调色）已在 2026-09-03 实现，用户确认接受该视觉变动。其余条目的当前状态见 [本地待办清单](../BACKLOG.md)。
+`REQ-08`（13 套毛玻璃预设逐套强调色）与 `REQ-13`（自定义背景浅/深 accent）均已完成实现；前者的视觉逐套人工复核仍作为 `REQ-08b` 验证欠账保留。其余条目的当前状态见 [本地待办清单](../BACKLOG.md)。
 
 ---
 
@@ -214,29 +214,25 @@
 | 项 | 内容 |
 | --- | --- |
 | 来源映射 | Issue #15（OPEN，`enhancement`，2026-09-02，`wztx`）；本地需求文档**无对应编号**，见 `PROB-06` |
-| 云端事实 | 标题仍是模板占位「简短描述你的新功能想法」，正文诉求「开发兼容 EdgeOne 部署版本」；维护者 2026-09-02 评论「目前没计划…下一个大版本纳入排期」，**未承诺实现** |
+| 云端事实 | 当前标题为「[Feature]: 兼容EdgeOne部署版本」；早期核对记录曾为模板占位标题，正文诉求仍是开发兼容 EdgeOne 部署版本；维护者 2026-09-02 评论「目前没计划…下一个大版本纳入排期」，**未承诺实现** |
 | 阻塞原因 | 兼容边界完全未定义 —— Workers 运行时 API 差异、D1/KV 的等价存储、部署配置、构建产物、CI、文档范围都不清楚。详见 `PROB-25` |
 | 处理顺序 | 先澄清范围（`PROB-25`）→ 再评估架构可行性 → 才谈立项。**当前不排期** |
 
 
 ### 组 D 追加：自定义背景的强调色
 
-#### REQ-13（P2，已批准待实现）自定义背景可配置强调色
+#### REQ-13（P2，已完成）自定义背景可配置强调色
 
 | 项 | 内容 |
 | --- | --- |
 | 来源映射 | `PROB-30` 方案 c（用户 2026-09-05 裁定）；推翻 `FRONTEND_EXPERIENCE_OPTIMIZATION_REQUIREMENTS.md` `FR-4.5` 第二条与 `D-10` |
-| 要解决的问题 | `background_preset_id === 'custom'` 时没有预设色相可依，`accentColor` 落到内置回退值。`--home-accent-color` 是 hover 描边与 focus 环的唯一来源，用户把自定义背景设成同色系时焦点环几乎不可见——这是无障碍风险，不只是观感问题 |
-| 生效口径（关键约束） | 新设置**只在没有预设时生效**。选中任意内置预设 → 仍用预设的 `accentColor` / `darkAccentColor`，用户值不参与；`custom` 且用户已设 → 用用户值；`custom` 且用户未设 → 用内置回退值。这条链保证不出现两个同时生效的真源，正是 `FR-4.5` 原顾虑的解法 |
-| 需要浅/深两个值 | 现有 accent 在预设里就是 light/dark 成对的（`accentColor` / `darkAccentColor`）。只给一个值会让深色模式下的焦点环对比度失控，因此设置项也必须是成对的两个字段 |
-| 三处硬编码回退都要覆盖 | 复核源码后确认回退值分散在**三处**，实现时缺一处就会出现「设置了却不生效」：① `src/lib/appData.ts` 的 `buildHomeBackground` 里 `accentColor` 的无预设分支（输出 `--theme-accent-color`）；② `src/views/Home.svelte` 的 `--home-accent-color: var(--theme-accent-color, #2563eb)` 与深色档 `var(--theme-accent-color, #7dd3fc)`；③ `src/components/settings/SettingsHomePreview.svelte` 有 6 处 `color-mix(… var(--theme-accent-color, #2563eb) …)` 内联回退 |
-| 顺带修掉的既有不一致 | 上面第 ③ 处的 6 个回退**深浅色都用浅色值 `#2563eb`**，没有深色档。后台预览在深色主题下若拿不到 `--theme-accent-color` 就会退到浅色蓝，与首页第 ② 处的深色回退 `#7dd3fc` 不一致。这是既有缺陷，实现 `REQ-13` 时一并对齐 |
-| 设置字段改动面 | `shared/types.ts` 类型；`shared/settings.ts` 的归一化、`SETTINGS_KEYS`、`PUBLIC_SETTINGS_KEYS` / `PUBLIC_DATA_SETTINGS_KEYS`（accent 要在公开首页生效，必须进公开白名单）；`worker/lib/settingsData.ts` 的 `DEFAULT_SETTINGS`；`worker/routes/settings.ts` 的 PUT 校验；`schema.sql` 的 seed；旧数据缺键时的回落 |
-| UI 落点与冲突 | 控件应落在配色分区，与 `PROB-04`（删模块顶层说明、分组名收敛）**改同一个 `GradientPresetSelector.svelte`**，必须串行；也可能落在 `AdvancedSettingsSection.svelte`（那里已有 `ColorAlphaInput` 的用法可复用）。落点在实现前定，不要两处都加 |
-| 文档同步（实现时必做） | `docs/reference/API_CONTRACT.md` 的设置键表要加新字段行，并更新该表前面「全部 30 个设置键」这个计数；`SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md` 的配色分区描述要补这个控件 |
-| 与 `REQ-07` 的依赖 | `REQ-07` 要把 `--accent-border` / `--accent-glow` 定义在 `--home-accent-color` 同处并在预览根再定义一份。两条都动同一批定义点，先做哪条都行，但第二条必须复验另一条的定义位置没被漏掉 |
-| 优先级说明 | 定为 P2 而非 `PROB-30` 原本的 P3：方案 a 只是加注释，方案 c 是新增公共设置字段 + 三处回退对齐 + 契约与 UI 同步，工作量与影响面都高一档，且它消除的是焦点可见性这一无障碍风险 |
-| 验收标准（可观察） | ① 自定义背景下设置 accent 后，首页卡片 hover 描边与 focus 环用该颜色；② 切到任一内置预设后立刻改回预设自身的 accent，用户值不生效；③ 后台预览与首页在浅色和深色下都取同一个 accent；④ 未设过该字段的旧实例行为完全不变 |
+| 要解决的问题 | `background_preset_id === 'custom'` 时没有预设色相可依，accent 可能回退到与用户背景相近的冷蓝，削弱 hover 描边与 focus 环可见性。 |
+| 最终生效口径 | 内置预设始终使用自身 `accentColor` / `darkAccentColor`；自定义背景且用户已设置时使用对应浅/深 accent；自定义背景未设置时继续使用原内置回退。 |
+| 已完成改动 | `shared/types.ts`、`shared/settings.ts`、`worker/lib/settingsData.ts`、`worker/routes/settings.ts`、`schema.sql`、`src/lib/settingsForm.ts`、`src/lib/appData.ts`、`src/views/Home.svelte` 与 `src/components/settings/SettingsHomePreview.svelte` 已完成字段、归一化、公开白名单、持久化、优先级和预览接线。 |
+| UI 落点 | 自定义浅/深强调色控件位于 `src/components/settings/BackgroundSettingsSection.svelte`；`PROB-04` 的 `GradientPresetSelector.svelte` 文案收敛已独立完成。 |
+| 文档同步 | `docs/reference/API_CONTRACT.md` 已加入两个设置键及其长度/回退语义；设置页需求记录已说明与本条的边界。 |
+| 验证结果 | `npm run type-check` 通过，`npm test` 112 files / 821 passed，`npm run build` 成功，`git diff --check` 通过；生产/L2 复核仍按发布验收边界保留。 |
+| 维护口径 | 本条已完成，不再进入未批准需求或当前待实现清单；后续如修改 accent token，需复验本条的定义和预览回退。 |
 
 ---
 
@@ -268,7 +264,7 @@
 | `FR-3.4` | 图标候选已随 URL 变化免费重算，**无需开发**；不接 fetch-favicon | `BookmarkEditModal.svelte:109-112` |
 | `FR-3.6` | 后台两个入口继续用 `categories[0]`；本轮不新增全局「新增书签」入口 | `admin/BookmarkListPanel.svelte:258,282`；`HomeFloatingActions.svelte:67-124` |
 | `FR-4.4`（部分） | 毛玻璃描边/柔影与 tooltip 无需开发；8px 间距不动（→`OQ-6`）；48px 默认高度不改（→`OQ-7`） | `BookmarkCardInfo.svelte:79,85-88,107,109`；`shared/settings.ts:33-43` |
-| `FR-4.5`（部分推翻） | 「不引入 `--accent-primary` 别名」仍然成立。「不新增 accent 用户设置」**已于 2026-09-05 随 PROB-30 裁定推翻**，改由 `REQ-13` 承接 | `appData.ts` 的 `buildHomeBackground`（`accentColor` 无预设分支与 `--theme-accent-color` 输出）；`shared/types.ts` 目前仍无 accent key |
+| `FR-4.5`（部分推翻） | 「不引入 `--accent-primary` 别名」仍然成立；「不新增 accent 用户设置」已于 2026-09-05 推翻并由**已完成的 `REQ-13`**承接 | `src/lib/appData.ts`、`shared/types.ts`、`src/components/settings/BackgroundSettingsSection.svelte`、`src/components/settings/SettingsHomePreview.svelte` |
 | `FR-5.3` | 驳回 300ms 布尔互斥锁；现有 900/900/600ms 时间戳窗口更完善 | `Home.svelte:78,297,336,364,378` |
 | `FR-5.4` | 首页一级分组不加 `content-visibility`；策略反转另留 `OQ-4` | `Home.svelte:781-790`；`TECHNICAL_NOTES.md:211` |
 | `FR-5.5` | 不是功能需求，而是上线前的 9 项性能护栏，随任何落地一起重跑，不单列开发 | `scripts/perf-audit.mjs:28-32,489-545` |
@@ -279,22 +275,22 @@
 
 ## 6. 实施顺序与冲突协调
 
-### 6.1 必须串行的文件
+### 6.1 必须串行的文件（历史实施协调记录）
 
 | 文件 | 争用方 | 处理 |
 | --- | --- | --- |
 | `src/components/HomeFloatingActions.svelte` | `REQ-01`（FR-1.2 新增搜索按钮） vs `PARTIAL_EXPORT_AND_TOP_NAV_WRAP_REQUIREMENTS.md` 需求 C（顶部导航按钮对齐，已落地在 `:143-156`） | 串行改，改后必须复验顶部模式对齐数值与 z-index |
-| `src/components/settings/SettingsHomePreview.svelte` | `REQ-07`（accent token） vs `REQ-13`（6 处 `--theme-accent-color` 回退要对齐深浅档） vs `SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md` `FR-0.5`/`FR-B` | 串行改，改后复验预览实时联动；`REQ-07` 与 `REQ-13` 动的是同一批回退与定义点，后做的那条必须复核前一条没被覆盖 |
+| `src/components/settings/SettingsHomePreview.svelte` | `REQ-07`（accent token）与已完成的 `REQ-13` 曾共同修改预览回退，并与 `SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md` `FR-0.5`/`FR-B` 有交集 | `REQ-13` 已完成；后续修改需复验预览实时联动与浅/深回退，不把历史依赖当作当前未完成任务 |
 | `src/views/Home.svelte`、`src/App.svelte` | `REQ-01`、`REQ-06` 与既有排序/分类回调 | 集中在同一轮改，避免多轮往返 |
-| `src/components/settings/GradientPresetSelector.svelte` | `PROB-04`（删模块顶层说明、分组名收敛成「毛玻璃」） vs `REQ-13`（若 accent 控件落在配色分区） | 串行改。`REQ-13` 的控件落点必须在动手前定下来：落配色分区就等 `PROB-04` 先做完，落 `AdvancedSettingsSection.svelte` 则两条互不干扰 |
-| `src/lib/appData.ts` | `REQ-13`（`buildHomeBackground` 的 accent 分支与 `--theme-accent-color` 输出） vs `PROB-30` 原方案 a（已作废，不再提取常量） | 方案 a 不再执行，此处只有 `REQ-13` 一个争用方；保留此行是为了说明「提取回退常量」那条动作已被 `REQ-13` 取代 |
+| `src/components/settings/GradientPresetSelector.svelte` | `PROB-04` 与 `REQ-13` 曾存在文案/配色区落点冲突 | 两项均已完成；后续改动需保留已完成的文案、控件和预览契约 |
+| `src/lib/appData.ts` | `REQ-13` 的 accent 分支与 PROB-30 原方案 a 曾有冲突 | `REQ-13` 已完成；方案 a 不再执行 |
 
-### 6.2 建议阶段
+### 6.2 建议阶段（历史实施顺序；当前状态以 BACKLOG 和完成记录为准）
 
 1. **阶段 1（前置抽取，不改行为）**：抽出共享防抖常量、抽出可复用滚动锁、抽出 accent token —— 为 `REQ-01`/`REQ-04`/`REQ-07` 铺路。每步必须证明无视觉变化（`C-3`）。
 2. **阶段 2（录入路径）**：`REQ-04` → `REQ-05` → `REQ-06`。`REQ-05` 同步更新 `API_CONTRACT.md:132`。
 3. **阶段 3（检索链路）**：`REQ-01`。依赖阶段 1 的防抖常量与滚动锁。
-4. **阶段 4（视觉）**：`REQ-07` → `REQ-13` → `REQ-08` → `REQ-09` → `REQ-10` → `REQ-11`。`REQ-13` 紧跟 `REQ-07`，因为两者动同一批 accent 定义点与预览回退，分开太久容易漏掉一处。按独立提交保存；回滚优先按提交粒度 revert，**不得**通过修改用户设置数据或删除兼容字段来回滚。
+4. **阶段 4（视觉，历史顺序）**：`REQ-07` → `REQ-13` → `REQ-08` → `REQ-09` → `REQ-10` → `REQ-11`。`REQ-13` 已完成；该顺序只保留为依赖和冲突的历史记录，不表示当前仍待实施。
 5. **阶段 5（可发现性）**：`REQ-02`、`REQ-03`，可与阶段 4 并行（文件不重叠）。
 6. `REQ-12` 不进阶段，阻塞于 `PROB-25` 的范围澄清。
 

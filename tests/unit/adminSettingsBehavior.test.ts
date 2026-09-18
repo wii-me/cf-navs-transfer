@@ -132,7 +132,7 @@ describe('设置控件到 payload 的实际写入', () => {
     await openSection('外观与卡片')
     await fireEvent.click(screen.getByTestId('appearance-advanced-toggle'))
 
-    await fireEvent.input(screen.getByRole('spinbutton', { name: '卡片最小宽度' }), { target: { value: '40' } })
+    await fireEvent.input(screen.getByRole('spinbutton', { name: '详情卡片列宽下限' }), { target: { value: '40' } })
     const saveButton = screen.getByRole('button', { name: '保存设置' }) as HTMLButtonElement
     await waitFor(() => expect(saveButton.disabled).toBe(false))
     await fireEvent.submit(document.querySelector('#settings-form') as HTMLFormElement)

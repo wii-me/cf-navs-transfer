@@ -54,12 +54,14 @@ export type SelectBookmarkIconifyIconResult =
       error: string
     }
 
-export function createBookmarkIconifySearchState(): BookmarkIconifySearchState {
+// 弹窗是单例、只切 open，所以重置时必须越过上一轮在途请求的编号。
+// 保留默认 0 让首次搜索从 1 开始；传入上一轮编号时单调递增，旧响应永远不会匹配。
+export function createBookmarkIconifySearchState(previousRequestId?: number): BookmarkIconifySearchState {
   return {
     candidates: [],
     loading: false,
     error: '',
-    requestId: 0,
+    requestId: previousRequestId === undefined ? 0 : previousRequestId + 1,
     lastQuery: '',
   }
 }

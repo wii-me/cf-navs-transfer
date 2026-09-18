@@ -107,6 +107,21 @@ describe('bookmark Iconify controller', () => {
     expect(stale.loading).toBe(true)
   })
 
+  it('advances the request id when the singleton modal state resets', () => {
+    const scheduled = scheduleBookmarkIconifyCandidateSearch(createBookmarkIconifySearchState(), {
+      enabled: true,
+      value: 'image',
+    })
+    const reset = createBookmarkIconifySearchState(scheduled.state.requestId)
+    const late = resolveBookmarkIconifySearchSuccess(reset, {
+      requestId: scheduled.task?.requestId ?? 0,
+      candidates: [homeCandidate],
+    })
+
+    expect(reset.requestId).toBe((scheduled.task?.requestId ?? 0) + 1)
+    expect(late).toEqual(reset)
+  })
+
   it('clears candidates and stores an error when the latest search fails', () => {
     const scheduled = scheduleBookmarkIconifyCandidateSearch(createBookmarkIconifySearchState(), {
       enabled: true,

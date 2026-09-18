@@ -10,7 +10,7 @@ import {
 } from '../lib/db'
 import {
   dataUriToResponse,
-  fetchCacheableIcon,
+  fetchIcon,
   iconBytesToDataUri,
   iconBytesToResponse,
   isIconifyIconUrl,
@@ -21,11 +21,14 @@ import {
   cacheResponse,
   errorIconResponse,
   fallbackIconResponse,
+  ICON_FAILURE_CACHE,
   getCachedResponse,
   iconCacheKey,
+  iconFetchFallbackResponse,
   ICON_FALLBACK_CACHE,
   ICON_PRIVATE_CACHE,
   ICON_SUCCESS_CACHE,
+  transientIconErrorResponse,
 } from '../lib/iconResponses'
 import { createIconAccessGrant, verifyIconAccessGrant } from '../lib/iconSignature'
 import { getJwtSecret } from '../lib/jwt'
@@ -33,6 +36,15 @@ import { fail, ok } from '../lib/response'
 import type { HonoEnv } from '../types'
 
 export const iconRoutes = new Hono<HonoEnv>()
+function normalizeCategoryIconUrl(value: string): string | null {
+  const icon = value.trim()
+  if (!icon) return null
+  if (/^data:image\//i.test(icon) || /^https?:\/\//i.test(icon)) return icon
+
+  const normalized = normalizeIconifySearchQuery(icon)
+  const [prefix, name] = normalized.split(':')
+  return prefix && name ? iconifyUrlFromParams(prefix, name) : null
+}
 
 // 后台预览私密对象图标用的短期授权。签名密钥复用 settings.jwt_secret，因此改密码
 // （rotateJwtSecret）会顺带作废全部已签发授权。该端点在 worker/index.ts 上挂
@@ -76,12 +88,18 @@ iconRoutes.get('/iconify/:prefix/:name', async (c) => {
       return cached
     }
 
-    const icon = await fetchCacheableIcon(iconUrl)
-    if (!icon) {
-      return cachedFallbackIconResponse(c, cacheKey, c.req.param('name').replace(/\.svg$/i, ''), iconUrl)
+    const outcome = await fetchIcon(iconUrl)
+    if (!outcome.ok) {
+      return iconFetchFallbackResponse(
+        c,
+        cacheKey,
+        outcome.failure,
+        c.req.param('name').replace(/\.svg$/i, ''),
+        iconUrl,
+      )
     }
 
-    const response = iconBytesToResponse(icon, ICON_SUCCESS_CACHE)
+    const response = iconBytesToResponse(outcome.icon, ICON_SUCCESS_CACHE)
     cacheResponse(c, cacheKey, response)
     return response
   } catch {
@@ -184,11 +202,12 @@ iconRoutes.get('/icon/:id', async (c) => {
       return cachedFallbackIconResponse(c, cacheKey, bookmark.title, bookmark.url, fallbackCache)
     }
 
-    const fetchedIcon = await fetchCacheableIcon(bookmark.icon)
-    if (!fetchedIcon) {
-      return cachedFallbackIconResponse(c, cacheKey, bookmark.title, bookmark.url, fallbackCache)
+    const outcome = await fetchIcon(bookmark.icon)
+    if (!outcome.ok) {
+      return iconFetchFallbackResponse(c, cacheKey, outcome.failure, bookmark.title, bookmark.url, fallbackCache)
     }
 
+    const fetchedIcon = outcome.icon
     if (isIconifyIconUrl(bookmark.icon)) {
       const response = iconBytesToResponse(fetchedIcon, successCache)
       cacheResponse(c, cacheKey, response)
@@ -235,27 +254,45 @@ iconRoutes.get('/category-icon/:id', async (c) => {
     if (!category.icon) {
       return cachedFallbackIconResponse(c, cacheKey, category.title, '', fallbackCache)
     }
+    const categoryIconUrl = normalizeCategoryIconUrl(category.icon)
+    if (!categoryIconUrl) {
+      return cachedFallbackIconResponse(c, cacheKey, category.title, '', fallbackCache)
+    }
 
-    if (category.icon.startsWith('data:image/')) {
-      const response = dataUriToResponse(category.icon, successCache)
+    if (categoryIconUrl.startsWith('data:image/')) {
+      const response = dataUriToResponse(categoryIconUrl, successCache)
       if (!response) return cachedFallbackIconResponse(c, cacheKey, category.title, '', fallbackCache)
       cacheResponse(c, cacheKey, response)
       return response
     }
 
-    if (!/^https?:\/\//i.test(category.icon)) {
+    if (!/^https?:\/\//i.test(categoryIconUrl)) {
       return cachedFallbackIconResponse(c, cacheKey, category.title, '', fallbackCache)
     }
 
-    const fetchedIcon = await fetchCacheableIcon(category.icon)
-    if (!fetchedIcon) {
-      return cachedFallbackIconResponse(c, cacheKey, category.title, category.icon, fallbackCache)
+    const outcome = await fetchIcon(categoryIconUrl)
+    if (!outcome.ok) {
+      if (outcome.failure === 'transient') {
+        return transientIconErrorResponse(
+          category.title,
+          categoryIconUrl,
+          authorized ? fallbackCache : ICON_FAILURE_CACHE,
+        )
+      }
+      return iconFetchFallbackResponse(
+        c,
+        cacheKey,
+        outcome.failure,
+        category.title,
+        categoryIconUrl,
+        fallbackCache,
+      )
     }
 
-    const response = iconBytesToResponse(fetchedIcon, successCache)
+    const response = iconBytesToResponse(outcome.icon, successCache)
     cacheResponse(c, cacheKey, response)
     return response
   } catch {
-    return fallbackIconResponse('', '')
+    return transientIconErrorResponse('', '')
   }
 })

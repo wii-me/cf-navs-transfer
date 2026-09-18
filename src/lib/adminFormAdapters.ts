@@ -8,11 +8,15 @@ import type {
 } from '../../shared/types'
 import { normalizeBookmarkUrl } from '../../shared/urlPolicy'
 import type { BookmarkFormValue, CategoryFormValue } from './adminTypes'
+import { iconifyIcon } from './icons'
 
 export function toCategoryPayload(form: CategoryFormValue): CategoryUpsertReq {
+  const icon = form.icon.trim()
+  const normalizedIcon = iconifyIcon(icon) || icon
+
   return {
     title: form.title.trim(),
-    icon: form.icon.trim() || null,
+    icon: normalizedIcon || null,
     parent_id: form.parent_id == null || form.parent_id === '' ? null : Number(form.parent_id),
     ...(form.is_private === undefined ? {} : { is_private: form.is_private === true }),
   }

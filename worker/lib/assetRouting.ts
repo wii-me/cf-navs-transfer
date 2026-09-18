@@ -1,4 +1,7 @@
-const APP_SHELL_PATH = '/index.html'
+// Cloudflare Assets may redirect `/index.html` to `/` on the deployed custom
+// domain. Fetch the canonical root instead so the fallback itself cannot leak
+// another redirect back to the browser.
+const APP_SHELL_PATH = '/'
 const ASSET_PATH_PREFIX = '/assets/'
 
 type AssetFetcher = {
@@ -46,7 +49,11 @@ export async function fetchAssetResponse(request: Request, assets: AssetFetcher)
     return missingAssetResponse()
   }
 
-  if (response.status !== 404 || !shouldFallbackToAppShell(request)) return response
+  // Cloudflare Assets may redirect an unknown extensionless path to `/` instead of
+  // returning 404. That redirect is not a valid response for a client-side route:
+  // load the shell for document navigations before the redirect escapes the Worker.
+  const isAssetRedirect = response.status >= 300 && response.status < 400
+  if (!shouldFallbackToAppShell(request) || (response.status !== 404 && !isAssetRedirect)) return response
 
   const shellRequest = new Request(new URL(APP_SHELL_PATH, request.url), request)
   return assets.fetch(shellRequest)

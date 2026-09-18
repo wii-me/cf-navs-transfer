@@ -1,5 +1,5 @@
 import type { IconifyCandidate, IconifySearchResp } from '../../shared/types'
-import { fetchCacheableIcon, iconBytesToResponse } from './iconData'
+import { fetchIcon, iconBytesToResponse } from './iconData'
 import { ICON_SUCCESS_CACHE } from './iconResponses'
 import { extractSvgText, svgHasColor } from './svgColor'
 
@@ -73,20 +73,26 @@ export function normalizeIconifySearchQuery(value: string): string {
   if (!trimmed) return ''
 
   const withoutUrl = iconifyNameFromKnownHost(trimmed) ?? trimmed
-  const normalized = withoutUrl
+  const withoutPrefix = withoutUrl
     .replace(/^iconify:/, '')
     .replace(/^@iconify-json\//, '')
     .replace(/^@iconify-icons\//, '')
-    .replace(/\s+/g, '')
     .replace(/\/+$/g, '')
-    .replace(/\//g, ':')
 
-  if (/^[a-z0-9-]+:[a-z0-9-]+$/.test(normalized)) {
-    return normalized
+  const compactIconifyName = withoutPrefix.replace(/\s+/g, '').replace(/\//g, ':')
+  if (/^[a-z0-9-]+:[a-z0-9-]+$/.test(compactIconifyName)) {
+    return compactIconifyName
   }
 
-  const plain = normalized.replace(/[^a-z0-9-]/g, '')
-  return plain.length >= 2 && plain.length <= 80 ? plain : ''
+  const plain = withoutPrefix
+    .replace(/[^a-z0-9-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!plain) return ''
+
+  const words = plain.split(' ')
+  const query = words.length > 1 && words.every((word) => word.length === 1) ? words.join('') : plain
+  return query.length >= 2 && query.length <= 80 ? query : ''
 }
 
 function iconifyNameFromKnownHost(value: string): string | null {
@@ -240,9 +246,10 @@ async function inspectIconifyCandidate(
   const iconUrl = iconifyUrlFromName(item.name)
   if (!iconUrl) return null
 
-  const icon = await fetchCacheableIcon(iconUrl, ICONIFY_ICON_FETCH_TIMEOUT_MS)
-  if (!icon) return null
+  const outcome = await fetchIcon(iconUrl, ICONIFY_ICON_FETCH_TIMEOUT_MS)
+  if (!outcome.ok) return null
 
+  const icon = outcome.icon
   const svg = extractSvgText(icon.bytes, icon.contentType)
   const colored = svg ? svgHasColor(svg) : false
   const response = iconBytesToResponse(icon, ICON_SUCCESS_CACHE)
@@ -309,11 +316,30 @@ export async function searchIconifyIcons(
     items.slice(0, ICONIFY_SVG_INSPECT_LIMIT),
     writeIconCache,
   )
+  const inspectedByName = new Map(inspected.map((candidate) => [candidate.name, candidate]))
+  // Search results are useful even when the optional SVG inspection is rate-limited.
+  // Keep the raw Iconify candidates as a fallback, so one inspection burst cannot
+  // turn a valid search into a 502 or an empty result.
+  const rankedPool = items.slice(0, ICONIFY_SVG_INSPECT_LIMIT).map((item) => (
+    inspectedByName.get(item.name) ?? {
+      ...createIconifyCandidate(item, false),
+      palette: item.palette,
+      order: item.order,
+    }
+  ))
+  const candidates = rankIconifyCandidates(rankedPool)
+
   const data: IconifySearchResp = {
     query,
-    candidates: rankIconifyCandidates(inspected),
+    candidates,
   }
 
-  setCachedIconifySearch(query, data)
+  // Optional inspection failures must not be cached: the raw fallback keeps this
+  // request useful, while a later request gets a chance to recover colored/icon
+  // metadata after the upstream rate limit clears.
+  const inspectionLimit = Math.min(items.length, ICONIFY_SVG_INSPECT_LIMIT)
+  if (inspected.length >= inspectionLimit) {
+    setCachedIconifySearch(query, data)
+  }
   return data
 }

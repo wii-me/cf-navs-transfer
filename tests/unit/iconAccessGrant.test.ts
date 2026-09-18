@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getJwtSecret, resetJwtSecretCache } from '../../worker/lib/jwt'
 import { createIconAccessGrant, verifyIconAccessGrant, ICON_ACCESS_TTL_MS } from '../../worker/lib/iconSignature'
 import { iconRoutes } from '../../worker/routes/icon'
@@ -92,6 +92,11 @@ beforeEach(() => {
   })
 })
 
+// 上游抓取在本文件里用 stub 顶替；漏掉复位会让后面的用例拿到假 fetch。
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
 const executionCtx = {
   waitUntil(promise: Promise<unknown>) {
     void promise.catch(() => undefined)
@@ -114,6 +119,7 @@ const fixture = {
   categories: [
     { id: 1, parent_id: null, title: '公开分类', icon: null },
     { id: 2, parent_id: null, title: '私密分类', icon: PRIVATE_ICON, is_private: 1 },
+    { id: 3, parent_id: null, title: '外站图标分类', icon: 'https://icons.example.com/a.svg' },
   ],
   bookmarks: [
     { id: 10, category_id: 1, title: '公开书签', url: 'https://public.example.com', icon: PRIVATE_ICON, icon_blob: PRIVATE_ICON },
@@ -222,6 +228,24 @@ describe('GET /api/category-icon/:id', () => {
     expect(cachePuts).toHaveLength(0)
   })
 
+  it('keeps the private cache invariant when the upstream transiently fails', async () => {
+    // 授权路径全程 `cacheKey` 为 null，瞬时失败也必须保持同一份 `private, no-store`，
+    // 不能退化成匿名路径的兜底策略。
+    const env = createEnv(fixture)
+    const { grant } = await createIconAccessGrant(await getJwtSecret(env.DB))
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('busy', {
+      status: 503,
+      headers: { 'content-type': 'text/plain' },
+    })))
+
+    const response = await iconRequest(env, `/category-icon/3?key=${encodeURIComponent(grant)}`)
+
+    expect(response.status).toBe(503)
+    expect(response.headers.get('X-Icon-Fallback')).toBe('1')
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store')
+    expect(cachePuts).toHaveLength(0)
+  })
+
   it('keeps a missing id and a private id indistinguishable', async () => {
     const env = createEnv(fixture)
     const [privateIcon, missingIcon] = await Promise.all([
@@ -263,5 +287,49 @@ describe('anonymous icon caching', () => {
     const response = await iconRequest(createEnv(fixture), '/icon/999')
 
     expect(response.headers.get('Cache-Control')).toBe('public, max-age=300, s-maxage=300')
+  })
+
+  it('never caches a fallback produced by a transient upstream failure', async () => {
+    // 瞬时失败返回的兜底图是 200 + image/svg+xml，与真实图标在缓存与网络面板里完全一样。
+    // 按 5 分钟写进 edge、Service Worker 或浏览器，用户就会在整个缓存期内看到文字兜底，
+    // 而请求看起来是成功的——这正是「图标明明加载了却回退成文字」的成因。
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('busy', {
+      status: 503,
+      headers: { 'content-type': 'text/plain' },
+    })))
+
+    const response = await iconRequest(createEnv(fixture), '/category-icon/3')
+
+    expect(response.status).toBe(503)
+    expect(response.headers.get('X-Icon-Fallback')).toBe('1')
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+    expect(cachePuts).toHaveLength(0)
+  })
+
+  it('keeps the transient rule on the Iconify preview proxy too', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('busy', {
+      status: 429,
+      headers: { 'content-type': 'text/plain' },
+    })))
+
+    const response = await iconRequest(createEnv(fixture), '/iconify/mdi/home.svg')
+
+    expect(response.headers.get('X-Icon-Fallback')).toBe('1')
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+    expect(cachePuts).toHaveLength(0)
+  })
+
+  it('still short-caches the fallback when the upstream says the icon does not exist', async () => {
+    // 图标确实不存在时不缓存就等于每次访问都打一次上游，这里保持原有策略。
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('missing', {
+      status: 404,
+      headers: { 'content-type': 'text/plain' },
+    })))
+
+    const response = await iconRequest(createEnv(fixture), '/category-icon/3')
+
+    expect(response.headers.get('X-Icon-Fallback')).toBe('1')
+    expect(response.headers.get('Cache-Control')).toBe('public, max-age=300, s-maxage=300')
+    expect(cachePuts).toHaveLength(1)
   })
 })

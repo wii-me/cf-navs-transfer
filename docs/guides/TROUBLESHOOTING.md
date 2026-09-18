@@ -164,7 +164,7 @@ npm run deploy
 - 自定义图片 URL
 - 表情或短文字
 
-如果预览正常但保存后仍显示标题首字，请先强制刷新页面让新版 Service Worker 接管，再检查书签保存的 `icon` 是否仍是可访问的 HTTP(S) 图片地址。首页普通浏览不应出现按书签数量增长的 `/api/icon/:id` 请求；如果网络面板里仍看到这种行为，通常是旧静态资源或旧 Service Worker 还未更新。
+如果预览正常但保存后仍显示标题首字，请先强制刷新页面让新版 Service Worker 接管，再检查书签保存的 `icon` 是否仍是可访问的 HTTP(S) 图片地址。首页首次遇到 `icon_cached=true` 且本地图标缓存不存在的书签时，可能为每个图标请求一次 `/api/icon/:id` 并写入 `cf-navs-bookmark-icons-v1`；成功后刷新、滚动和重新打开浏览器都不应重复请求。若每次重开仍重新请求，先在 Application 中确认该 Cache Storage 条目是否存在，再检查当前页面是否由旧静态资源控制。
 
 ### Iconify 图标不显示
 

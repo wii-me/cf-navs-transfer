@@ -13,7 +13,7 @@ CF-Navs 支持多种图标来源：
 - 自定义文字或表情
 - 基于完整书签标题生成的本地 SVG 文字图标，长标题按字符宽度自动换行到最多 4 行
 
-新增或编辑书签时，普通 HTTP(S) 图标会通过刷新接口写入书签图标缓存。刷新接口使用短超时抓取外站图标，避免保存流程被慢速 favicon 服务长时间阻塞；抓取失败时保留已有 `icon_blob`，没有缓存则返回 `null`。**聚合接口不返回二进制 `icon_blob`，而返回 `icon_cached` 轻量标志**；首页普通渲染据此配合浏览器本地图标缓存和已保存的普通 HTTP(S) 图标 URL，必要时使用兼容代理获取图标。后台列表或显式刷新结果可以使用完整实体中的 `icon_blob`。
+新增或编辑书签时，普通 HTTP(S) 图标会通过刷新接口写入书签图标缓存。刷新接口使用短超时抓取外站图标，避免保存流程被慢速 favicon 服务长时间阻塞；抓取失败时保留已有 `icon_blob`，没有缓存则返回 `null`。**聚合接口不返回二进制 `icon_blob`，而返回 `icon_cached` 轻量标志**；首页普通渲染据此优先读取浏览器本地图标缓存。对 `icon_cached=true` 但本地没有副本的普通书签，首页会先读取 `cf-navs-bookmark-icons-v1`，未命中时抓取一次稳定的 `/api/icon/:id` 响应并写入该 Cache Storage，再把响应交给图片元素；失败时才回退到兼容代理或已保存的普通 HTTP(S) 图标 URL。后台列表或显式刷新结果可以使用完整实体中的 `icon_blob`。
 
 相关接口：
 
@@ -161,7 +161,7 @@ Worker 和前端共同承担缓存：
 - Service Worker 预缓存 `/index.html` 作为离线导航回退。
 Service Worker 对构建资源采用 cache-first；分类图标和可读且不超过 512KB 的跨域 Iconify SVG 可写入 Cache Storage；同源 `/api/icon/*` 与 `/api/iconify/*` 不写入 Cache Storage，跨域 `opaque` 响应也不缓存。
 
-浏览器本地存储只保留必要副本：后台聚合数据快照会清理旧登录态对应的同源快照；后台书签列表在**完整实体**已有 `icon_blob` 时直接展示并删除同 key 的本地图标副本，不在翻页预览时把 data URI 再复制到 `cf-navs-bookmark-icons-v1`。
+浏览器本地存储只保留必要副本：首页普通书签在本地缓存未命中且 `icon_cached=true` 时，会把一次成功且不超过 512 KiB 的 `/api/icon/:id` 响应写入 `cf-navs-bookmark-icons-v1`，后续浏览器重开先从该持久化缓存读取；后台聚合数据快照会清理旧登录态对应的同源快照；后台书签列表在**完整实体**已有 `icon_blob` 时直接展示并删除同 key 的本地图标副本，不在翻页预览时把 data URI 再复制到 `cf-navs-bookmark-icons-v1`。
 
 部署新版后，如果浏览器仍使用旧逻辑，可以强制刷新一次页面，让新版 Service Worker 接管。
 

@@ -47,7 +47,27 @@ describe('Worker asset routing', () => {
 
     expect(response.status).toBe(200)
     expect(await response.text()).toContain('<div id="app"></div>')
-    expect(paths).toEqual(['/admin', '/index.html'])
+    expect(paths).toEqual(['/admin', '/'])
+  })
+
+  it('replaces an Assets redirect with the app shell for SPA routes', async () => {
+    const paths: string[] = []
+    const fetch = vi.fn(async (assetRequest: Request) => {
+      const pathname = new URL(assetRequest.url).pathname
+      paths.push(pathname)
+      if (pathname === '/admin') {
+        return new Response(null, { status: 307, headers: { Location: '/' } })
+      }
+      return new Response('<!doctype html><div id="app"></div>', {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      })
+    })
+
+    const response = await request('/admin', { fetch }, { Accept: 'text/html' })
+
+    expect(response.status).toBe(200)
+    expect(await response.text()).toContain('<div id="app"></div>')
+    expect(paths).toEqual(['/admin', '/'])
   })
 
   it('keeps valid JavaScript assets cacheable and unchanged', async () => {

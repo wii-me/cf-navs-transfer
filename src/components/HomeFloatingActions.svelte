@@ -146,8 +146,8 @@
         class="icon-button transfer-button"
         data-testid="home-transfer-button"
         on:click={handleOpenTransfer}
-        title="便笺传输助手 (Ctrl+J)"
-        aria-label="便笺传输助手"
+        title="传输助手 (Ctrl+J)"
+        aria-label="传输助手"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="m22 2-7 20-4-9-9-4Z" />

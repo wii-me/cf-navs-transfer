@@ -1,3 +1,5 @@
+import type { IconFetchFailure } from './iconData'
+
 export const ICON_BROWSER_CACHE_SECONDS = 7 * 24 * 60 * 60
 export const ICON_EDGE_CACHE_SECONDS = 6 * 24 * 60 * 60
 
@@ -109,4 +111,39 @@ export function cachedFallbackIconResponse(
   const response = fallbackIconResponse(title, url, cacheControl)
   cacheResponse(context, request, response)
   return response
+}
+
+/**
+ * 按抓取失败的性质选择兜底图标响应。
+ *
+ * 上游瞬时失败（超时、429、5xx、网络错误）返回的兜底图**绝不进任何缓存**：它是
+ * `200 + image/svg+xml`，与真实图标在缓存和网络面板里长得一样，一旦按
+ * `ICON_FALLBACK_CACHE` 写进 edge、Service Worker 或浏览器，用户会在整个 5 分钟
+ * 缓存期内一直看到文字兜底。图标确实不存在（`missing`）时保留短缓存，避免持续打上游。
+ */
+export function iconFetchFallbackResponse(
+  context: CacheWritableContext,
+  request: Request | null,
+  failure: IconFetchFailure,
+  title: string,
+  url: string,
+  permanentCacheControl = ICON_FALLBACK_CACHE,
+): Response {
+  if (failure === 'transient') {
+    // `request === null` 即授权路径（PROB-20b 全程 `cacheKey` 为 null、不读不写 edge
+    // cache），这里保持同一条 `private, no-store` 不变量；匿名路径用 `no-store`。
+    return fallbackIconResponse(title, url, request === null ? ICON_PRIVATE_CACHE : ICON_FAILURE_CACHE)
+  }
+  return cachedFallbackIconResponse(context, request, title, url, permanentCacheControl)
+}
+
+// 分类图标由 <img> 直接加载。瞬时失败不能用 200 兜底，否则浏览器会把错误图当成
+// 成功结果，前端既无法重试，用户也会一直看到文字图标。保留相同的 SVG 作为响应体，
+// 但用 503 让 CategoryIcon 进入退避重试路径；no-store 继续阻止各级缓存污染。
+export function transientIconErrorResponse(title: string, url: string, cacheControl = ICON_FAILURE_CACHE): Response {
+  const fallback = fallbackIconResponse(title, url, cacheControl)
+  return new Response(fallback.body, {
+    status: 503,
+    headers: fallback.headers,
+  })
 }

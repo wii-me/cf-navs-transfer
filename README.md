@@ -5,7 +5,7 @@
   <p>
     本项目基于优秀开源项目 <a href="https://github.com/lbjxr/CF-Navs" target="_blank"><strong>CF-Navs</strong></a> 进行二次开发与功能扩展。<br>
     在完整保留原版优雅起始页、两级书签收纳、22 套内置主题与 Serverless 零运维特性的基础上，<br>
-    <strong>新增了跨设备、跨平台的轻量便笺随手记与 50MB 大文件极速传输功能</strong>，让个人导航页无缝升级为多端协同的数字中枢。
+    <strong>新增了跨设备、跨平台的传输助手（支持便笺记事与 50MB 大文件极速传输）</strong>，让个人导航页无缝升级为多端协同的数字中枢。
   </p>
 
   <p>
@@ -22,7 +22,7 @@
   <p>
     <a href="#-项目定位与背景">项目背景</a> ·
     <a href="#-核心功能矩阵">功能特性</a> ·
-    <a href="#-增强特性跨设备跨平台传输功能">跨平台传输</a> ·
+    <a href="#-增强特性跨设备跨平台传输助手">传输助手</a> ·
     <a href="#️-界面展示">界面展示</a> ·
     <a href="#-原版-cf-navs-无缝升级指南">平滑升级</a> ·
     <a href="#-快速部署指南">快速部署</a> ·
@@ -54,7 +54,7 @@
   以往不得不借助微信/QQ的“文件传输助手”或第三方网盘，步骤繁琐且依赖客户端与第三方账号。
 
 - **CF-Navs Transfer 的解法**：
-  本项目以 **CF-Navs 为坚实基石**，在原生架构中深度融合了 Cloudflare R2 对象存储，开发了半浮动式的**跨设备跨平台传输助手**。无需打开任何额外软件，在浏览器起始页内随时按下 <kbd>Ctrl</kbd> + <kbd>J</kbd> 即可呼出面板，支持剪贴板截屏直接粘贴发送、50MB 大文件上传、原图灯箱缩放以及到期自动销毁清理。
+  本项目以 **CF-Navs 为坚实基石**，在原生架构中深度融合了 Cloudflare R2 对象存储，开发了开箱即用的**传输助手**。无需打开任何额外软件，在浏览器起始页内随时按下 <kbd>Ctrl</kbd> + <kbd>J</kbd> 即可呼出面板，支持剪贴板截屏直接粘贴发送、50MB 大文件上传、原图灯箱缩放以及到期自动销毁清理。
   **既是强大赏心的浏览器起始页，又是触手可及的多端中转站。**
 
 ---
@@ -66,17 +66,18 @@
 - **毫秒级全站检索**：支持对书签标题、URL、描述以及所属分类完整路径进行模糊搜索，支持快捷键随时聚焦。
 - **自由拖拽与批量整理**：桌面端支持跨分类自由拖拽排序；手机端提供便捷的穿梭选项；后台支持多选批量迁移。
 - **私密书签与私密分类**：一键设置“仅登录可见”。在未登录的访客模式下，接口层严格过滤私密数据，隐私安全无懈可击。
-- **22 款内置精美主题**：提供纯色护眼、现代磨砂毛玻璃与暗黑深色外观，可微调卡片尺寸（最小支持 40px 极窄布局）与自定义 CSS/JS。
+- **22 款内置精美主题**：提供纯色护眼、现代磨砂毛玻璃与暗黑深色外观，可微调卡片尺寸（统一 160px 规范并支持最低 40px 极窄布局）与自定义 CSS/JS。
+- **图标本地优先缓存**：聚合数据支持 CacheStorage 本地持久化，秒级直出且极大降低边缘请求。
 - **Chrome / Edge 扩展单向同步**：内置浏览器扩展，浏览网页时可一键将新增书签同步至起始页指定分类，不覆盖原有数据。
 - **访问频次统计**：首页书签点击自动累计，后台提供访问量排行与零访问书签筛选。
 - **无痛数据导入与备份**：完美支持 CF-Navs 原生 JSON 备份（增量或覆盖）、Sun-Panel 数据迁移以及浏览器标准书签 HTML 导入。
 
-### 🚀 2. 深度增强的跨设备跨平台传输助手（本项目新增特性）
+### 🚀 2. 深度增强的传输助手（本项目新增特性）
 - **剪贴板即贴即传 (`Ctrl+V`)**：在传输助手面板按下 `Ctrl+V`（或移动端长按粘贴），自动识别纯文本或将剪贴板中的截屏图片直接上传发送，省去手动存图流程。
 - **R2 50MB 大文件极速传输**：原生集成 Cloudflare R2 对象存储，支持文档、压缩包、图片、音视频及安装包等任意格式，单文件上限 **50 MB**，不消耗 D1 数据库配额。
 - **图片高清全屏灯箱预览**：图片附件自动生成高清缩略图，点击即刻进入全屏灯箱无损查看与平滑缩放，支持一键安全重命名下载。
 - **多档 TTL 自动销毁策略**：支持 **1小时**、**1天**、**7天** 及 **永久** 4 种保留策略，到期由边缘调度机制安全清理，避免闲置占用存储空间。
-- **全局快捷唤起 (`Ctrl+J`)**：在导航首页及各页面随时按下 `Ctrl+J` / `Cmd+J`（或点击右上角传输图标），半浮动呼出传输窗口，即用即走。
+- **全局快捷唤起 (`Ctrl+J`)**：在导航首页及各页面随时按下 `Ctrl+J` / `Cmd+J`（或点击右上角传输图标），半浮动呼出传输助手，即用即走。
 
 ### 🛡️ 3. 银行级边缘安全与性能架构
 - **全边缘无服务器架构**：运行于 Cloudflare 遍布全球的边缘节点，首屏毫秒级直出。
@@ -88,10 +89,10 @@
 
 ---
 
-## 🚀 增强特性：跨设备跨平台传输功能
+## 🚀 增强特性：跨设备跨平台传输助手
 
 <div align="center">
-  <img src="docs/screenshots/cf-navs-transfer-assistant.png" alt="CF-Navs Transfer 便笺传输助手界面" width="380" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+  <img src="docs/screenshots/cf-navs-transfer-assistant.png" alt="CF-Navs Transfer 传输助手界面" width="380" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
 </div>
 
 针对跨设备日常协同，CF-Navs Transfer 在原生起始页上实现了轻量无感的传输体验：
@@ -137,9 +138,9 @@
   </tr>
 </table>
 
-### 3. 便笺与文件传输助手（新增功能实机效果）
+### 3. 传输助手（新增功能实机效果）
 <p align="center">
-  <img src="docs/screenshots/cf-navs-transfer-assistant.png" alt="CF-Navs Transfer 便笺传输助手：文件下载、图片缩略与文本随手记" width="360">
+  <img src="docs/screenshots/cf-navs-transfer-assistant.png" alt="CF-Navs Transfer 传输助手：文件下载、图片缩略与便笺备忘" width="360">
   <br>
   <em>手机与 PC 均支持随时唤出，支持大图灯箱预览、文件一键下载与便笺复制</em>
 </p>
@@ -155,14 +156,14 @@
 
 ## 🔄 原版 CF-Navs 无缝升级指南
 
-如果你已经是 [CF-Navs](https://github.com/lbjxr/CF-Navs) 的老用户，想要在保留原有分类、书签和设置的前提下获得**跨设备跨平台传输功能**，升级非常平滑：
+如果你已经是 [CF-Navs](https://github.com/lbjxr/CF-Navs) 的老用户，想要在保留原有分类、书签和设置的前提下获得**传输助手**，升级非常平滑：
 
 1. **更新仓库代码**：将你的 Fork 仓库更新并同步为本仓库 `wii-me/cf-navs-transfer` 的 `main` 分支代码。
 2. **在 Cloudflare 创建并绑定 R2 存储桶**：
    - 在控制台 **R2 Object Storage** 中创建一个存储桶（例如命名为 `cf-navs-storage`）。
    - 进入你的 Worker **Settings (设置)** → **Bindings (绑定)**，添加一个 R2 存储桶绑定，变量名填 `STORAGE`，选择刚创建的桶。
 3. **在 D1 中执行数据表增量升级 SQL**：
-   打开 Cloudflare 控制台的 **D1 SQL Database** → 点击你原有的数据库 → 进入 **Console**，执行以下 SQL 语句（仅新增传输便笺表，**不会影响原有书签数据**）：
+   打开 Cloudflare 控制台的 **D1 SQL Database** → 点击你原有的数据库 → 进入 **Console**，执行以下 SQL 语句（仅新增传输记录表，**不会影响原有书签数据**）：
    ```sql
    CREATE TABLE IF NOT EXISTS transfer_notes (
        id TEXT PRIMARY KEY,
@@ -190,9 +191,9 @@
 
 | 资源类别 | 绑定变量名 (Binding) | 默认命名建议 | 用途说明 |
 |---|---|---|---|
-| **Cloudflare D1** | `DB` | `cf-navs-db` | 存储分类、书签数据、站点配置以及便笺传输元数据 |
+| **Cloudflare D1** | `DB` | `cf-navs-db` | 存储分类、书签数据、站点配置以及传输助手元数据 |
 | **Cloudflare KV** | `SESSION` | `cf-navs-session` | 存储管理员登录态、会话撤销黑名单、API 频控防爆破记录 |
-| **Cloudflare R2** | `STORAGE` | `cf-navs-storage` | 存储跨设备传输的文件、图片与附件对象 |
+| **Cloudflare R2** | `STORAGE` | `cf-navs-storage` | 存储传输助手上传的文件、图片与附件对象 |
 | **Secret 密钥** | `SETUP_TOKEN` | 自定义高强度字符串 | 仅用于首次初始化 `/install` 创建管理员账号时的身份凭证 |
 
 ---
@@ -212,7 +213,11 @@
    - KV 绑定：变量名 `SESSION` 指向 `cf-navs-session`
    - R2 绑定：变量名 `STORAGE` 指向 `cf-navs-storage`（若未自动绑定，点击添加并选择对应桶）
 5. **添加初始化密钥**：
-   在 **Settings (设置)** → **Variables and Secrets (变量与机密)** 中添加类型为 **Secret** 的 `SETUP_TOKEN`，填写一段自定义强密码，保存后对最新部署点击 **Retry deployment (重新部署)** 使其生效。
+   在 **Settings (设置)** → **Variables and Secrets (变量与机密)** 中添加类型为 **Secret** 的 `SETUP_TOKEN`，填写一段自定义强密码。
+   <p align="center">
+     <img src="docs/screenshots/cf-deploy3.jpg" alt="Cloudflare 控制台变量和密钥设置示意" width="700">
+   </p>
+   保存后对最新部署点击 **Retry deployment (重新部署)** 使其生效。
 6. **初始化数据库与账号**：
    > [!IMPORTANT]
    > 首次运行前需初始化数据库：
@@ -264,7 +269,7 @@ npm run deploy
 
 | 快捷键 | 作用域 | 功能说明 |
 |---|---|---|
-| <kbd>Ctrl</kbd> + <kbd>J</kbd> / <kbd>Cmd</kbd> + <kbd>J</kbd> | 全局 | 随时呼出或收起**便笺与文件传输助手**窗口 |
+| <kbd>Ctrl</kbd> + <kbd>J</kbd> / <kbd>Cmd</kbd> + <kbd>J</kbd> | 全局 | 随时呼出或收起**传输助手**窗口 |
 | <kbd>Ctrl</kbd> + <kbd>V</kbd> / <kbd>Cmd</kbd> + <kbd>V</kbd> | 传输助手面板 | 直接粘贴文本，或将剪贴板截屏作为附件直接上传 |
 | <kbd>Ctrl</kbd> + <kbd>Enter</kbd> / <kbd>Cmd</kbd> + <kbd>Enter</kbd> | 传输助手输入框 | 快速提交并发送当前便笺与附件 |
 | <kbd>Esc</kbd> | 全局 | 关闭当前打开的大图灯箱预览、设置弹窗或传输浮窗 |
@@ -287,16 +292,16 @@ npm run dev:web
 ```text
 cf-navs-transfer/
 ├── src/                 # Svelte 5 前端视图与交互组件
-│   ├── components/      # 便笺传输助手 (TransferNotes)、书签卡片、灯箱预览等
+│   ├── components/      # 传输助手 (TransferDrawer)、书签卡片、灯箱预览等
 │   ├── routes/          # 首页、后台管理 (/admin)、初始化 (/install) 路由
 │   └── stores/          # 全局响应式状态
 ├── worker/              # Cloudflare Workers 后端核心 (Hono)
-│   ├── routes/          # 导航数据、分类管理、便笺与 R2 文件中转接口
+│   ├── routes/          # 导航数据、分类管理、传输助手与 R2 文件中转接口
 │   ├── middleware/      # 安全鉴权、频控限流、安全响应头中间件
 │   └── services/        # D1 数据库交互、R2 上传与 TTL 生命周期清理
 ├── shared/              # 前后端共享类型定义
 ├── browser-extension/   # Chrome / Edge 浏览器新增书签自动同步插件
-├── schema.sql           # D1 完整表结构定义（含书签与便笺传输表）
+├── schema.sql           # D1 完整表结构定义（含书签与传输记录表）
 └── wrangler.toml        # Cloudflare 架构配置文件
 ```
 
@@ -307,7 +312,7 @@ cf-navs-transfer/
 <details>
 <summary><b>Q1: 本项目与原版 CF-Navs 有什么区别？</b></summary>
 <br>
-本项目基于原版 CF-Navs 进行深度增强。完全继承了 CF-Navs 的极简无服务器架构、两级书签收纳、22 款主题、拖拽整理和高私密性；同时通过深度结合 Cloudflare R2 对象存储，<b>新增了跨设备、跨平台的轻量便笺随手记与 50MB 大文件极速传输功能</b>，让日常使用的起始页同时承担个人中转站的角色。
+本项目基于原版 CF-Navs 进行深度增强。完全继承了 CF-Navs 的极简无服务器架构、两级书签收纳、22 款主题、拖拽整理和高私密性；同时通过深度结合 Cloudflare R2 对象存储，<b>新增了跨设备、跨平台的传输助手（支持便笺记事与 50MB 大文件极速传输功能）</b>，让日常使用的起始页同时承担个人中转站的角色。
 </details>
 
 <details>

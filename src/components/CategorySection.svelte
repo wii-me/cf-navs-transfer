@@ -25,7 +25,7 @@
   export let sortGroup = ''
   export let sortCategoryId: number | null = null
   export let showSortActions = true
-  export let cardWidth = 200 // 改为 200，Sun-Panel 标准
+  export let cardWidth = 160 // 与 CARD_SIZE_DEFAULTS.width 一致（refs #22）
   export let cardHeight = 0
   export let cardStyle: CardStyle = 'info'
   export let cardIconSize = 70
@@ -436,7 +436,7 @@
 
   .bookmark-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(var(--card-min-width, 200px), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(var(--card-min-width, 160px), 1fr));
     gap: var(--bookmark-grid-gap, 18px);
     justify-content: start;
     align-items: start;

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createBookmarkIconCacheKey,
   deleteCachedBookmarkIcon,
+  fetchAndCacheBookmarkIconUrl,
   fetchCachedBookmarkIconUrl,
   isDataImage,
   readCachedBookmarkIconDataUri,
@@ -53,6 +54,30 @@ function setupLocalStorage() {
   vi.stubGlobal('localStorage', localStorage)
   vi.stubGlobal('window', { localStorage })
   return localStorage
+}
+
+function setupCacheStorage() {
+  const localStorage = setupLocalStorage()
+  const entries = new Map<string, Response>()
+  const cache = {
+    match: async (request: Request) => entries.get(request.url)?.clone(),
+    keys: async () => [],
+    put: async (request: Request, response: Response) => {
+      entries.set(request.url, response.clone())
+    },
+    delete: async (request: Request) => entries.delete(request.url),
+  }
+  const caches = { open: vi.fn(async () => cache) }
+
+  vi.stubGlobal('caches', caches)
+  vi.stubGlobal('window', { localStorage, caches })
+  const testUrl = class extends URL { }
+  Object.assign(testUrl, {
+    createObjectURL: vi.fn(() => 'blob:test'),
+    revokeObjectURL: vi.fn(),
+  })
+  vi.stubGlobal('URL', testUrl)
+  return entries
 }
 
 describe('local bookmark icon cache', () => {
@@ -123,6 +148,71 @@ describe('local bookmark icon cache', () => {
 
     expect(readCachedBookmarkIconDataUri(cacheKey)).toBeNull()
     await expect(readCachedBookmarkIconUrl('missing-cache-key')).resolves.toBeNull()
+  })
+
+  it('persists fetched remote icons in Cache Storage for later browser sessions', async () => {
+    const entries = setupCacheStorage()
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      const response = new Response('<svg/>', {
+        headers: { 'content-type': 'image/svg+xml', 'content-length': '6' },
+      })
+      return response
+    }))
+    const cacheKey = createBookmarkIconCacheKey({ id: 4, icon: 'https://example.com/icon.svg', iconSource: 'custom' })
+
+    const firstUrl = await fetchAndCacheBookmarkIconUrl(cacheKey, '/api/icon/4?v=stable')
+    const reopenedUrl = await readCachedBookmarkIconUrl(cacheKey)
+
+    expect(firstUrl).toMatch(/^blob:/)
+    expect(reopenedUrl).toMatch(/^blob:/)
+    expect(entries.size).toBe(1)
+    if (firstUrl) revokeLocalIconUrl(firstUrl)
+    if (reopenedUrl) revokeLocalIconUrl(reopenedUrl)
+  })
+
+  it('does not persist fallback, no-store, or oversized icon responses', async () => {
+    const entries = setupCacheStorage()
+    const responses = [
+      new Response('<svg/>', {
+        headers: { 'content-type': 'image/svg+xml', 'X-Icon-Fallback': '1' },
+      }),
+      new Response('<svg/>', {
+        headers: { 'content-type': 'image/svg+xml', 'cache-control': 'private, no-store' },
+      }),
+      new Response('<svg/>', {
+        headers: {
+          'content-type': 'image/svg+xml',
+          'content-length': String(512 * 1024 + 1),
+        },
+      }),
+    ]
+    vi.stubGlobal('fetch', vi.fn(async () => responses.shift()!))
+
+    const fallbackUrl = await fetchAndCacheBookmarkIconUrl('4-fallback', '/api/icon/4')
+    const privateUrl = await fetchAndCacheBookmarkIconUrl('5-private', '/api/icon/5')
+    const oversizedUrl = await fetchAndCacheBookmarkIconUrl('6-oversized', '/api/icon/6')
+
+    expect(fallbackUrl).toMatch(/^blob:/)
+    expect(privateUrl).toMatch(/^blob:/)
+    expect(oversizedUrl).toMatch(/^blob:/)
+    expect(entries.size).toBe(0)
+    if (fallbackUrl) revokeLocalIconUrl(fallbackUrl)
+    if (privateUrl) revokeLocalIconUrl(privateUrl)
+    if (oversizedUrl) revokeLocalIconUrl(oversizedUrl)
+  })
+
+  it('deletes stale fallback and no-store entries when reading', async () => {
+    const entries = setupCacheStorage()
+    entries.set('https://cf-navs.local/bookmark-icon/6-fallback', new Response('<svg/>', {
+      headers: { 'content-type': 'image/svg+xml', 'X-Icon-Fallback': '1' },
+    }))
+    entries.set('https://cf-navs.local/bookmark-icon/7-private', new Response('<svg/>', {
+      headers: { 'content-type': 'image/svg+xml', 'cache-control': 'private, no-store' },
+    }))
+
+    await expect(readCachedBookmarkIconUrl('6-fallback')).resolves.toBeNull()
+    await expect(readCachedBookmarkIconUrl('7-private')).resolves.toBeNull()
+    expect(entries.size).toBe(0)
   })
 })
 

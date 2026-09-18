@@ -51,9 +51,14 @@ export function getIconifySearchQuery(value: string): string {
     .replace(/^iconify:/, '')
     .replace(/^@iconify-json\//, '')
     .replace(/^@iconify-icons\//, '')
-    .replace(/[^a-z0-9-]/g, '')
+    .replace(/[^a-z0-9-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!plain) return ''
 
-  return plain.length >= 2 && plain.length <= 80 ? plain : ''
+  const words = plain.split(' ')
+  const query = words.length > 1 && words.every((word) => word.length === 1) ? words.join('') : plain
+  return query.length >= 2 && query.length <= 80 ? query : ''
 }
 
 export function getLogoSchemeByName(name: string): LogoSurfColorScheme {

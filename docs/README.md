@@ -13,7 +13,7 @@
    - 缺陷 / 验收欠账 / 文档与源码不一致 / 风险的核对证据：`plans/PROBLEM_HANDLING_TASK_LIST.md`（`PROB-NN`）。
    - 尚未实现的功能需求及其来源：`plans/REQUIREMENT_DEVELOPMENT_TASK_LIST.md`（`REQ-NN`）。
    - 设置页 / 顶部导航 / 部分导出：`plans/DEV_TASK_BREAKDOWN_UI_NAV_EXPORT.md`，需求边界看 `SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md` 与 `PARTIAL_EXPORT_AND_TOP_NAV_WRAP_REQUIREMENTS.md`。
-   - R-01～R-08 Issue 需求：`plans/DEV_TASK_BREAKDOWN_GITHUB_ISSUES.md`；云端 Issue 快照看 `reference/GITHUB_ISSUES_REQUIREMENTS.md`（快照会过期，状态以 GitHub 实时查询为准）。
+   - R-01～R-08 历史 Issue 需求：`plans/DEV_TASK_BREAKDOWN_GITHUB_ISSUES.md`；发布追溯看 `reference/GITHUB_ISSUES_REQUIREMENTS.md`。新一轮开放 Issue / PR 的分析入口见下方「GitHub 任务分析快照」。
    - 前端体验优化：`plans/FRONTEND_EXPERIENCE_OPTIMIZATION_REQUIREMENTS.md` 是需求评估，状态“尚未实现”，不能当作已批准的实现清单。
 5. **涉及公共契约时同步查参考文档**：API 看 `reference/API_CONTRACT.md`，性能看 `reference/PERFORMANCE_CONTRACT.md`，架构和当前功能看 `reference/PROJECT_OVERVIEW.md`，实现细节看 `reference/TECHNICAL_NOTES.md`。
 6. **开发完成后写发布记录**：`CHANGELOG.md` 按版本分节，只记录已交付的变更；未发版的内容放在 `[Unreleased]`。
@@ -43,7 +43,7 @@
 ## 技术参考
 
 - [项目概览](reference/PROJECT_OVERVIEW.md)
-- [Open GitHub Issues 需求与问题汇总](reference/GITHUB_ISSUES_REQUIREMENTS.md)
+- [GitHub Issues 需求与发布追溯（R-01～R-08）](reference/GITHUB_ISSUES_REQUIREMENTS.md)
 - [API 契约](reference/API_CONTRACT.md)
 - [技术说明](reference/TECHNICAL_NOTES.md)
 - [分类层级设计](reference/CATEGORY_HIERARCHY_DESIGN.md)
@@ -53,6 +53,13 @@
 ## 发布与变更记录
 
 - [变更记录](../CHANGELOG.md)
+
+## GitHub 任务分析快照
+
+以下两份清单分别整理开放 Issue 与 PR 的内容、建议任务、阻塞条件和未来验收，均记录固定采集时间；**不维护实时进度，也不构成开发或合并授权**。云端状态仍以 GitHub Issue / PR 为准。
+
+- [开启 Issue 任务清单](plans/OPEN_ISSUES_TASK_LIST.md)：#21、#19、#16、#15 的正文与评论分析。
+- [开启 PR 审查任务清单](plans/OPEN_PRS_TASK_LIST.md)：#14 的实际差异、CI、合并条件与功能审查任务。
 
 ## 开发计划与决策记录
 
