@@ -199,35 +199,76 @@
 
 ---
 
-### 方式一：Cloudflare 控制台 0 代码一键部署（推荐）
+### 方式一：Cloudflare 控制台 0 代码一键部署（新手推荐）
 
-1. **Fork 仓库**：点击右上角 **[Fork 本仓库](https://github.com/wii-me/cf-navs-transfer/fork)** 到你的 GitHub 个人账号。
-2. **导入 Cloudflare**：进入 [Cloudflare 控制台](https://dash.cloudflare.com/)，依次点击 **Compute (Workers & Pages)** → **Create** → **Pages**（或 **Workers**）中的 **Import a repository**，选择刚才 Fork 的仓库。
-3. **填写构建配置**：
-   - **生产分支**：`main`
-   - **Build command**：`npm run build`
-   - **Deploy command**：`npx wrangler deploy`
-   - **环境变量**：添加 `NODE_VERSION` = `24`
-4. **检查并绑定 D1、KV 与 R2 资源**：
-   部署完成后，在 Worker 的 **Settings (设置)** → **Bindings (绑定)** 中确认三大资源绑定：
-   - **D1 数据库**：变量名 `DB` 指向 `cf-navs-db`
-   - **KV 命名空间**：变量名 `SESSION` 指向 `cf-navs-session`
-   - **R2 存储桶**：变量名 `STORAGE` 指向 `cf-navs-storage`
-   > 💡 **特别提示（关于 R2）**：传输助手需要 R2 存储上传的文件与图片。如果控制台下拉菜单未自动找到存储桶，只需在 Cloudflare 左侧导航栏进入 **R2 对象存储**（首次使用点击开通免费计划），创建一个名为 `cf-navs-storage` 的桶，再回到 Worker 绑定中选择即可。
-5. **添加初始化密钥**：
-   在 **Settings (设置)** → **Variables and Secrets (变量与机密)** 中添加类型为 **Secret** 的 `SETUP_TOKEN`，填写一段自定义强密码（用于首次初始化认证）。
-   <p align="center">
-     <img src="docs/screenshots/cf-deploy3.jpg" alt="Cloudflare 控制台变量和密钥设置示意" width="700">
-   </p>
-   保存后对最新部署点击 **Retry deployment (重新部署)** 使密钥生效。
-6. **初始化数据库与设置管理员密码**：
+适合绝大多数用户，在网页端点击即可完成全部配置与上线，全程零代码。
+
+#### 步骤 0：前置准备（开通并创建 R2 存储桶）
+> 💡 传输助手需要使用 Cloudflare R2 存储上传的文件与截屏（每月免费提供 10GB 存储，且**出网流量完全免费**）。由于 Cloudflare Git 导入无法自动创建 R2，建议在部署前提前开通：
+1. 登录 [Cloudflare 控制台](https://dash.cloudflare.com/)，在左侧导航栏点击 **Storage & Databases** → **R2 对象存储 (R2 Object Storage)**。
+2. 首次使用请根据提示点击开启（无需产生费用）。
+3. 点击 **Create bucket (创建存储桶)**，桶名称填入 `cf-navs-storage`，位置建议选择默认或亚太，点击完成创建。
+
+#### 步骤 1：Fork 仓库
+点击右上角 **[Fork 本仓库](https://github.com/wii-me/cf-navs-transfer/fork)** 到你的 GitHub 个人账号下。
+
+#### 步骤 2：在 Cloudflare 中导入仓库
+1. 进入 Cloudflare 控制台，点击左侧导航栏 **Compute (Workers & Pages)**。
+2. 点击右上角 **Create** 按钮。
+3. > [!WARNING]
+   > **关键注意（切勿选错）**：页面上方有 **Workers** 和 **Pages** 两个标签页。本项目基于 Workers with Assets 边缘架构，**必须在 Workers 标签下点击「Import a repository (导入代码库)」**（或 Connect to Git）。**请勿选择 Pages**，否则构建流程与后端路由将无法正常工作！
+4. 授权并选择你在步骤 1 Fork 的 GitHub 仓库。
+
+#### 步骤 3：填写构建参数
+在配置页面中，准确填写以下构建参数：
+
+| 配置项 | 填写内容 | 说明 |
+|---|---|---|
+| **项目名称 (Project Name)** | `cf-navs`（可自定义） | 部署生成的二级域名将基于此名称 |
+| **生产分支 (Production Branch)** | `main` | 生产发布分支 |
+| **构建命令 (Build command)** | `npm run build` | 编译打包 Svelte 5 前端 |
+| **部署命令 (Deploy command)** | `npx wrangler deploy` | 部署 Worker 边缘后端及静态资产 |
+| **环境变量 (Environment Variables)** | `NODE_VERSION` = `24` | **必填**！项目依赖 Vite 7，需指定 Node 22+ 环境，避免构建引擎过低报错 |
+
+填写完毕后，点击 **Save and Deploy (保存并部署)**。等待首轮自动构建完成。
+
+#### 步骤 4：检查并补齐边缘资源绑定 (Bindings)
+构建完成后，进入该 Worker 的 **Settings (设置)** → **Bindings (绑定)**（或 Variables and Bindings）：
+- 检查是否存在以下 3 项资源绑定。若缺少某项，点击 **Add binding** 手动补齐：
+  1. **D1 数据库**：类型选择 `D1 Database`，变量名称填 `DB`，数据库选择 `cf-navs-db`（如未自动生成，点击创建同名数据库即可）。
+  2. **KV 命名空间**：类型选择 `KV Namespace`，变量名称填 `SESSION`，命名空间选择 `cf-navs-session`。
+  3. **R2 存储桶**：类型选择 `R2 Bucket`，变量名称必须填 **`STORAGE`**（全大写），存储桶选择步骤 0 创建的 `cf-navs-storage`。
+
+#### 步骤 5：添加安装初始化密钥 (`SETUP_TOKEN`)
+1. 进入该 Worker 的 **Settings (设置)** → **Variables and Secrets (变量与机密)**。
+2. 点击 **Add secret (添加机密)**：
+   - **名称 (Name)**：`SETUP_TOKEN`（全大写）
+   - **类型**：**Secret (加密密钥)**（切勿勾选为纯文本）
+   - **值 (Value)**：自定义一段复杂密码（例如 `Setup@2026TokenSecret`，务必临时复制记下）
+3. 点击 **Save (保存)**。
+4. > [!IMPORTANT]
+   > **关键必须操作**：添加完 Secret 后，进入 Worker 顶部的 **Deployments (部署)** 页面，找到最新一条部署记录，点击右侧的 **`...`** 并选择 **Retry deployment (重新部署)**。
+   > *（原因：Cloudflare Worker 边缘实例只有在重新部署后才能热读取最新注入的 Secret，否则访问 `/install` 会提示「还缺少部署密钥」）*。
+
+#### 步骤 6：执行 D1 数据库初始化建表
+为避免在 Worker 边缘冷启动时执行 14 张数据表因超时导致偶发错误，建议在控制台直观完成 SQL 执行：
+1. 在 Cloudflare 左侧导航栏点击 **Storage & Databases** → **D1 SQL Database**。
+2. 点击进入你的数据库 `cf-navs-db`，切换到顶部的 **Console (控制台)** 标签。
+3. 打开本项目根目录的 [`schema.sql`](schema.sql)（或在 GitHub 仓库中打开），**复制其中的全部内容**，粘贴进控制台输入框。
+4. 点击 **Execute (执行)**，下方出现 `Query executed successfully` 即表示书签与传输助手的全部数据表准备完毕。
+
+#### 步骤 7：访问 `/install` 创建管理员账号
+1. 打开浏览器，访问你 Worker 的访问域名并在末尾追加 `/install`（例如：`https://cf-navs.xxx.workers.dev/install`）。
+2. 输入你在步骤 5 设置的 `SETUP_TOKEN`。
+3. 设定你的管理员用户名（建议 `admin`）。
+4. 设定管理员密码：
    > [!IMPORTANT]
-   > 首次运行前需初始化数据库并设置管理员账号：
-   > 1. 进入 Cloudflare 控制台 **D1** → 选择 `cf-navs-db` → **Console**，将仓库根目录的 [`schema.sql`](schema.sql) 内容完整复制并执行（包含书签与传输助手的全部数据表）。
-   > 2. 随后访问你的站点域名末尾加上 `/install`（如 `https://your-nav.workers.dev/install`），输入 `SETUP_TOKEN`，设置管理员账号与密码（**密码强制要求至少 12 个字符**）。
-   > 3. 安装成功后会自动登录，详细使用与安全收尾见下方[「部署后初始化与新手使用指引」](#-部署后初始化与新手使用指引)。
-7. **绑定自定义域名（可选）**：
-   站点默认生成的 `*.workers.dev` 域名开箱即可正常使用。如果需要绑定个性化独立域名，可在 Worker 的 **Settings (设置)** → **Domains & Routes (域和路由)** 中添加并启用你的自定义域名。
+   > **密码长度安全限制**：系统底层强制要求**密码长度至少 12 个字符**（少于 12 位无法提交，例如请设置如 `Admin@2026SecureNav`）。
+5. 点击 **「完成安装」**，系统自动完成加密并自动登录跳转至前台首页！
+
+#### 步骤 8：安全收尾与自定义域名（推荐）
+- **删除临时密钥**：回到 Worker 的 **设置 → 变量和机密** 中，**删除 `SETUP_TOKEN`**。站点已就绪，删除可杜绝未授权访问风险。
+- **自定义独立域名**：在 Worker 的 **Settings → Domains & Routes (域和路由)** 中点击 **Add**，绑定你在 Cloudflare 托管的个性化独立域名。
 
 ---
 
@@ -245,28 +286,45 @@ npm install
 npx wrangler login
 npx wrangler whoami
 
-# 3. 创建所需边缘资源（如云端已有同名资源可跳过对应创建命令）
+# 3. 创建所需边缘资源（云端若已存在同名资源可跳过）
 npx wrangler d1 create cf-navs-db
 npx wrangler kv namespace create SESSION
-npx wrangler r2 bucket create cf-navs-storage # 首次使用 R2 请确认控制台已开通 R2 免费额度
+npx wrangler r2 bucket create cf-navs-storage # 首次使用 R2 请确认控制台已开通免费额度
 
-# 4. 自动识别真实资源 ID 并写入本地 wrangler.local.toml
+# 4. 自动识别云端真实资源 ID 并生成本地 wrangler.local.toml
 npm run setup:wrangler
 
-# 5. 首次部署创建 Worker 实例
+# 5. 首次部署：在云端创建 Worker 实例
 npm run deploy
 
-# 6. 设置安装授权密钥 Secret
+# 6. 设置安装授权机密密钥（必须在实例创建后执行）
 npx wrangler secret put SETUP_TOKEN
 
 # 7. 一键初始化远程 D1 数据库完整表结构（含导航与传输助手数据表）
 npm run db:init:remote
 
-# 8. 重新部署使所有绑定与配置完全就绪
+# 8. 重新部署使所有绑定与机密配置完全就绪
 npm run deploy
 ```
 
-部署完成后访问 `https://<your-worker>.workers.dev/install`，输入 `SETUP_TOKEN` 设置管理员账号密码即可完成初始化。安装成功后，可运行 `npx wrangler secret delete SETUP_TOKEN` 删除一次性安装令牌。
+部署完成后访问 `https://<your-worker>.workers.dev/install`，输入 `SETUP_TOKEN` 设置管理员账号密码（≥ 12 位）即可完成初始化。安装成功后，可运行 `npx wrangler secret delete SETUP_TOKEN` 删除一次性安装令牌。
+
+---
+
+### 🚨 常见部署与初始化坑点速查表
+
+如果在部署或初始化过程中遇到问题，请对照下表自查，通常可在 1 分钟内迅速解决：
+
+| 异常现象 / 报错信息 | 根本原因 | 一分钟排查与解决方案 |
+|---|---|---|
+| **构建报错**：`unsupported engine` 或打包语法错误 | Cloudflare 默认构建镜像的 Node.js 版本过低（低于 22.12） | 在 Worker **Settings → Builds** 的环境变量中添加 `NODE_VERSION` = `24`，然后重新触发构建。 |
+| **部署后访问**：直接出现 `404 Not Found` 无法进入任何页面 | 在 Cloudflare 导入仓库时误点击了 **Pages** 标签而非 **Workers** | 本项目采用 Worker with Assets 架构。删除该 Pages 项目，在 **Workers & Pages** 下确保选择 **Workers** 标签重新导入。 |
+| **访问 `/install` 提示**：「还缺少部署密钥 (setup_token_missing)」 | ① 未添加 Secret，或误设为 Plaintext 纯文本变量；<br>② 添加 Secret 后**未重新部署**，实例未加载 | 检查 Worker **设置 → 变量和机密** 中 `SETUP_TOKEN` 是否为 **Secret** 类型；然后在 **Deployments** 页面点击最新部署右侧的 **Retry deployment (重新部署)**。 |
+| **访问 `/install` 提示**：「还缺少存储绑定 (missing DB/SESSION/STORAGE)」 | Worker 未正确绑定 D1、KV 或 R2 存储桶 | 进入 Worker **设置 → 绑定**，确认是否有名为 `DB` (D1)、`SESSION` (KV) 和 `STORAGE` (R2) 的三个大写绑定。 |
+| **传输助手上传附件报错**：`R2 storage is not configured` (HTTP 500) | Worker 缺少 R2 绑定，或绑定变量名未大写为 `STORAGE` | 在控制台开通 R2 并创建 `cf-navs-storage` 桶；进入 Worker 绑定设置添加 R2 绑定，**变量名务必填写大写 `STORAGE`**。 |
+| **创建管理员提示**：「密码不符合安全规范」或提交无响应 | 管理员密码少于 12 位（底层强校验 `MIN_PASSWORD_LENGTH = 12`） | 设置 12 位及以上的强密码（例如字母、数字和符号组合 `Admin@2026SecureNav`）。 |
+| **访问首页或 `/install` 提示**：数据表不存在或 SQL 执行错误 | D1 数据库未执行建表脚本 | 进入 Cloudflare 控制台 **D1** → `cf-navs-db` → **Console**，完整复制粘贴 [`schema.sql`](schema.sql) 并点击 Execute 执行。 |
+| **CLI 命令行部署报错**：`Worker not found` 或 `secret put` 失败 | 在首次执行 `npm run deploy` 之前就尝试写入 Secret | 遵循正确顺序：先运行 `npm run deploy` 创建 Worker 实例，然后再运行 `npx wrangler secret put SETUP_TOKEN`。 |
 
 ---
 

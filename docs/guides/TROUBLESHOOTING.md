@@ -10,6 +10,27 @@
 npx wrangler login
 ```
 
+### 构建失败：unsupported engine 或 Node.js 版本过低
+
+Vite 7 和 Svelte 5 要求 Node.js >= 22.12。如果 Cloudflare 构建日志出现：
+```text
+npm error code EBADENGINE
+npm error unsupported engine for ... wanted: {"node":"^20.19.0 || >=22.12.0"}
+```
+**解决方案**：
+进入该 Worker 的 **Settings (设置) → Builds (构建)**，在 Environment Variables（环境变量）中添加：
+- 变量名：`NODE_VERSION`
+- 变量值：`24`
+
+保存后重新触发构建即可。
+
+### 部署后访问 404 / 无法加载页面（误导入为 Pages）
+
+Cloudflare 控制台创建应用时有 **Workers** 和 **Pages** 两个标签。如果误在 Pages 标签下导入，项目会作为纯静态站点构建，导致缺少 Worker 边缘路由及 D1/KV/R2 绑定。
+
+**解决方案**：
+在控制台删除该 Pages 项目，转到 **Compute (Workers & Pages)** → **Create**，务必选择 **Workers** 标签下的 **Import a repository** 重新导入。
+
 ### KV namespace `replace-with-your-kv-namespace-id` is not valid
 
 这是旧版公开 `wrangler.toml` 中的 KV 占位符被 Cloudflare 当成真实 ID 使用导致的。请将 Fork 更新到最新版本，确认 `wrangler.toml` 中的 `[[kv_namespaces]]` 只有 `binding = "SESSION"`、没有 `id = "replace-with-your-kv-namespace-id"`，然后重新运行在线部署。
@@ -117,9 +138,20 @@ Cloudflare Secret 生效可能需要等待片刻。执行重置前请确认 Wran
 
 查看日志：
 
-```bash
-npx wrangler tail
-```
+### R2 存储未配置或上传文件报错（HTTP 500）
+
+在传输助手上传文件、截图时，如果提示 `R2 storage is not configured` 或返回 HTTP 500：
+
+1. 确认 Cloudflare 账号中已开通 R2 并创建了名为 `cf-navs-storage` 的存储桶。
+2. 确认 Worker 的 **Settings (设置) → Bindings (绑定)** 中添加了 R2 存储桶绑定。
+3. **关键检查**：变量名称必须全部大写为 `STORAGE`（不要写成 `R2`、`storage` 或 `cf-navs-storage`）。
+4. 本地 Wrangler CLI 部署场景，请运行 `npm run setup:wrangler` 并重新部署 `npm run deploy`。
+
+### 管理员密码设置失败或提示弱密码
+
+访问 `/install` 提交创建管理员时，如果提示密码不符合安全要求：
+- 系统底层强制校验 `MIN_PASSWORD_LENGTH = 12`。
+- 请设置 **12 个字符以上** 的密码（推荐包含大小写字母、数字与特殊字符）。
 
 ## 数据无法保存
 

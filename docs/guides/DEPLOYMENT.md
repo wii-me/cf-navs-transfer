@@ -12,18 +12,23 @@
 
 适合 Fork 项目后在线部署。
 
-1. 在 GitHub 上 Fork 仓库（`https://github.com/wii-me/cf-navs-transfer`）。
-2. 进入 **Workers & Pages → Create application → Import a repository**，关联 GitHub 并选择 fork。不要使用通用 Deploy Button：它会新建 GitHub 仓库，不能指定已有 Fork。
-3. 生产分支选择 `main`，Build command 填写 `npm run build`，Deploy command 填写 `npx wrangler deploy`。
-4. 保存并完成首轮生产部署。Cloudflare 的 Git 引导流程会根据 `wrangler.toml` 中声明创建并绑定 `DB` D1 数据库、`SESSION` KV 命名空间与 `STORAGE` R2 存储桶。
-
-   若未自动创建或绑定 R2 存储桶，可在控制台 **R2** 中新建桶 `cf-navs-storage`，并在该 Worker 的 **设置 → 变量和绑定** 中添加 R2 存储桶绑定，绑定名称填 `STORAGE`。
-
-5. 首轮部署完成后，进入该 Worker 的 **设置 → 变量和密钥**，选择**生产环境**，添加一个类型为**密钥**的变量，变量名填写 `SETUP_TOKEN`，值填写一段足够长且随机的字符串。
-6. 保存 Secret 后重新触发生产分支部署。打开部署后的 Workers URL，并访问 `/install`。输入 `SETUP_TOKEN`，再设置管理员用户名和密码；安装器会初始化数据库 schema 和管理员账号。
-7. （可选）如果需要绑定个性化独立域名，可在 Worker 的 **设置 → 域和路由** 页面添加并启用自定义域名；若无独立域名，保留默认的 `workers.dev` 访问地址即可。
-
-> 💡 **提示**：为确保最稳妥的初始化，建议首次在控制台 D1 的 Console 执行一次 [schema.sql](../../schema.sql)（包含书签与传输助手的全部数据表），或在本地终端运行一次 `npm run db:init:remote` 初始化远端表。随后在 `/install` 创建管理员账号，安装完成后建议在 **变量与机密** 中删除 `SETUP_TOKEN`。
+1. **前置开通 R2**：进入 Cloudflare 控制台 **Storage & Databases → R2**，激活免费计划并新建名为 `cf-navs-storage` 的存储桶。
+2. 在 GitHub 上 Fork 仓库（`https://github.com/wii-me/cf-navs-transfer`）。
+3. 进入 **Workers & Pages → Create application**。
+   > [!WARNING]
+   > **关键提示**：页面上有 **Workers** 和 **Pages** 两个选项卡，**必须选择 Workers 选项卡下的「Import a repository」**，切勿误选 Pages！
+4. 生产分支选择 `main`，Build command 填写 `npm run build`，Deploy command 填写 `npx wrangler deploy`，**环境变量添加 `NODE_VERSION` = `24`**（必须设置，防止默认 Node 版本过低报错）。
+5. 保存并完成首轮生产部署。
+6. 检查 Worker 的 **设置 → 绑定**：
+   - `DB` (D1): `cf-navs-db`
+   - `SESSION` (KV): `cf-navs-session`
+   - `STORAGE` (R2): `cf-navs-storage`（若未自动绑定，手动添加 R2 绑定，变量名为大写 `STORAGE`）。
+7. 进入该 Worker 的 **设置 → 变量和机密**，添加类型为**机密 (Secret)** 的变量 `SETUP_TOKEN`，填写一段复杂随机字符串。
+8. > [!IMPORTANT]
+   > 添加 Secret 后，进入 Worker 顶部的 **Deployments** 页面，点击最新部署右侧的 `...` 选择 **Retry deployment (重新部署)**，使实例加载新注入的 Secret。
+9. 在 D1 的 Console 执行一次 [schema.sql](../../schema.sql)（包含书签与传输助手的全部数据表），确保数据表完全就绪。
+10. 打开部署后的 Workers URL，访问 `/install`。输入 `SETUP_TOKEN`，设置管理员账号和密码（**密码强制要求至少 12 个字符**）。安装完成后建议在变量设置中删除 `SETUP_TOKEN`。
+11. （可选）如果需要绑定个性化独立域名，可在 Worker 的 **设置 → 域和路由** 页面添加并启用自定义域名；若无独立域名，保留默认的 `workers.dev` 访问地址即可。
 
 > `package.json` 的 Cloudflare Git 元数据声明 D1/KV/R2 资源，不声明 `SETUP_TOKEN` 或旧版恢复 Secret，因此 GitHub 导入不会自动生成或填充 Secret 参数。正常在线安装不需要 Cloudflare API Token、GitHub Actions 或手动 SQL。
 
