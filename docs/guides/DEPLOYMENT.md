@@ -130,7 +130,7 @@ npm run deploy
 
 ### 2. 测试安装与登录
 
-Cloudflare Git 和 Wrangler CLI 全新安装都先访问 `/install`，输入 `SETUP_TOKEN` 并创建管理员账号。确认安装和登录成功后，建议删除或轮换 `SETUP_TOKEN`；公开状态检查不需要它，已安装状态也会永久阻止再次初始化。`INIT_ADMIN_USER`、`INIT_ADMIN_PASSWORD` 和 `RESET_ADMIN_CREDENTIALS` 仅用于旧数据库升级或凭据恢复。安装完成后：
+Cloudflare Git 和 Wrangler CLI 全新安装都先访问 `/install`，输入 `SETUP_TOKEN` 并创建管理员账号（**注意：系统强制要求管理员密码至少 12 个字符**）。确认安装和登录成功后，建议删除或轮换 `SETUP_TOKEN`；公开状态检查不需要它，已安装状态也会永久阻止再次初始化。`INIT_ADMIN_USER`、`INIT_ADMIN_PASSWORD` 和 `RESET_ADMIN_CREDENTIALS` 仅用于旧数据库升级或凭据恢复。安装完成后：
 
 - [ ] 登录成功
 - [ ] 登录成功后回到前台首页，再次点击管理入口能够进入管理界面
