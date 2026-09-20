@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { SETUP_TOKEN_ASCII_ERROR, isAsciiPrintableToken } from '../lib/setupTokenInput'
+
   type InstallViewMode =
     | 'needs_install'
     | 'setup_token_missing'
@@ -69,6 +71,10 @@
 
     if (!setupToken.trim()) {
       localError = '请输入部署时配置的 SETUP_TOKEN。'
+      return
+    }
+    if (!isAsciiPrintableToken(setupToken.trim())) {
+      localError = SETUP_TOKEN_ASCII_ERROR
       return
     }
     if (!username.trim()) {

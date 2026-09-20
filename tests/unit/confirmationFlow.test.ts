@@ -41,7 +41,8 @@ describe('destructive action confirmation flow', () => {
     expect(body).toContain('requestConfirmation(createDeleteCategoryConfirmation(')
     expect(body).toContain('childCategoryCount')
     expect(body).toContain('if (!confirmed) return')
-    expect(body).toContain('await api.categories.remove(categoryId)')
+    // 删除仍必须落到 api.categories.remove；调用形态（await / runAdminMutation 包装）是实现细节，不锚定。
+    expect(body).toContain('api.categories.remove(categoryId)')
   })
 
   it('confirms import overwrite before entering importing state', () => {

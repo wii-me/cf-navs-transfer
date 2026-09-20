@@ -7,6 +7,106 @@
 
 ## [Unreleased]
 
+## v0.7.1 — 2026-09-21
+
+### 修复 v0.7.0 冒烟脚本 recover 场景（refs #24）
+
+- 根因：`scripts/smoke-test.mjs` 的 `call()` 辅助函数只解构 `{ method, token, body }`，recover 段传入的 `headers: { 'X-Setup-Token': ... }` 被静默丢弃——三个「有效令牌」用例实际未带令牌头，全部返回 `401 unauthorized`；前两个 401 断言（错误令牌 / 缺令牌头）是碰巧通过。CI 自 170fd71（recover 功能提交）起即因此红线，与 merge 到 main 无关。
+- 修复：`call()` 增加 `headers` 透传（`accept` 打底 → 附加头 → content-type → authorization）。
+- **勘误**：v0.7.0 变更记录中「L1 smoke 83/83（恢复成功…）」表述不准确——该场景在本次修复前实际为 77/83（CI 与本地一致）；修复后 `npm run smoke` 83/83 全过，产品侧 `/api/recover` 功能不受影响（手工实测正常）。
+- 验证：`npm run smoke` 83/83、`npm run type-check` 316 files 0/0。
+
+## v0.7.0 — 2026-09-20
+
+### 新增管理员密码恢复端点 `/api/recover`（REQ-14，Issue #24）
+
+- 新增免登录的 `POST /api/recover`：已安装实例上用部署者持有的 `SETUP_TOKEN`（请求头 `X-Setup-Token`，常量时间比较）+ 同源校验 + `install_rate_limits` 表 `recover:<ip>` 独立命名空间限流，重置管理员密码而无需重新部署。**只重置密码、不改用户名**；新密码须 8–12 位且至少含小写/大写/数字/符号中的两类（恢复端点专用策略，与 `/install` 的 12–256 不同）。
+- 成功只更新 `settings.admin_password` 并轮换 JWT secret 作废全部旧会话，返回 `LoginResp` 直接进入登录态；**刻意保留 `admin_bootstrap_password` 快照**——把它同步成新哈希会让未变的 `INIT_ADMIN_PASSWORD` 在下一次登录被判定为「初始化凭据变化」并回滚本次重置（该错误由 L1 smoke 场景发现并纠正）。未安装实例返回 `code=1002 not installed`，错误/未配置令牌返回真实 401，跨域 403，限流/密码校验走 `HTTP 200 + code` 包络。
+- 忘记原 `SETUP_TOKEN` 时可在 Cloudflare **设置 → 变量和密钥 → 生产环境** 新增/轮换该密钥后重新部署——令牌不落库、每次请求实时读环境值。
+- 重构：从 `worker/routes/install.ts` 抽出 `worker/lib/setupToken.ts`（`authorizeSetup` + `isSameOriginRequest`）与 `worker/lib/installRateLimit.ts`（限流四函数 + 常量，`client_key` 参数化），install 与 recover 共用、行为不变；admin 设置 key 常量从 `worker/lib/bootstrap.ts` 导出统一引用。
+- 前端：新增 `/recover` 页面 `src/views/Recover.svelte`（复刻安装页视觉，无用户名字段），`src/App.svelte` 挂载 `/recover` 路由分支，登录弹窗新增「忘记密码？」入口，`src/lib/api.ts` 补 `authApi.recover`，`shared/types.ts` 新增 `RecoverReq`。
+- 文档：`docs/reference/API_CONTRACT.md` 补 `POST /api/recover` 契约；`docs/guides/DEPLOYMENT.md`、`docs/guides/TROUBLESHOOTING.md` 恢复路径重排为三级（账号安全改密 → `/recover` → `INIT_ADMIN_*`/`RESET_ADMIN_CREDENTIALS` 重部署兜底）。
+- 追加：部署密钥非 ASCII 字符前端校验——`src/lib/setupTokenInput.ts` 的 `isAsciiPrintableToken`（可见 ASCII 0x20–0x7E）接入 `Recover.svelte` 与 `Install.svelte`，含全角字符（如全角 `￥`）的令牌在提交前被拦下并给友好提示，不再暴露浏览器 `Headers` 构造的原始 `TypeError`。根因：HTTP 头值限 ISO-8859-1，`SETUP_TOKEN` 含非 ASCII 会让 `X-Setup-Token` 头无法构造。
+- 验证：L0 `type-check` 316 files 0/0、`npm test` 948 tests、build 成功；单测 `recover.test.ts` 14/14、`recoverView.test.ts` 7/7、`setupTokenInput.test.ts` 4/4；L1 `npm run smoke` 83/83（恢复成功、错误/缺令牌 401、弱密码 1002、新密码可登录、旧密码被拒）。**部署后真实浏览器 L2 已完成**（`develop` 生产站点，ASCII 令牌 `123456#$%@ss`）：`/recover` 页面渲染（无用户名字段）、客户端密码校验、全角令牌被拦并显示友好提示；正向 round-trip 成功——恢复重置密码后旧密码失效、预置会话经 `rotateJwtSecret` 失效（`/api/me`→401），随后经 `/api/password` 还原原密码、站点状态复原。独立 `workflow-reviewer` 复核 PASS（低 severity 的 schema-less→`not installed` 已修）。Issue #24 在提交进默认分支并最终确认前保持 Open。
+
+### 密码重置操作说明（使用手册）
+
+- **适用场景**：管理员忘记密码，且 `INIT_ADMIN_*` 初始密码校验无法直接登录时，可用 `/recover` 免登录重置。
+- **你需要**：部署者持有的部署密钥 `SETUP_TOKEN`。Cloudflare 用户在「控制台 → 设置 → 变量和密钥 → 生产环境」查看或轮换（轮换后重新部署生效）；本地实例经 `wrangler dev --var SETUP_TOKEN:...` 或 `.dev.vars` 注入。
+- **操作步骤**：打开站点 `/recover`（或登录弹窗「忘记密码？」入口）→ 输入部署密钥 → 输入新密码（8–12 位，须同时包含小写、大写、数字、符号中的两类）→ 提交。成功后立即回到登录态。
+- **生效范围**：只重置密码、不改用户名；同时轮换 JWT secret，全部旧会话立即失效、需重新登录；刻意保留 `admin_bootstrap_password` 快照，不影响后续 `INIT_ADMIN_PASSWORD` 的一致性校验（登录时若检测到该快照与初始密码一致会判定「初始化凭据未变」）。
+- **错误语义**：未安装实例返回 `code=1002 not installed`；令牌缺失/错误返回真实 HTTP 401；跨域请求 403；连续失败按 IP 独立限流（`HTTP 200 + code` 包络）。
+- **兜底链路**（改密偏好顺序）：后台「账号安全」改密 → `/recover` 页面 → 重新部署（以新 `INIT_ADMIN_*` 或 `RESET_ADMIN_CREDENTIALS` 环境变量覆盖后首次登录回写）。
+
+### 后台管理界面审计整改 P0（对比度 / 焦点环 / 主题基建）
+
+- 由 web-design-guidelines / frontend-design / brand-guidelines / extract-design-system / theme-factory 五个前端技能驱动的只读审计，决策记录 `docs/plans/ADMIN_UI_REDESIGN_DEVELOPMENT.md`；本版本落地其 P0 批次。P1（站点设置布局拆分、单滚动、预览联动）与 L2/L3 浏览器验证欠账见该文档。
+- 对比度按 WCAG AA 复算收敛：浅色占位符 `#94a3b8→#64748b`（2.56→4.76）、暗色占位符 `#64748b→#94a3b8`（3.59→6.66）、后台徽标文字 `#64748b→#475569`（4.34→6.92）、浅色危险红 `#dc2626→#b91c1c`（4.41→5.91）。
+- 主题基建：`src/app.css` 补 `color-scheme: light` 与 `:root[data-theme='dark']{color-scheme:dark}`；`index.html` 内联脚本让 `theme-color` 随 `data-theme` 动态（暗 `#08111f` / 浅 `#f8fafc`，MutationObserver 监听）。
+- 消灭 token 漂移：`adminListPanels.css` 主按钮硬编码 `#2563eb/#fff` 收敛到 `var(--admin-accent)` + 新增 `--admin-accent-ink`（浅 `#ffffff` / 暗 `#0f172a`）。独立复核发现并修复 token 化引入的暗色主按钮对比度回归（白字 on `#7dd3fc` 仅 1.67:1），修复后浅 5.17 / 暗 10.71。
+- 焦点：10 个组件的 `input/textarea:focus{outline:none; ring}` 与 settingsSections.css 两处多选择器规则统一为 `:focus-visible`（BookmarkBaseFields 的 input/select/textarea 一并收敛），保留 3px 可见焦点替代环。
+- 验证：`npm run type-check` 315 files 0 errors / 0 warnings；`npm test` 128 files / 948 tests 全通过；`npm run build` 成功；`git diff --check` 干净。独立 Reviewer 两轮（首轮 CHANGES_REQUIRED 暗色主按钮回归 → 修复 → PASS）。L2 浏览器回归与 P1 布局整改未在本提交范围。
+
+### 后台管理界面审计整改 P1/P2（设置布局 / 暗色层级 / 无障碍）
+
+- 承接 `docs/plans/ADMIN_UI_REDESIGN_DEVELOPMENT.md` 的 P1/P2 批次（P0 已在上一节交付）。
+- 站点设置信息架构拆分：二级菜单 6→7，新增「高级与视觉」，把 `AdvancedSettingsSection`（背景 / 尺寸 / 卡片表面 / 分类标题视觉）从「外观与卡片」移出，后者只留配色方案与卡片风格。外观分区展开高级后此前编辑区内滚约 1149px（约 3.5 屏），拆分后单分区编辑区内滚为 0。
+- 设置页去三层嵌套滚动：`.settings-panel` 移除 `height: clamp(...)` 锁高与 `overflow: hidden`，编辑区不再自成滚动，交由外层 `.admin-content` 单一滚动；`.settings-preview-column` 改 `position: sticky` 桌面粘性跟随；`@media (max-width:1320px)` 收起为单列并让预览回落静态流。
+- 布局与导航小栅格：`.navigation-grid > .field`（显示位置）占整行，两个条件开关成对落在下一行，修复「分类分行显示」开关此前单独占一行、右侧留白的孤立感。
+- 自定义样式/脚本：三个 `textarea` 标签补 `HTML` / `CSS` / `JS` 单色 monospace 语言徽标。
+- 暗色层级按「表面色差优先于阴影」提亮：`--admin-card-bg` 由半透明 `rgba(15,23,42,0.6)` 改不透明 `#141f33`（与页底 `#08111f` 拉开亮度差）、`--admin-border` 0.22→0.26、`--admin-card-border` 0.2→0.26；正文 `#e5eefb` on `#141f33` ≈ 14:1。浅色 token 不动。
+- 动效收敛：移除 `AdminPageHeader` 图标按钮与设置二级菜单 hover 的 `translateY` 抬升，仅保留主保存按钮单点强调。
+- 无障碍：后台新增「跳到主内容」skip-link（标准 `:focus` 显现，`href="#admin-main"`），`.admin-content` 补 `id="admin-main"` + `tabindex="-1"`；分类 / 书签搜索框补 `aria-label`。
+- 焦点环 token 化：`src/app.css` 新增 `--focus-ring`（浅色保持原 `rgba(37,99,235,0.12)` 零回归，暗色改青色 `rgba(125,211,252,0.35)` 呼应强调色），11 处焦点环字面量收敛到该 token；顺带把 `LoginModal` 的 `input:focus` 补成 `:focus-visible`（P0 因该文件被并行任务占用而遗留，现已释放）。
+- 验证：`npm run type-check` 316 files 0/0；`npm test` 128 files / 948 tests 全通过（含随 IA 拆分与单滚动重构同步更新的 `adminSettingsLayout`/`adminSettingsBehavior`/`designTokens`）；`npm run build` 成功；`git diff --check` 干净。本地 `wrangler dev` 真实浏览器（1440 视窗）实测：二级菜单 7 项 / 7 列、预览列 `position: sticky`、面板 `overflow: visible`、四个设置分区编辑区内滚均为 0、语言徽标渲染、暗色卡片 `#141f33` 对页底层差明显、skip-link 接线正确。独立 `workflow-reviewer` 两轮（首轮 CHANGES_REQUIRED：一个菜单用例仍写「六个分区」→ 补「高级与视觉」并改名 → 复检 PASS）。未改动任何并行任务文件（仅 `src/` 与 `tests/`）。
+
+
+## v0.6.0 — 2026-09-20
+
+功能版本。新增首页离屏搜索按钮与居中 Spotlight 命令面板（REQ-01）：`Ctrl/Cmd+K`、`/` 或浮动按钮唤起，即时检索、键盘导航、主题自适应，高亮项自动滚入可视区。同步收敛后台增删改编排（PROB-24）、后台公开对象图标恢复共享缓存（PROB-35），关闭 PROB-36（首页搜索防抖复核为测量伪影 + `perf:audit` 门禁时序加固）与 PROB-19v（登出撤销的会话存储失败分支），补齐详情卡片列宽缺失回退到 160px（refs #22）。部署来源为 `develop`。
+
+### 新增离屏搜索按钮与居中 Spotlight 命令面板（REQ-01）
+
+- 首页搜索框滚出视口后，右上浮动操作组出现搜索按钮（`search_box_show=false` 时恒显，保证始终有搜索入口）；点击按钮或全局 `Ctrl/Cmd+K`、`/` 唤起居中命令面板 `SearchSpotlight.svelte`，`Esc` 关闭。面板即时过滤，结果范围与首页完全一致（共用同一 `publicData.bookmarks`），空查询展示常用书签，上限 50 条，键盘上下/回车选中、回车打开书签详情。
+- 组件懒加载（`ensureSearchSpotlightComponent`）；`openSpotlight` 在 await 加载前后各校验一次 `spotlightOpen / anyBlockingModalOpen / currentView / canSeeHome`，与登录/分类/书签/确认框/详情卡互斥（D-e），共用单槽滚动锁 `src/lib/pageScrollLock.ts`（从 `BookmarkEditModal` 抽出，单实例保存/恢复 `overflow`）。全局 keydown 守卫排除输入态与 IME（`isComposing`、`event.key === 'Process'`）。
+- 离屏可见性由 `src/lib/searchBoxVisibility.ts`（IntersectionObserver，无 IO 时回退为可见）观测 `.hero-search`，Home 订阅透传给浮动操作组。搜索按钮常驻 DOM，用 `class:is-visible` + `opacity/visibility` 过渡（走 `--transition-base` 令牌，无字面时长，`prefers-reduced-motion` 关闭过渡）；隐藏态 `aria-hidden` + `tabindex=-1` 不可聚焦，并以 `position:absolute` 移出 flex 流避免按钮组空槽。
+- 新增单测 `pageScrollLock.test.ts`、`searchBoxVisibility.test.ts`、`searchSpotlight.test.ts`、`homeFloatingActions.test.ts`（离屏按钮可见性/可聚焦/无障碍名与快捷键）。
+- 验证：L0 类型检查 311 files 0/0、`npm test` 125 files / 923 tests 全通过、生产构建成功；L2 真实 Chrome 25/25（滚动进出按钮、Ctrl+K 唤起、居中面板、字母头像占位无图标请求、模态互斥、移动端无溢出）；L3 `perf:audit` 全部预算通过（含首页防抖 jank-immune 门禁、图标请求 232 ≤ 260、缓存 1.2 MiB ≤ 5 MiB）+ Spotlight 50 条探针。独立复核就竞态/过渡/IME/布局空槽提出四轮意见，均已 fix-forward 收敛。
+- 上线后修复两处用户实测缺陷并在生产验证：面板配色此前硬编码深色、不随站点主题变化，改为默认亮色 `--spotlight-*` 变量 + `:global([data-theme='dark'])` 覆盖（对齐 `ConfirmDialog`）随主题自动切换；方向键导航此前不滚动，新增 `scrollActiveOptionIntoView`（`aria-activedescendant` 模式下焦点常驻输入框、浏览器不自动跟随高亮），高亮项超出面板时自动滚入可视区。真实 Chrome 生产实测：亮色面板白底深字、暗色深板浅字随 `data-theme` 翻转；50 条结果溢出时连按 ArrowDown 高亮项 `scrollTop` 持续跟随、始终可见。
+- **使用说明**：
+  - **唤起**：首页按 `Ctrl+K`（macOS `Cmd+K`）或 `/`；向下滚动使顶部搜索框离开视野后，也可点击右上角浮动的搜索按钮（`search_box_show=false` 时该按钮恒显）。
+  - **检索**：输入关键词即时过滤书签标题 / 网址 / 分类；空关键词展示最常访问的书签，结果上限 50 条。
+  - **键盘**：`↑` / `↓` 移动高亮（到端循环）、`Home` / `End` 跳首尾、`Enter` 打开当前项、`Esc` 关闭；高亮项自动滚入可视区。
+  - **打开方式**：沿用每个书签自身设置（新标签页 / 当前页 / 站内弹层）。
+  - **主题**：面板配色随站点亮 / 暗主题自动适配。
+
+### 关闭 PROB-36：首页搜索防抖复核为测量伪影，perf:audit 门禁时序加固
+
+- 复核结论：首页搜索**不缺防抖**。`src/views/Home.svelte` 既有 120ms 尾沿防抖（`SEARCH_FILTER_DEBOUNCE_MS` + `scheduleSearchFilterUpdate`），书签过滤/列表重渲染只读防抖后的 `deferredSearchQuery`；隔离 Chrome 正常负载复测 3/3，连打 `n`/`np`/`npm`（间隔 ~46ms < 120ms）settle 前 **0 次 mutation**，防抖窗过后一次重建（7 records）。
+- 上轮 L3 `perf:audit` 报出的 16 次 mutation 是测量伪影：那次运行全程 ~294s（约 10 倍负载），固定 45ms 的按键间隔被主线程拖到超过 120ms 防抖窗，防抖在打字途中触发了一次重建并计入 settle 前计数。
+- 工具加固（`scripts/perf-audit.mjs`）：`runHomeSearch` 改为记录每次按键真实时间戳与 mutation 批次，门禁只断言「最后一次按键后 60ms 判定窗内无立即重渲染」（未防抖实现会在一个 tick 内命中，卡顿不影响判定）；另报 `rebuiltAfterSettle` 正向佐证搜索链路在工作。复跑 `npm run perf:audit` 该项通过（`immediateAfterLastKey=0`，gaps 55/45ms，settle 后 7 records），其余 9 项预算同轮通过（图标请求 232 ≤ 260、缓存 1.2 MiB ≤ 5 MiB、首页 0 破图、一方请求失败 0）。
+
+### 关闭 PROB-19v：登出撤销的会话存储失败分支闭环
+
+- 登出撤销的 `store_unavailable` 分支（`worker/routes/auth.ts` 的 `POST /logout`：`SESSION` 绑定存在但 `revokeSession` 写入抛错时返回 `{revoked:false, reason:'store_unavailable'}`、HTTP 200 且不谎称撤销成功）已由 `tests/unit/sessionRevocation.test.ts` 路由级单测覆盖——注入 `put` 抛错的 KV，断言响应体，并与 `store_unconfigured`（缺绑定）区分。
+- happy path（登出后旧 token 在 15 秒窗口内被拒）三次生产实测 178 ms / 212 ms / 216 ms，均远低于窗口。生产 KV 故障注入不可行且不必要，失败分支的可观察契约已由单测闭环。据此从 `docs/BACKLOG.md` §3 移除，正式关闭。
+- 本次为文档 / 状态收尾，未改源码或测试；`sessionRevocation.test.ts` 复跑 11/11 通过。
+
+### 后台公开对象图标改用匿名代理 URL 恢复共享缓存（PROB-35）
+
+- 后台分类 / 书签 / 访问分析三个面板此前无条件给所有对象代理图标 URL 附加授权 `key`，使公开对象的响应也变成 `private, no-store`、丢失 edge / 浏览器 / 分类 Service Worker 缓存，每次渲染都为每个图标回源一次外站。本轮按「有效可见性」分流：公开对象改用不带 `key` 的匿名 `/api/{icon,category-icon}/:id?v=...`（恢复共享缓存），有效私密对象继续带签名 `key`。
+- 有效私密判定复用既有前端镜像 `getHiddenCategoryIds`（与 Worker `getPublicCategoryIds` 由 `tests/unit/publicVisibility.test.ts` 交叉断言，覆盖私密祖先链与循环链）：分类看自身是否落入 hidden 集，书签看 `is_private` 或所属分类是否落入 hidden 集——覆盖「公开子分类挂私密根下」「公开书签在私密分类树下」两种 Worker 匿名拒绝条件。
+- 不改 Worker 判定顺序、缓存命名空间、TTL、`no-store` 边界与 `withIconAccessKey` 签名；首页公开卡片本就不带 `key`，未受影响。
+- 新增 `tests/unit/adminIconAccess.test.ts`：三个面板 mount 后断言渲染 `<img src>` 的 key 分流（公开无 `key`、私密与私密树下对象带 `key`，含祖先链情形）。
+- 验证：L0 类型检查 0 errors / 0 warnings、`npm test` 122 files / 906 tests 全通过、生产构建成功。图标链路属缓存 / 性能相关：后台 L2 浏览器分流与推送后的 L3（真实 edge/SW 命中、`perf:audit` 图标请求与 Cache Storage 预算）未跑，进发版前清单。
+
+### 后台增删改编排收敛到 runAdminMutation（PROB-24）
+
+- `src/App.svelte` 里分类 / 书签 / 设置的创建、编辑、删除、批量删除、批量移动共 8 个处理器各自重复的 `try/catch/finally + 成功 Toast + 刷新` 样板，收敛到新的纯编排函数 `src/lib/appAdminMutation.ts` 的 `runAdminMutation`（对齐既有 `runOptimisticSort` 的「纯函数 + 回调选项」约定）。行为不变：成功文案、busy 标记清理时机、批量条件刷新、`handleBatchMoveBookmarks` 的失败重抛、设置提交不触发数据刷新等逐条保持。
+- 只做这一块编排收敛，未触碰安装 / 引导、鉴权、排序、reorganize 等其余处理器。
+- 新增 `tests/unit/appAdminMutation.test.ts` 断言 run→onSuccess→成功 Toast 的顺序、run 与 onSuccess 抛错统一落 onError、rethrow 重抛原始错误、successMessage 返回空串不弹 Toast、onSettled 恒执行；`tests/unit/confirmationFlow.test.ts` 一条随调用形态改变而失效的源码文本断言改为形态无关的接线存在性检查。
+- 验证：L0 类型检查 0 errors / 0 warnings、`npm test` 121 files / 903 tests 全通过、生产构建成功。App.svelte 组件层的 L2 浏览器回归未跑（无可达实例与管理员凭据），进发版前清单。
+
 ### 详情卡片列宽缺失回退补齐到 160px（refs #22）
 
 - v0.5.1 只把数据层默认（schema seed、`CARD_SIZE_DEFAULTS`、Home 兜底）改为 160px，组件与 CSS 层仍残留 200px 兜底：`CategorySection` / `BookmarkCard` 的 width prop 默认、两张卡片的网格与外壳 CSS fallback、`getInfoCardTrackWidth` 的非有限输入回落。本轮把这 5 处全部统一到 160px，使首次部署或缺失设置时详情卡列宽下限与共享默认一致；用户显式保存的宽度不迁移。

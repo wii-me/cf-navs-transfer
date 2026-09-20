@@ -123,8 +123,6 @@
   .icon-button:hover:not(:disabled) {
     background: var(--admin-control-hover-bg);
     border-color: color-mix(in srgb, var(--admin-accent) 52%, var(--admin-border));
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
   }
 
   .icon-button:disabled {

@@ -38,6 +38,7 @@ const readyTimeoutMs = Number.parseInt(process.env.SMOKE_READY_TIMEOUT || '90', 
 // 管理员用户名必须与 wrangler 配置里的 INIT_ADMIN_USER 一致，密码则由本次运行现造。
 const ADMIN_USER = 'admin'
 const ADMIN_PASS = `smoke-${randomBytes(18).toString('base64url')}`
+const SETUP_TOKEN = `smoke-setup-${randomBytes(18).toString('base64url')}`
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -122,6 +123,7 @@ async function main() {
       // 本地 bootstrap 用的一次性凭据，不写入任何文件
       '--var', `INIT_ADMIN_USER:${ADMIN_USER}`,
       '--var', `INIT_ADMIN_PASSWORD:${ADMIN_PASS}`,
+      '--var', `SETUP_TOKEN:${SETUP_TOKEN}`,
     ],
     { cwd: rootDir, stdio: ['ignore', 'ignore', 'inherit'], detached: process.platform !== 'win32' },
   )
@@ -133,7 +135,7 @@ async function main() {
     const smoke = spawnSync(process.execPath, [path.join(rootDir, 'scripts', 'smoke-test.mjs')], {
       cwd: rootDir,
       stdio: 'inherit',
-      env: { ...process.env, BASE_URL: baseUrl, ADMIN_USER, ADMIN_PASS },
+      env: { ...process.env, BASE_URL: baseUrl, ADMIN_USER, ADMIN_PASS, SETUP_TOKEN },
     })
     exitCode = smoke.status ?? 1
   } finally {

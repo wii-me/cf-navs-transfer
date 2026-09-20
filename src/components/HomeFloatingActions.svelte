@@ -17,8 +17,20 @@
   export let onOpenCreateRootCategory: (() => AsyncVoid) | undefined = undefined
   export let topNavigation = false
   export let sortActive = false
+  export let searchBoxVisible = false
+  export let searchBoxShow = true
+  export let onOpenSearch: (() => AsyncVoid) | undefined = undefined
 
   let showBackToTop = false
+  let isMac = false
+  // 搜索框离屏时显示；`search_box_show=false` 时恒显，保证仍有搜索入口（REQ-01 / FR-1.2）。
+  $: showSearchButton = !searchBoxVisible || !searchBoxShow
+  $: searchShortcutHint = isMac ? '⌘K' : 'Ctrl+K'
+
+  function handleOpenSearch() {
+    closeMenu()
+    void onOpenSearch?.()
+  }
 
   // 移动端把整组操作收进一个「更多」触发器，点开后向下弹出；桌面端仍平铺（纯 CSS @media 切换）。
   // 触发器与操作组始终在 DOM，由 @media 决定形态——jsdom 不解析 @media，所以操作按钮在单元测试里
@@ -103,6 +115,14 @@
     updateBackToTopVisibility()
     window.addEventListener('scroll', updateBackToTopVisibility, { passive: true })
 
+    if (typeof window !== 'undefined') {
+      const platform =
+        (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ??
+        navigator.platform ??
+        ''
+      isMac = /mac/i.test(platform)
+    }
+
     return () => window.removeEventListener('scroll', updateBackToTopVisibility)
   })
 </script>
@@ -128,6 +148,23 @@
     </svg>
   </button>
   <div class="actions-group" id={menuId} bind:this={menuGroup}>
+    <button
+      type="button"
+      class="icon-button search-fab"
+      class:is-visible={showSearchButton}
+      data-testid="home-search-button"
+      on:click={handleOpenSearch}
+      title={`搜索书签 (${searchShortcutHint})`}
+      aria-label="搜索书签"
+      aria-hidden={!showSearchButton}
+      tabindex={showSearchButton ? undefined : -1}
+      aria-keyshortcuts="Control+K Meta+K"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="11" cy="11" r="7" />
+        <path d="m20 20-3.5-3.5" />
+      </svg>
+    </button>
     <button
       type="button"
       class="icon-button theme-toggle-button"
@@ -319,6 +356,58 @@
     background: rgba(255, 255, 255, 0.95);
     border-color: rgba(37, 99, 235, 0.45);
     transform: translateY(-1px);
+  }
+
+  .search-fab {
+    color: #2563eb;
+    border-color: rgba(37, 99, 235, 0.5);
+    background: rgba(219, 234, 254, 0.92);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity var(--transition-base), visibility var(--transition-base);
+  }
+
+  .search-fab.is-visible {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  /* 隐藏态移出 flex 流，避免在按钮组里留永久空槽/间隙（搜索框在视口内时的首页常态）。
+     绝对定位锚到最近定位祖先角落（随布局模式为 .floating-actions 或 .actions-group），
+     因不可见（opacity/visibility/pointer-events）在各模式下均无视觉与交互影响。 */
+  .search-fab:not(.is-visible) {
+    position: absolute;
+    top: 0;
+    right: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .search-fab {
+      transition: none;
+    }
+  }
+
+  .search-fab:hover:not(:disabled) {
+    background: rgba(191, 219, 254, 0.95);
+    border-color: rgba(37, 99, 235, 0.6);
+  }
+
+  .search-fab svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  :global([data-theme='dark']) .search-fab {
+    color: #bfdbfe;
+    background: rgba(30, 58, 138, 0.55);
+    border-color: rgba(96, 165, 250, 0.5);
   }
 
   .theme-toggle-button {

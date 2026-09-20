@@ -4,6 +4,7 @@
 const BASE = process.env.BASE_URL || 'http://127.0.0.1:8787'
 const USER = process.env.ADMIN_USER || 'admin'
 const PASS = process.env.ADMIN_PASS || 'replace-with-a-local-dev-password'
+const SETUP_TOKEN = process.env.SETUP_TOKEN || ''
 
 let pass = 0
 let fail = 0
@@ -20,8 +21,8 @@ function check(name, cond, detail = '') {
   }
 }
 
-async function call(path, { method = 'GET', token, body } = {}) {
-  const headers = { accept: 'application/json' }
+async function call(path, { method = 'GET', token, body, headers: extraHeaders } = {}) {
+  const headers = { accept: 'application/json', ...extraHeaders }
   if (body !== undefined) headers['content-type'] = 'application/json'
   if (token) headers['authorization'] = `Bearer ${token}`
   const res = await fetch(`${BASE}${path}`, {
@@ -363,6 +364,40 @@ async function main() {
     check('登出 code=0', r.json?.code === 0)
     const after = await call('/api/me', { token })
     check('登出后 token 失效 → 401', after.status === 401, `status=${after.status}`)
+  }
+
+  // 15. 密码恢复（放最后：会重置密码并轮换 JWT secret，作废全部会话）
+  section('密码恢复 /api/recover')
+  if (!SETUP_TOKEN) {
+    check('SETUP_TOKEN 未配置，跳过恢复场景', true, 'skipped')
+  } else {
+    const NEW_PASS = 'recovNew1'
+    {
+      const r = await call('/api/recover', { method: 'POST', body: { password: NEW_PASS }, headers: { 'X-Setup-Token': 'wrong-token' } })
+      check('恢复错误令牌 → 401', r.status === 401, `status=${r.status}`)
+    }
+    {
+      const r = await call('/api/recover', { method: 'POST', body: { password: NEW_PASS } })
+      check('恢复缺令牌头 → 401', r.status === 401, `status=${r.status}`)
+    }
+    {
+      const r = await call('/api/recover', { method: 'POST', body: { password: 'short1' }, headers: { 'X-Setup-Token': SETUP_TOKEN } })
+      check('恢复弱密码 → 1002', r.json?.code === 1002, `code=${r.json?.code}`)
+    }
+    {
+      const r = await call('/api/recover', { method: 'POST', body: { password: NEW_PASS }, headers: { 'X-Setup-Token': SETUP_TOKEN } })
+      check('恢复成功 code=0', r.json?.code === 0, JSON.stringify(r.json))
+      check('恢复返回原用户名', r.json?.data?.username === USER, `u=${r.json?.data?.username}`)
+      check('恢复返回可用 token', typeof r.json?.data?.token === 'string' && r.json.data.token.length > 0)
+    }
+    {
+      const r = await call('/api/login', { method: 'POST', body: { username: USER, password: NEW_PASS } })
+      check('新密码可登录 code=0', r.json?.code === 0, JSON.stringify(r.json))
+    }
+    {
+      const r = await call('/api/login', { method: 'POST', body: { username: USER, password: PASS } })
+      check('旧密码登录被拒绝', r.json?.code !== 0, `code=${r.json?.code}`)
+    }
   }
 
   finish()

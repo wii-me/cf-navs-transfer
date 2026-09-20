@@ -157,11 +157,11 @@
   accent-color: var(--sp-accent);
 }
 
-.settings-panel :is(.field, .engine-cell) > :is(input:not([type='range']), select, textarea):focus,
-.settings-panel .inline-input > :is(input, select):focus {
+.settings-panel :is(.field, .engine-cell) > :is(input:not([type='range']), select, textarea):focus-visible,
+.settings-panel .inline-input > :is(input, select):focus-visible {
   outline: none;
   border-color: var(--sp-accent);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .settings-panel :is(.field, .engine-cell) > :is(input, select, textarea):disabled {

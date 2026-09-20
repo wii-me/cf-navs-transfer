@@ -40,10 +40,10 @@ async function openSection(label: string) {
 }
 
 describe('设置页分区导航', () => {
-  it('六个分区都在二级菜单里，默认停在「站点设置」', () => {
+  it('七个分区都在二级菜单里，默认停在「站点设置」', () => {
     renderPanel()
 
-    const labels = ['站点设置', '外观与卡片', '布局与导航', '搜索设置', '自定义样式/脚本', '账号安全']
+    const labels = ['站点设置', '外观与卡片', '高级与视觉', '布局与导航', '搜索设置', '自定义样式/脚本', '账号安全']
     for (const label of labels) expect(submenuButton(label)).toBeTruthy()
 
     expect(submenuButton('站点设置').classList.contains('active')).toBe(true)
@@ -129,7 +129,7 @@ describe('设置控件到 payload 的实际写入', () => {
 
   it('允许保存输入控件已支持的 40 px 卡片宽度', async () => {
     const { onSubmit } = renderPanel()
-    await openSection('外观与卡片')
+    await openSection('高级与视觉')
     await fireEvent.click(screen.getByTestId('appearance-advanced-toggle'))
 
     await fireEvent.input(screen.getByRole('spinbutton', { name: '详情卡片列宽下限' }), { target: { value: '40' } })
@@ -145,7 +145,7 @@ describe('设置控件到 payload 的实际写入', () => {
 describe('外观分区的高级设置与置灰联动', () => {
   it('用具名背景预设时高级设置默认收起，点开才出现尺寸控件', async () => {
     renderPanel()
-    await openSection('外观与卡片')
+    await openSection('高级与视觉')
 
     const toggle = screen.getByTestId('appearance-advanced-toggle')
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
@@ -161,7 +161,7 @@ describe('外观分区的高级设置与置灰联动', () => {
 
   it('背景改成自定义后高级设置自动展开——否则用户找不到自己刚改过的值', async () => {
     renderPanel({ value: { ...baseValue, background_preset_id: 'custom' } })
-    await openSection('外观与卡片')
+    await openSection('高级与视觉')
 
     expect(screen.getByTestId('appearance-advanced-toggle').getAttribute('aria-expanded')).toBe('true')
     expect(document.getElementById('settings-card-width')).toBeTruthy()
@@ -171,7 +171,7 @@ describe('外观分区的高级设置与置灰联动', () => {
     // 这是原断言 `disabled={form.card_style !== 'info'}` 真正想表达的东西：
     // 两个控件按当前风格互斥可用，而不是模板里写了那个表达式。
     renderPanel({ value: { ...baseValue, card_style: 'icon' } })
-    await openSection('外观与卡片')
+    await openSection('高级与视觉')
     await fireEvent.click(screen.getByTestId('appearance-advanced-toggle'))
 
     expect((document.getElementById('settings-card-width') as HTMLInputElement).disabled).toBe(true)
@@ -179,7 +179,7 @@ describe('外观分区的高级设置与置灰联动', () => {
 
     cleanup()
     renderPanel({ value: { ...baseValue, card_style: 'info' } })
-    await openSection('外观与卡片')
+    await openSection('高级与视觉')
     await fireEvent.click(screen.getByTestId('appearance-advanced-toggle'))
 
     expect((document.getElementById('settings-card-width') as HTMLInputElement).disabled).toBe(false)
@@ -188,7 +188,7 @@ describe('外观分区的高级设置与置灰联动', () => {
 
   it('卡片宽度控件的 min 是 40（PROB-28 裁定值）', async () => {
     renderPanel()
-    await openSection('外观与卡片')
+    await openSection('高级与视觉')
     await fireEvent.click(screen.getByTestId('appearance-advanced-toggle'))
 
     expect((document.getElementById('settings-card-width') as HTMLInputElement).min).toBe('40')

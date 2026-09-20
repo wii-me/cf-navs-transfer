@@ -14,6 +14,7 @@ import dataRoutes from './routes/data'
 import errorReportRoutes from './routes/errorReport'
 import faviconRoutes from './routes/favicon'
 import installRoutes from './routes/install'
+import recoverRoutes from './routes/recover'
 import { iconRoutes } from './routes/icon'
 import publicRoutes from './routes/public'
 import settingsRoutes from './routes/settings'
@@ -29,6 +30,7 @@ app.options('/api/login', () => corsPreflight())
 app.use('/api/login', corsHeaders)
 app.route('/api', authRoutes)
 app.route('/api', installRoutes)
+app.route('/api', recoverRoutes)
 app.route('/api', publicRoutes)
 app.route('/api', errorReportRoutes) // 公开错误上报，无需认证
 

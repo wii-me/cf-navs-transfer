@@ -328,7 +328,7 @@
   .category-select-trigger[aria-expanded='true'] {
     outline: none;
     border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    box-shadow: 0 0 0 3px var(--focus-ring);
   }
 
   .category-select-trigger:disabled {

@@ -180,8 +180,8 @@
 
 .admin-primary-button {
   border: none;
-  background: #2563eb;
-  color: #ffffff;
+  background: var(--admin-accent);
+  color: var(--admin-accent-ink, #ffffff);
 }
 
 .admin-ghost-button {

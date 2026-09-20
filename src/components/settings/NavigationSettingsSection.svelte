@@ -163,6 +163,11 @@
     align-items: stretch;
   }
 
+  /* 显示位置占整行，两个条件开关成对落在下一行，避免单个开关孤立留白 */
+  .navigation-grid > .field {
+    grid-column: 1 / -1;
+  }
+
   .nav-switch-row {
     display: flex;
     align-items: center;

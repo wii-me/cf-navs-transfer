@@ -36,7 +36,7 @@ describe('admin settings layout', () => {
     expect(positions.every((position) => position >= 0)).toBe(true)
     expect(new Set(positions).size).toBe(sectionOrder.length)
 
-    const labels = ['站点设置', '外观与卡片', '布局与导航', '搜索设置', '自定义样式/脚本', '账号安全']
+    const labels = ['站点设置', '外观与卡片', '高级与视觉', '布局与导航', '搜索设置', '自定义样式/脚本', '账号安全']
     const labelPositions = labels.map((label) => panel.indexOf(`label: '${label}'`))
     expect(labelPositions.every((position) => position >= 0)).toBe(true)
     expect(labelPositions).toEqual([...labelPositions].sort((a, b) => a - b))
@@ -47,9 +47,9 @@ describe('admin settings layout', () => {
     const submenuRule = panel.match(/\.settings-submenu\s*\{([^}]+)\}/)?.[1] ?? ''
     const workspaceRule = panel.match(/\.settings-workspace\s*\{([^}]+)\}/)?.[1] ?? ''
     expect(formRule).toContain('grid-template-columns: minmax(0, 1fr)')
-    expect(formRule).toContain('grid-template-rows: auto minmax(0, 1fr)')
+    expect(formRule).toContain('grid-template-rows: auto auto')
     expect(submenuRule).toContain('grid-column: 1 / -1')
-    expect(submenuRule).toContain('grid-template-columns: repeat(6, minmax(0, 1fr))')
+    expect(submenuRule).toContain('grid-template-columns: repeat(7, minmax(0, 1fr))')
     expect(submenuRule).toContain('position: static')
     expect(workspaceRule).toContain('grid-column: 1 / -1')
     expect(panel).not.toContain('grid-column: span 1')
@@ -57,28 +57,25 @@ describe('admin settings layout', () => {
     expect(panel).not.toContain('group::before')
   })
 
-  it('bounds the desktop settings card height to the available shell', () => {
+  it('lets the admin shell own the scroll and keeps the preview sticky', () => {
     const panel = readFileSync('src/components/SettingsPanel.svelte', 'utf8')
     const adminContent = readFileSync('src/components/admin/AdminTabContent.svelte', 'utf8')
     const panelRule = panel.match(/\.settings-panel\s*\{([^}]+)\}/)?.[1] ?? ''
-    const sectionContentRule = panel.match(/\.settings-section-content\s*\{([^}]+)\}/)?.[1] ?? ''
+    const previewRule = panel.match(/\.settings-preview-column\s*\{([^}]+)\}/)?.[1] ?? ''
     const adminContentRule = adminContent.match(/\.admin-content\s*\{([^}]+)\}/)?.[1] ?? ''
     const desktopCollapseStart = panel.indexOf('@media (max-width: 1320px)')
     const desktopCollapseEnd = panel.indexOf('@media (max-width: 960px)')
     const desktopCollapseRule = panel.slice(desktopCollapseStart, desktopCollapseEnd)
 
-    expect(panelRule).toContain('height: clamp(0px, calc(100dvh - 180px), 960px)')
-    expect(panelRule).toContain('min-height: min(560px, calc(100dvh - 180px))')
-    expect(sectionContentRule).toContain('height: 100%')
-    expect(sectionContentRule).toContain('overflow-y: auto')
-    expect(adminContentRule).toContain('height: 100%')
+    // 单滚动契约：面板不再锁死高度自成内滚，交由 admin 内容区滚动，右侧预览在桌面粘性跟随。
+    expect(panelRule).not.toContain('height: clamp')
+    expect(previewRule).toContain('position: sticky')
+    expect(previewRule).toContain('align-self: start')
     expect(adminContentRule).toContain('overflow: auto')
-    expect(panelRule).not.toContain('100dvh - 156px')
     expect(adminContent).toContain('margin: 0 0 24px')
-    expect(desktopCollapseRule).toContain('height: auto;')
-    expect(desktopCollapseRule).toContain('min-height: 0;')
-    expect(desktopCollapseRule).toContain('overflow: visible;')
+    // 窄屏收起为单列，预览回落为静态流。
     expect(desktopCollapseRule).toContain('grid-template-columns: minmax(0, 1fr)')
+    expect(desktopCollapseRule).toContain('position: static')
   })
 
   it('places theme, search, image-host, and layout controls in their current sections', () => {

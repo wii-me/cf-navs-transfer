@@ -15,12 +15,12 @@ export type InstallScreenState =
 
 export interface InstallViewState {
   mode:
-    | 'needs_install'
-    | 'setup_token_missing'
-    | 'bindings_missing'
-    | 'database_unreachable'
-    | 'session_store_unreachable'
-    | 'status_error'
+  | 'needs_install'
+  | 'setup_token_missing'
+  | 'bindings_missing'
+  | 'database_unreachable'
+  | 'session_store_unreachable'
+  | 'status_error'
   missingBindings: InstallBinding[]
   schemaVersion: number | null
   installing: boolean
@@ -29,6 +29,10 @@ export interface InstallViewState {
 
 export function isInstallPath(pathname: string): boolean {
   return pathname === '/install' || pathname.startsWith('/install/')
+}
+
+export function isRecoverPath(pathname: string): boolean {
+  return pathname === '/recover' || pathname.startsWith('/recover/')
 }
 
 // 启动时是否需要探测 `/api/install/status`。

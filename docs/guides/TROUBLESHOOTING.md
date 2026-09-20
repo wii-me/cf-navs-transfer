@@ -103,22 +103,36 @@ npm run db:init:remote
 
 ## 登录失败
 
-### 密码错误
+### 第一层：仍能登录
 
-如果仍能登录后台，进入 **站点设置 → 账号安全**，输入当前密码后更新管理员密码。修改成功后，现有登录会话会失效，需要使用新密码重新登录。
+进入 **站点设置 → 账号安全**，输入当前密码后更新管理员密码。修改成功后，现有登录会话会失效，需要使用新密码重新登录。
 
-如果已经无法登录，以下 `INIT_ADMIN_*` 流程仅用于已完成初始化的旧数据库升级或凭据恢复，不适用于全新部署。修改 `INIT_ADMIN_USER` 和 `INIT_ADMIN_PASSWORD` 后重新部署，下一次登录会自动用新值覆盖 D1 中的管理员凭据。确认当前 Wrangler 指向正确的 Worker、D1 和账号后再执行；本地 CLI 场景优先使用项目脚本生成的 `wrangler.local.toml`：
+### 第二层：无法登录，但能操作 Cloudflare Secret
+
+访问站点 `/recover`，输入生产环境的 `SETUP_TOKEN` 和新密码。恢复只修改密码，不修改管理员用户名；新密码须为 8–12 位，且至少包含两类字符。
+
+如果忘记了原 `SETUP_TOKEN`：
+
+1. 在 Worker **设置 → 变量和密钥 → 生产环境** 新增或编辑类型为**密钥**的 `SETUP_TOKEN`。
+2. 保存后重新触发生产分支部署；CLI 部署则使用 `npx wrangler secret put SETUP_TOKEN` 后运行 `npm run deploy`。
+3. 使用新值重新访问 `/recover`。
+
+`SETUP_TOKEN` 不存入 D1；Worker 每次请求读取当前环境值。恢复成功后会轮换 JWT secret，旧会话立即失效。错误或未配置令牌统一返回 401，不会泄露当前环境是否配置了令牌；限流和密码校验错误遵循 API 的 `HTTP 200 + code` 包络。
+
+### 第三层：使用 INIT_ADMIN_* 重部署兜底
+
+无法使用 `/recover` 时，以下流程仅用于已完成初始化的旧数据库升级或凭据恢复，不适用于全新部署。修改 `INIT_ADMIN_USER` 和 `INIT_ADMIN_PASSWORD` 后重新部署，下一次使用新凭据登录会自动覆盖 D1 中的管理员凭据；本地 CLI 场景优先使用项目脚本生成的 `wrangler.local.toml`：
 
 ```bash
 npm run wrangler -- secret put INIT_ADMIN_PASSWORD
 npm run deploy
 ```
 
-如果不使用项目脚本，必须显式传入包含真实 D1/KV ID 的本地配置（例如 `--config wrangler.local.toml`），不得用不带资源 ID 的公共 `wrangler.toml` 误部署。恢复变量修改后重新部署，成功登录并确认恢复后及时移除临时变量。
+如果不使用项目脚本，必须显式传入包含真实 D1/KV ID 的本地配置（例如 `--config wrangler.local.toml`），不得用不带资源 ID 的公共 `wrangler.toml` 误部署。
 
-升级前已经创建的旧数据库可能还没有初始化标记。此时再设置一个新的 `RESET_ADMIN_CREDENTIALS` 变量值，例如 `reset-2026-07-12`，重新部署并登录一次即可。成功登录后可以移除该变量；同一个标记不会重复重置，以后再次强制重置时请使用新的标记值。
+升级前已创建但没有初始化标记的旧数据库，再设置新的 `RESET_ADMIN_CREDENTIALS` 值（例如 `reset-2026-07-12`）并重新部署，用新凭据登录一次即可。成功后可移除该变量；同一标记不会重复重置，下一次强制重置必须使用新值。
 
-Cloudflare Secret 生效可能需要等待片刻。执行重置前请确认 Wrangler 指向的是正确的 Cloudflare 账号、Worker 和 D1 数据库。
+如果既没有 Cloudflare 后台权限，也无法重新部署，则不存在应用层恢复路径，这是部署者权限的固有边界。
 
 ### KV 相关错误
 

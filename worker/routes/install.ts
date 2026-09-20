@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import type { InstallBinding, InstallReq, InstallStatusResp } from '../../shared/types'
 import { ErrCode } from '../../shared/types'
-import { hashPassword, secretsEqual } from '../lib/crypto'
+import { hashPassword } from '../lib/crypto'
 import { getSettingValues, setSettingValue } from '../lib/db'
 import { initializeSchema } from '../lib/installSchema'
 import { fail, ok } from '../lib/response'
@@ -9,6 +9,14 @@ import { createSession } from '../lib/session'
 import { hasSessionBinding } from '../lib/sessionStore'
 import { getClientIp } from '../middleware/rateLimit'
 import type { Env, HonoEnv, LoginRateLimitState } from '../types'
+import { authorizeSetup, isSameOriginRequest } from '../lib/setupToken'
+import {
+  RATE_LIMIT_MAX_ATTEMPTS,
+  clearInstallFailures,
+  consumeInstallAttempt,
+  ensureInstallRateLimitTable,
+  readInstallFailures,
+} from '../lib/installRateLimit'
 
 const ADMIN_USERNAME_KEY = 'admin_username'
 const ADMIN_PASSWORD_KEY = 'admin_password'
@@ -17,18 +25,8 @@ const BOOTSTRAP_PASSWORD_KEY = 'admin_bootstrap_password'
 const INSTALL_MARKER_KEY = 'installation_schema_version'
 const INSTALL_SCHEMA_VERSION = 1
 const KV_PROBE_KEY = '__cf_navs_install_probe__'
-const RATE_LIMIT_MAX_ATTEMPTS = 5
-const RATE_LIMIT_WINDOW_SECONDS = 10 * 60
-const RATE_LIMIT_WINDOW_MS = RATE_LIMIT_WINDOW_SECONDS * 1000
 const INSTALL_CLAIM_TTL_MS = 10 * 60 * 1000
 const INSTALL_CLAIM_PREFIX = '__cf_navs_install_claim__:'
-const CREATE_RATE_LIMIT_TABLE_SQL = `
-  CREATE TABLE IF NOT EXISTS install_rate_limits (
-    client_key TEXT PRIMARY KEY,
-    count INTEGER NOT NULL,
-    reset_at INTEGER NOT NULL
-  )
-`
 const MIN_PASSWORD_LENGTH = 12
 const MAX_PASSWORD_LENGTH = 256
 const MAX_USERNAME_LENGTH = 64
@@ -76,70 +74,8 @@ async function sessionStoreIsReachable(session: KVNamespace): Promise<boolean> {
   }
 }
 
-async function authorizeSetup(env: Env, suppliedToken: string | undefined): Promise<boolean> {
-  const configuredToken = env.SETUP_TOKEN?.trim()
-  if (!configuredToken || !suppliedToken) return false
-  return secretsEqual(suppliedToken, configuredToken)
-}
-
-function isSameOriginRequest(request: Request): boolean {
-  const fetchSite = request.headers.get('Sec-Fetch-Site')
-  if (fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'none') return false
-
-  const suppliedOrigin = request.headers.get('Origin')
-  if (!suppliedOrigin) return true
-
-  try {
-    return new URL(suppliedOrigin).origin === new URL(request.url).origin
-  } catch {
-    return false
-  }
-}
-
 function getRateLimitKey(ip: string): string {
   return `install:${ip}`
-}
-
-async function ensureInstallRateLimitTable(db: D1Database): Promise<void> {
-  await db.prepare(CREATE_RATE_LIMIT_TABLE_SQL).run()
-}
-
-async function readInstallFailures(db: D1Database, ip: string): Promise<LoginRateLimitState | null> {
-  return db
-    .prepare('SELECT count, reset_at AS resetAt FROM install_rate_limits WHERE client_key = ?')
-    .bind(getRateLimitKey(ip))
-    .first<LoginRateLimitState>()
-}
-
-async function consumeInstallAttempt(db: D1Database, ip: string): Promise<boolean> {
-  const now = Date.now()
-  const key = getRateLimitKey(ip)
-  const result = await db
-    .prepare(`
-      INSERT INTO install_rate_limits (client_key, count, reset_at)
-      VALUES (?, 1, ?)
-      ON CONFLICT(client_key) DO UPDATE SET
-        count = CASE
-          WHEN install_rate_limits.reset_at <= ? THEN 1
-          ELSE install_rate_limits.count + 1
-        END,
-        reset_at = CASE
-          WHEN install_rate_limits.reset_at <= ? THEN excluded.reset_at
-          ELSE install_rate_limits.reset_at
-        END
-      RETURNING count, reset_at
-    `)
-    .bind(key, now + RATE_LIMIT_WINDOW_MS, now, now)
-    .first<LoginRateLimitState>()
-  if (!result) throw new Error('failed to record installation attempt')
-  return result.resetAt > now && result.count > RATE_LIMIT_MAX_ATTEMPTS
-}
-
-async function clearInstallFailures(db: D1Database, ip: string): Promise<void> {
-  await db
-    .prepare('DELETE FROM install_rate_limits WHERE client_key = ?')
-    .bind(getRateLimitKey(ip))
-    .run()
 }
 
 function createInstallClaim(): string {
@@ -286,7 +222,7 @@ installRoutes.post('/install', async (c) => {
   let rateLimitState: LoginRateLimitState | null
   try {
     await ensureInstallRateLimitTable(c.env.DB)
-    rateLimitState = await readInstallFailures(c.env.DB, ip)
+    rateLimitState = await readInstallFailures(c.env.DB, getRateLimitKey(ip))
   } catch {
     return noStore(c.json(fail(ErrCode.SERVER_ERROR, 'database is unavailable')))
   }
@@ -296,7 +232,7 @@ installRoutes.post('/install', async (c) => {
 
   if (!(await authorizeSetup(c.env, c.req.header('X-Setup-Token')))) {
     try {
-      const limited = await consumeInstallAttempt(c.env.DB, ip)
+      const limited = await consumeInstallAttempt(c.env.DB, getRateLimitKey(ip))
       if (limited) {
         return noStore(c.json(fail(ErrCode.RATE_LIMITED, 'too many setup token attempts')))
       }
@@ -370,7 +306,7 @@ installRoutes.post('/install', async (c) => {
       return noStore(c.json(fail(ErrCode.BAD_REQUEST, 'already installed')))
     }
 
-    await clearInstallFailures(c.env.DB, ip)
+    await clearInstallFailures(c.env.DB, getRateLimitKey(ip))
     try {
       return noStore(c.json(ok(await createSession(c.env, username))))
     } catch {

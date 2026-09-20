@@ -244,6 +244,11 @@ export interface ChangePasswordReq {
   new_password: string
 }
 
+// POST /api/recover （已安装实例上用 SETUP_TOKEN 重置管理员密码，只改密码不改用户名）
+export interface RecoverReq {
+  password: string
+}
+
 // GET /api/public/data  （公开只读聚合）
 export interface PublicData {
   categories: PublicCategory[]

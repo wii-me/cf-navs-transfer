@@ -25,6 +25,7 @@ import {
   type LoginResp,
   type LogoutResp,
   type PublicData,
+  type RecoverReq,
   type Settings,
   type SettingsUpdateReq,
   type SiteMetaResp,
@@ -357,6 +358,8 @@ export const authApi = {
   changePassword: (payload: ChangePasswordReq) => jsonRequest<null>('/password', 'POST', payload, true),
   logout: () => jsonRequest<LogoutResp>('/logout', 'POST', undefined, true),
   iconAccess: () => request<IconAccessResp>('/icon-access', { auth: true, cache: 'no-store' }),
+  recover: (payload: RecoverReq, setupToken: string) =>
+    jsonRequest<LoginResp>('/recover', 'POST', payload, false, { 'X-Setup-Token': setupToken }),
 }
 
 export const categoriesApi = {

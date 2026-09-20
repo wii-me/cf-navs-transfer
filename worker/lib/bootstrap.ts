@@ -2,11 +2,11 @@ import type { Env } from '../types'
 import { hashPassword, verifyPassword } from './crypto'
 import { getSettingValues, setSettingValue } from './db'
 
-const ADMIN_USERNAME_KEY = 'admin_username'
-const ADMIN_PASSWORD_KEY = 'admin_password'
+export const ADMIN_USERNAME_KEY = 'admin_username'
+export const ADMIN_PASSWORD_KEY = 'admin_password'
 const BOOTSTRAP_USERNAME_KEY = 'admin_bootstrap_username'
-const BOOTSTRAP_PASSWORD_KEY = 'admin_bootstrap_password'
-const INSTALL_MARKER_KEY = 'installation_schema_version'
+export const BOOTSTRAP_PASSWORD_KEY = 'admin_bootstrap_password'
+export const INSTALL_MARKER_KEY = 'installation_schema_version'
 const RESET_MARKER_KEY = 'admin_reset_marker'
 
 export interface AdminCredentials {

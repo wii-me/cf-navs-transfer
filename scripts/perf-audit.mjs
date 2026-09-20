@@ -273,6 +273,12 @@ async function runHomeSearch() {
       const input = document.querySelector('.search-card input')
       if (!input) return { error: 'home search input not found' }
 
+      // 「立即重渲染」判定窗：低于任何合理防抖阈值（产品当前 120ms）。用 MutationObserver
+      // 批次的真实时间戳判定，不依赖 setTimeout 精度，因此对测量环境卡顿免疫——过载环境下
+      // 早先按键的间隔被拉长、防抖在打字途中触发的重渲染，其时间戳不落在「最后一次按键 + 60ms」
+      // 窗内，不会误判为未防抖；未防抖实现则会在每次按键后一个 tick（远小于 60ms）内重渲染。
+      const IMMEDIATE_WINDOW_MS = 60
+
       const before = {
         nodes: document.querySelectorAll('*').length,
         links: document.querySelectorAll('a').length,
@@ -280,19 +286,23 @@ async function runHomeSearch() {
         sections: document.querySelectorAll('[data-section-id]').length,
       }
 
-      const mutations = { count: 0 }
+      const start = performance.now()
+      const batches = []
       const observer = new MutationObserver((list) => {
-        mutations.count += list.length
+        batches.push({ at: performance.now() - start, records: list.length })
       })
       observer.observe(document.querySelector('main') || document.body, {
         childList: true,
         subtree: true,
         characterData: true,
       })
+      const total = () => batches.reduce((sum, batch) => sum + batch.records, 0)
 
+      const keyTimes = []
       for (const value of ['n', 'np', 'npm']) {
         input.value = value
         input.dispatchEvent(new Event('input', { bubbles: true }))
+        keyTimes.push(performance.now() - start)
         await delay(45)
       }
 
@@ -300,7 +310,7 @@ async function runHomeSearch() {
         nodes: document.querySelectorAll('*').length,
         links: document.querySelectorAll('a').length,
         cards: document.querySelectorAll('.bookmark-card-shell').length,
-        mutations: mutations.count,
+        mutations: total(),
       }
 
       await delay(260)
@@ -309,8 +319,18 @@ async function runHomeSearch() {
         links: document.querySelectorAll('a').length,
         cards: document.querySelectorAll('.bookmark-card-shell').length,
         sections: document.querySelectorAll('[data-section-id]').length,
-        mutations: mutations.count,
+        mutations: total(),
       }
+
+      const lastKeyAt = keyTimes[keyTimes.length - 1]
+      const gaps = keyTimes.slice(1).map((time, index) => Math.round(time - keyTimes[index]))
+      // 只统计「最后一次按键」之后、判定窗内的 mutation：防抖实现把重渲染推迟到 ~120ms 后（窗外），
+      // 未防抖实现在按键后一个 tick 内重渲染（窗内）。用真实时间戳，卡顿不影响判定。
+      const immediateAfterLastKey = batches.filter(
+        (batch) => batch.at > lastKeyAt && batch.at <= lastKeyAt + IMMEDIATE_WINDOW_MS,
+      ).length
+      // 正向佐证：防抖窗过后确实重渲染过（搜索链路在工作，不是「什么都没做」）。
+      const rebuiltAfterSettle = afterSettled.mutations > 0
 
       input.value = ''
       input.dispatchEvent(new Event('input', { bubbles: true }))
@@ -320,11 +340,21 @@ async function runHomeSearch() {
         links: document.querySelectorAll('a').length,
         cards: document.querySelectorAll('.bookmark-card-shell').length,
         sections: document.querySelectorAll('[data-section-id]').length,
-        mutations: mutations.count,
+        mutations: total(),
       }
 
       observer.disconnect()
-      return { before, afterRapid, afterSettled, afterClear }
+      return {
+        before,
+        afterRapid,
+        afterSettled,
+        afterClear,
+        gaps,
+        maxGap: gaps.length ? Math.max(...gaps) : 0,
+        immediateWindowMs: IMMEDIATE_WINDOW_MS,
+        immediateAfterLastKey,
+        rebuiltAfterSettle,
+      }
     }.toString()})()`,
     45000,
   )
@@ -555,10 +585,18 @@ function collectAuditChecks(result) {
       '0',
     ),
     auditCheck(
+      // 时序稳健：只看「最后一次按键 + 60ms」窗内有没有立即重渲染（未防抖会命中），
+      // 不再用连打全程的累计 mutation——那会在过载测量环境下把被拉长的按键间隔误判成缺防抖。
       'home search debounced before settle',
-      result.homeSearch.afterRapid?.mutations === 0,
-      result.homeSearch.afterRapid?.mutations,
-      '0',
+      result.homeSearch.immediateAfterLastKey === 0,
+      {
+        immediateAfterLastKey: result.homeSearch.immediateAfterLastKey,
+        afterRapidMutations: result.homeSearch.afterRapid?.mutations,
+        gaps: result.homeSearch.gaps,
+        afterSettledMutations: result.homeSearch.afterSettled?.mutations,
+        rebuiltAfterSettle: result.homeSearch.rebuiltAfterSettle,
+      },
+      'no DOM rebuild within 60ms of the final keystroke (jank-immune debounce check)',
     ),
     auditCheck(
       'admin search completed',

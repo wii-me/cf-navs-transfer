@@ -56,9 +56,12 @@
 | POST | `/api/login` | `LoginReq` | `LoginResp` |
 | POST | `/api/logout` | 无 | `LogoutResp` |
 | POST | `/api/password` | `ChangePasswordReq` | `null` |
+| POST | `/api/recover` | `RecoverReq` | `LoginResp` |
 | GET | `/api/me` | 无 | `{ username: string }` |
 
 全新部署通过 `/install` 初始化管理员：`POST /api/install` 使用 `SETUP_TOKEN` 授权，并将管理员密码通过 WebCrypto PBKDF2 哈希后以 `salt:hash` 形式存入 `settings.admin_password`。`INIT_ADMIN_USER`、`INIT_ADMIN_PASSWORD` 和初始化凭据标记仅用于已有旧数据库的升级或凭据恢复：修改兼容变量后，下一次登录会同步更新 D1 中的管理员凭据；后台账号安全修改后的密码不会被未变化的初始化变量覆盖。旧数据库可通过新的 `RESET_ADMIN_CREDENTIALS` 标记执行一次强制重置。
+
+`POST /api/recover` 仅用于**已安装实例**，不要求 Bearer token；请求头 `X-Setup-Token` 通过与 `/install` 相同的常量时间比较验证部署者身份，同源校验和 `install_rate_limits` 表的 `recover:<ip>` 独立命名空间限流仍生效。请求体为 `{ password }`，只重置密码、不修改 `admin_username`；密码长度须为 8–12 位且至少包含小写、大写、数字、符号四类中的两类。成功只更新 `settings.admin_password`，保留 `admin_bootstrap_password` 的 `INIT_ADMIN_*` 快照，然后轮换 JWT secret、作废全部旧会话并返回 `LoginResp`。未安装返回 `code=1002` 的 `not installed`；错误/未配置令牌返回真实 HTTP 401；跨域返回真实 HTTP 403；限流和密码校验错误遵循 HTTP 200 + `code` 包络。令牌不落库，忘记原值时可在 Cloudflare 生产环境变量和密钥中新增/轮换 `SETUP_TOKEN` 后重新部署。
 `LoginResp` 包含 `token`、`expires_at` 和 `username`，前端登录成功后直接使用返回的 `username` 更新登录态并停留/返回前台首页，不再额外请求 `/api/me` 或立即预加载后台分包。登录接口会在 bootstrap 初始化时用一次 settings 查询同时读取管理员账号和密码，并复用该结果进行密码校验，避免重复读取账号/密码设置。已有登录态刷新页面时会先恢复本地 session 和可能存在的 `AdminData` 快照，再请求 `/api/data/version` 确认远端版本；版本变化时才请求 `/api/admin/data`。只有显式刷新用户信息时才需要 `/api/me`。
 `POST /api/logout` 会尝试把当前 token 写入 KV 撤销名单，TTL 为 `max(60 秒, token 剩余寿命)`，并返回 `LogoutResp` 说明撤销是否真的落库。三种结果都是 HTTP 200 + `code=0`（退出登录不能失败：前端必须清掉本地登录态，返回错误反而会把用户留在登录态里）：
 

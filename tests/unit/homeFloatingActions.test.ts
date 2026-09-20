@@ -183,3 +183,34 @@ describe('移动端折叠菜单', () => {
     expect(source).toContain('below-top-navigation .actions-menu-trigger')
   })
 })
+
+describe('离屏搜索按钮（REQ-01）', () => {
+  it('搜索框离屏时可见，带无障碍名与快捷键', () => {
+    render(HomeFloatingActions, { props: { searchBoxVisible: false, searchBoxShow: true } })
+    const button = screen.getByTestId('home-search-button')
+    expect(button.classList.contains('is-visible')).toBe(true)
+    expect(button.getAttribute('aria-hidden')).toBe('false')
+    expect(button.getAttribute('aria-label')).toBe('搜索书签')
+    expect(button.getAttribute('aria-keyshortcuts')).toBe('Control+K Meta+K')
+  })
+
+  it('搜索框在视口内时隐藏搜索按钮（在 DOM 但不可见、不可聚焦）', () => {
+    render(HomeFloatingActions, { props: { searchBoxVisible: true, searchBoxShow: true } })
+    const button = screen.getByTestId('home-search-button')
+    expect(button.classList.contains('is-visible')).toBe(false)
+    expect(button.getAttribute('aria-hidden')).toBe('true')
+    expect(button.getAttribute('tabindex')).toBe('-1')
+  })
+
+  it('search_box_show=false 时恒显搜索按钮（否则没有搜索入口）', () => {
+    render(HomeFloatingActions, { props: { searchBoxVisible: true, searchBoxShow: false } })
+    expect(screen.getByTestId('home-search-button').classList.contains('is-visible')).toBe(true)
+  })
+
+  it('点击搜索按钮调用 onOpenSearch', async () => {
+    const onOpenSearch = vi.fn()
+    render(HomeFloatingActions, { props: { searchBoxVisible: false, onOpenSearch } })
+    await fireEvent.click(screen.getByTestId('home-search-button'))
+    expect(onOpenSearch).toHaveBeenCalledTimes(1)
+  })
+})

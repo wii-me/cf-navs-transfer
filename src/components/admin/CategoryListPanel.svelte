@@ -11,6 +11,7 @@
     filterAdminCategoryGroups,
     flattenAdminCategoryGroups,
     getAdminSortIds,
+    getHiddenCategoryIds,
     reorderAdminSortDraft,
   } from '../../lib/adminListState'
   import CategoryIcon from '../CategoryIcon.svelte'
@@ -48,6 +49,7 @@
   let trackedCategorySearch = ''
 
   $: categoryGroups = buildAdminCategoryGroups(categories)
+  $: hiddenCategoryIds = getHiddenCategoryIds(categories)
   $: filteredGroups = filterAdminCategoryGroups(categoryGroups, search)
   $: totalPages = getAdminListTotalPages(filteredGroups.length)
   $: page = clampAdminListPage(page, totalPages)
@@ -179,7 +181,7 @@
     <div class="admin-list-panel-header">
       <div>
         <p class="admin-panel-eyebrow">分类</p>
-        <div class="admin-title-row"><h2>分类列表</h2><div class="admin-bookmark-search-bar"><input type="text" data-testid="admin-category-search" placeholder="搜索分类…" value={search} on:input={handleSearchInput} /></div></div>
+        <div class="admin-title-row"><h2>分类列表</h2><div class="admin-bookmark-search-bar"><input type="text" data-testid="admin-category-search" aria-label="搜索分类" placeholder="搜索分类…" value={search} on:input={handleSearchInput} /></div></div>
       </div>
       <div class="admin-header-actions-row">
         {#if !sortMode}
@@ -239,7 +241,7 @@
               <article class="admin-compact-card sortable" data-sortable-item data-sort-id={category.id}>
                 <span class="admin-drag-handle" aria-hidden="true">⋮⋮</span>
                 {#if category.icon?.trim()}
-                  <CategoryIcon category={toCategoryIconValue(category)} size={28} className="admin-icon-badge" iconAccessKey={$iconAccessKey} imageLoading="eager" />
+                  <CategoryIcon category={toCategoryIconValue(category)} size={28} className="admin-icon-badge" iconAccessKey={hiddenCategoryIds.has(Number(category.id)) ? $iconAccessKey : ''} imageLoading="eager" />
                 {:else}
                   <span class="admin-icon-badge">📁</span>
                 {/if}
@@ -271,7 +273,7 @@
                   <span class="admin-tree-toggle-spacer" aria-hidden="true"></span>
                 {/if}
                 {#if group.root.icon?.trim()}
-                  <CategoryIcon category={toCategoryIconValue(group.root)} size={28} className="admin-icon-badge" iconAccessKey={$iconAccessKey} imageLoading="eager" />
+                  <CategoryIcon category={toCategoryIconValue(group.root)} size={28} className="admin-icon-badge" iconAccessKey={hiddenCategoryIds.has(Number(group.root.id)) ? $iconAccessKey : ''} imageLoading="eager" />
                 {:else}
                   <span class="admin-icon-badge">📁</span>
                 {/if}
@@ -302,7 +304,7 @@
                       <input type="checkbox" aria-label={`选择分类 ${category.title}`} checked={selectedIds.has(Number(category.id))} on:change={(event) => toggleCategorySelection(event, Number(category.id))} />
                       <span class="admin-hierarchy-connector" aria-hidden="true">↳</span>
                       {#if category.icon?.trim()}
-                        <CategoryIcon category={toCategoryIconValue(category)} size={28} className="admin-icon-badge" iconAccessKey={$iconAccessKey} imageLoading="eager" />
+                        <CategoryIcon category={toCategoryIconValue(category)} size={28} className="admin-icon-badge" iconAccessKey={hiddenCategoryIds.has(Number(category.id)) ? $iconAccessKey : ''} imageLoading="eager" />
                       {:else}
                         <span class="admin-icon-badge">📁</span>
                       {/if}
@@ -380,7 +382,7 @@
     font: inherit;
   }
 
-  .admin-bookmark-search-bar input:focus {
+  .admin-bookmark-search-bar input:focus-visible {
     outline: 2px solid color-mix(in srgb, var(--admin-accent) 32%, transparent);
     outline-offset: 1px;
   }

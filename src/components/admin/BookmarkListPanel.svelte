@@ -17,6 +17,7 @@
     type AdminBookmarkSortField,
     type AdminBookmarkSortState,
     reorderAdminSortDraft,
+    getHiddenCategoryIds,
   } from '../../lib/adminListState'
   import { getBookmarkFallbackIcon, getBookmarkIconUrl, hasBookmarkImageIcon } from '../../lib/bookmarkIconDisplay'
   import { iconAccessKey, withIconAccessKey } from '../../lib/iconAccessKey'
@@ -58,6 +59,7 @@
   ]
 
   $: filteredBookmarks = sortAdminBookmarks(filterAdminBookmarks(bookmarks, categories, search), { field: sortField, direction: sortDirection }, categories)
+  $: hiddenCategoryIds = getHiddenCategoryIds(categories)
   $: totalPages = getAdminListTotalPages(filteredBookmarks.length)
   $: page = clampAdminListPage(page, totalPages)
   $: bookmarkPage = createAdminListPage(filteredBookmarks, page)
@@ -233,7 +235,7 @@
     <div class="admin-list-panel-header">
       <div>
         <p class="admin-panel-eyebrow">书签</p>
-        <div class="admin-title-row"><h2>书签列表</h2><div class="admin-bookmark-search-bar"><input type="text" data-testid="admin-bookmark-search" placeholder="搜索标题、链接或分类…" value={search} on:input={handleSearchInput} /></div></div>
+        <div class="admin-title-row"><h2>书签列表</h2><div class="admin-bookmark-search-bar"><input type="text" data-testid="admin-bookmark-search" aria-label="搜索书签" placeholder="搜索标题、链接或分类…" value={search} on:input={handleSearchInput} /></div></div>
       </div>
       <div class="admin-header-actions-row">
         <button
@@ -338,12 +340,13 @@
                     <div class="admin-bookmark-cell">
                       <span class="admin-icon-badge small" style={bookmark.icon_background_color ? `background: ${bookmark.icon_background_color};` : ''}>
                         {#if hasBookmarkImageIcon(bookmark)}
+                          {@const needsIconKey = bookmark.is_private === true || hiddenCategoryIds.has(Number(bookmark.category_id))}
                           <CachedBookmarkIcon
                             id={bookmark.id}
                             icon={bookmark.icon ?? ''}
                             iconSource={bookmark.icon_source}
                             iconBlob={bookmark.icon_blob ?? ''}
-                            src={withIconAccessKey(getBookmarkIconUrl(bookmark), $iconAccessKey)}
+                            src={withIconAccessKey(getBookmarkIconUrl(bookmark), needsIconKey ? $iconAccessKey : '')}
                             alt=""
                             fallback={getBookmarkFallbackIcon(bookmark)}
                             style="width: 100%; height: 100%; object-fit: contain;"
@@ -589,10 +592,10 @@
     transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
   }
 
-  .admin-bookmark-search-bar input:focus {
+  .admin-bookmark-search-bar input:focus-visible {
     outline: none;
     border-color: var(--admin-accent);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    box-shadow: 0 0 0 3px var(--focus-ring);
   }
 
   .admin-bookmark-search-bar input::placeholder {

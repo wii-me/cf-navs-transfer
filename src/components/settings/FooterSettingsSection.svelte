@@ -16,7 +16,7 @@
   <p class="group-desc">管理首页页脚内容以及自定义 CSS、JavaScript。预览会隔离展示页脚和 CSS，不会执行 JavaScript。</p>
 
   <label class="field full-width">
-    <span>页脚 HTML</span>
+    <span class="code-field-label">页脚 HTML <em class="lang-tag">HTML</em></span>
     <textarea
       bind:value={form.footer_html}
       rows="4"
@@ -26,7 +26,7 @@
   </label>
 
   <label class="field full-width">
-    <span>自定义 CSS</span>
+    <span class="code-field-label">自定义 CSS <em class="lang-tag">CSS</em></span>
     <textarea
       bind:value={form.custom_css}
       rows="7"
@@ -36,7 +36,7 @@
   </label>
 
   <label class="field full-width">
-    <span>自定义 JavaScript</span>
+    <span class="code-field-label">自定义 JavaScript <em class="lang-tag">JS</em></span>
     <textarea
       bind:value={form.custom_js}
       rows="7"
@@ -49,5 +49,23 @@
 <style>
   .field.full-width {
     grid-column: 1 / -1;
+  }
+
+  .code-field-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .lang-tag {
+    font-style: normal;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 1px 7px;
+    border-radius: var(--radius-sm, 8px);
+    color: var(--sp-chip-text);
+    background: var(--sp-chip-bg);
   }
 </style>

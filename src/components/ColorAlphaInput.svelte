@@ -149,10 +149,10 @@
     font-family: inherit;
   }
 
-  .color-picker-row input[type='text']:focus {
+  .color-picker-row input[type='text']:focus-visible {
     outline: none;
     border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    box-shadow: 0 0 0 3px var(--focus-ring);
   }
 
   .color-swatch {
@@ -186,7 +186,7 @@
   .color-swatch:hover,
   .color-swatch:focus-visible {
     border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12), inset 0 0 0 3px #ffffff;
+    box-shadow: 0 0 0 3px var(--focus-ring), inset 0 0 0 3px #ffffff;
     outline: none;
   }
 

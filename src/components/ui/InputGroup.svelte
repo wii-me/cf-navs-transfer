@@ -70,7 +70,7 @@
 
   .ui-input-group:focus-within {
     border-color: var(--sp-accent, #2563eb);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    box-shadow: 0 0 0 3px var(--focus-ring);
   }
 
   .ui-input-group.disabled {

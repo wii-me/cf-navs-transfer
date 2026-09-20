@@ -33,7 +33,8 @@
 
   const settingsSections = [
     { id: 'basic', label: '站点设置', hint: '标题、首页显示与默认主题' },
-    { id: 'appearance', label: '外观与卡片', hint: '配色、背景与书签卡片' },
+    { id: 'appearance', label: '外观与卡片', hint: '配色方案与书签卡片风格' },
+    { id: 'visual', label: '高级与视觉', hint: '背景、尺寸与分类标题视觉' },
     { id: 'layout', label: '布局与导航', hint: '内容宽度、边距与导航位置' },
     { id: 'search', label: '搜索设置', hint: '默认引擎与搜索服务' },
     { id: 'footer', label: '自定义样式/脚本', hint: '页脚、CSS 与 JavaScript' },
@@ -152,6 +153,7 @@
               onAdvancedChange={handleAppearanceAdvancedChange}
             />
             <CardSettingsSection bind:form {saving} />
+          {:else if activeSectionId === 'visual'}
             <AdvancedSettingsSection
               bind:form
               {saving}
@@ -228,18 +230,14 @@
     --sp-theme-card-border: #e2e8f0;
     --sp-radio-border: #e2e8f0;
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: auto auto;
     gap: 0;
     position: relative;
-    /* Fill the admin content track while reserving the wrapper's bottom margin. */
-    height: clamp(0px, calc(100dvh - 180px), 960px);
-    min-height: min(560px, calc(100dvh - 180px));
     box-sizing: border-box;
     border: 1px solid var(--sp-border);
     border-radius: 22px;
     background: var(--sp-panel-bg);
     box-shadow: var(--sp-panel-shadow);
-    overflow: hidden;
   }
 
   :global([data-theme='dark']) .settings-panel {
@@ -375,11 +373,10 @@
   .settings-form {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: auto auto;
     gap: 16px;
     padding: 22px 24px 28px;
     min-height: 0;
-    overflow: hidden;
     box-sizing: border-box;
   }
 
@@ -389,7 +386,7 @@
     grid-column: 1 / -1;
     align-self: start;
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 6px;
     position: static;
   }
@@ -404,10 +401,10 @@
     background: transparent;
     color: var(--sp-muted);
     cursor: pointer;
-    transition: background var(--transition-base), border-color var(--transition-base), color var(--transition-base), transform var(--transition-base);
+    transition: background var(--transition-base), border-color var(--transition-base), color var(--transition-base);
   }
 
-  .settings-submenu button:hover { background: var(--sp-toggle-bg); color: var(--sp-strong); transform: translateY(-1px); }
+  .settings-submenu button:hover { background: var(--sp-toggle-bg); color: var(--sp-strong); }
   .settings-submenu button.active { border-color: var(--sp-toggle-border); background: var(--sp-toggle-bg); color: var(--sp-accent-strong); box-shadow: 0 6px 16px rgba(75, 83, 70, 0.06); }
   .settings-submenu strong { font-size: 13px; font-weight: 650; }
   .settings-submenu span { display: block; font-size: 11px; line-height: 1.4; }
@@ -418,8 +415,7 @@
     grid-template-columns: minmax(430px, 1.3fr) minmax(340px, 0.9fr);
     gap: 18px;
     min-width: 0;
-    min-height: 0;
-    overflow: hidden;
+    align-items: start;
   }
 
   .settings-section-content {
@@ -428,18 +424,16 @@
     align-content: start;
     gap: 18px;
     min-width: 0;
-    height: 100%;
     min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    padding-right: 8px;
-    scrollbar-gutter: stable;
   }
 
   .settings-preview-column {
     min-width: 0;
-    min-height: 0;
-    height: 100%;
+    position: sticky;
+    top: 16px;
+    align-self: start;
+    height: auto;
+    max-height: calc(100dvh - 210px);
     overflow: hidden;
   }
 
@@ -493,30 +487,13 @@
   }
 
   @media (max-width: 1320px) {
-    .settings-panel {
-      height: auto;
-      min-height: 0;
-      overflow: visible;
-    }
-
-    .settings-form {
-      overflow: visible;
-    }
-
-
     .settings-workspace {
       grid-template-columns: minmax(0, 1fr);
-      overflow: visible;
-    }
-
-    .settings-section-content {
-      height: auto;
-      overflow: visible;
-      padding-right: 0;
     }
 
     .settings-preview-column {
-      height: auto;
+      position: static;
+      max-height: none;
       overflow: visible;
     }
   }

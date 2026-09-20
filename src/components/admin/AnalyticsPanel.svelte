@@ -5,6 +5,7 @@
     createAdminListPage,
     getAdminCategoryPathMap,
     getAdminListTotalPages,
+    getHiddenCategoryIds,
   } from '../../lib/adminListState'
   import { getBookmarkFallbackIcon, getBookmarkIconUrl, hasBookmarkImageIcon } from '../../lib/bookmarkIconDisplay'
   import { iconAccessKey, withIconAccessKey } from '../../lib/iconAccessKey'
@@ -26,6 +27,7 @@
   $: topBookmarks = sortedBookmarks.slice(0, 20).filter(b => (b.click_count ?? 0) > 0)
   $: zeroVisitBookmarks = bookmarks.filter(b => (b.click_count ?? 0) === 0)
   $: categoryTitleById = getAdminCategoryPathMap(categories)
+  $: hiddenCategoryIds = getHiddenCategoryIds(categories)
   $: zeroVisitTotalPages = getAdminListTotalPages(zeroVisitBookmarks.length)
   $: zeroVisitPage = clampAdminListPage(zeroVisitPage, zeroVisitTotalPages)
   $: zeroVisitListPage = createAdminListPage(zeroVisitBookmarks, zeroVisitPage)
@@ -78,12 +80,13 @@
                 <div class="top-item-rank">{i + 1}</div>
                 <span class="admin-icon-badge small" style={bookmark.icon_background_color ? `background: ${bookmark.icon_background_color};` : ''}>
                   {#if hasBookmarkImageIcon(bookmark)}
+                    {@const needsIconKey = bookmark.is_private === true || hiddenCategoryIds.has(Number(bookmark.category_id))}
                     <CachedBookmarkIcon
                       id={bookmark.id}
                       icon={bookmark.icon ?? ''}
                       iconSource={bookmark.icon_source}
                       iconBlob={bookmark.icon_blob ?? ''}
-                      src={withIconAccessKey(getBookmarkIconUrl(bookmark), $iconAccessKey)}
+                      src={withIconAccessKey(getBookmarkIconUrl(bookmark), needsIconKey ? $iconAccessKey : '')}
                       alt=""
                       fallback={getBookmarkFallbackIcon(bookmark)}
                       style="width: 100%; height: 100%; object-fit: contain;"
@@ -130,12 +133,13 @@
               <div class="zero-item">
                 <span class="admin-icon-badge small" style={bookmark.icon_background_color ? `background: ${bookmark.icon_background_color};` : ''}>
                   {#if hasBookmarkImageIcon(bookmark)}
+                    {@const needsIconKey = bookmark.is_private === true || hiddenCategoryIds.has(Number(bookmark.category_id))}
                     <CachedBookmarkIcon
                       id={bookmark.id}
                       icon={bookmark.icon ?? ''}
                       iconSource={bookmark.icon_source}
                       iconBlob={bookmark.icon_blob ?? ''}
-                      src={withIconAccessKey(getBookmarkIconUrl(bookmark), $iconAccessKey)}
+                      src={withIconAccessKey(getBookmarkIconUrl(bookmark), needsIconKey ? $iconAccessKey : '')}
                       alt=""
                       fallback={getBookmarkFallbackIcon(bookmark)}
                       style="width: 100%; height: 100%; object-fit: contain;"

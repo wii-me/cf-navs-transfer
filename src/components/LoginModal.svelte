@@ -6,6 +6,7 @@
     | ((payload: { username: string; password: string }) => void | Promise<void>)
     | undefined = undefined
   export let onCancel: (() => void) | undefined = undefined
+  export let onForgotPassword: (() => void) | undefined = undefined
 
   let username = ''
   let password = ''
@@ -66,6 +67,10 @@
 
         {#if error}
           <p class="error-text">{error}</p>
+        {/if}
+
+        {#if onForgotPassword}
+          <button type="button" class="forgot-link" on:click={onForgotPassword} disabled={loading}>忘记密码？</button>
         {/if}
 
         <div class="modal-actions">
@@ -149,16 +154,32 @@
     background: #ffffff;
   }
 
-  input:focus {
+  input:focus-visible {
     outline: none;
     border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    box-shadow: 0 0 0 3px var(--focus-ring);
   }
 
   .error-text {
     margin: 0;
     color: #dc2626;
     font-size: 13px;
+  }
+
+  .forgot-link {
+    justify-self: start;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #2563eb;
+    font-size: 13px;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .forgot-link:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
   }
 
   .modal-actions {

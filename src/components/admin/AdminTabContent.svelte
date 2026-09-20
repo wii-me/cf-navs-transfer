@@ -52,7 +52,7 @@
   export let onImportData: ((file: File, source: ImportSource, mode: 'replace' | 'merge') => AsyncVoid) | undefined = undefined
 </script>
 
-<div class="admin-content">
+<div class="admin-content" id="admin-main" tabindex="-1">
   {#if activeTab === 'categories'}
     <CategoryListPanel
       {isAuthenticated}
@@ -133,6 +133,10 @@
     flex-direction: column;
     gap: 16px;
     padding-right: 4px;
+  }
+
+  .admin-content:focus {
+    outline: none;
   }
 
   .settings-panel-wrap {

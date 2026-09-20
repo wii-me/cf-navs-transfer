@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte'
+  import { observeSearchBoxVisibility } from '../lib/searchBoxVisibility'
   import Sidebar from '../components/Sidebar.svelte'
   import CategorySection from '../components/CategorySection.svelte'
   import CategoryIcon from '../components/CategoryIcon.svelte'
@@ -65,10 +66,14 @@
   export let activeTheme: 'light' | 'dark' = 'light'
   export let activeThemeMode: ThemeMode = 'auto'
   export let onToggleTheme: (() => AsyncVoid) | undefined = undefined
+  export let onOpenSearch: (() => AsyncVoid) | undefined = undefined
 
   let searchQuery = ''
   let deferredSearchQuery = ''
   let searchFilterTimer: ReturnType<typeof setTimeout> | null = null
+  let searchBoxVisible = true
+  let stopSearchBoxObserver: (() => void) | null = null
+  $: searchBoxShow = settings?.search_box_show ?? true
   let activeId = ''
   let selectedCategoryIds = new Map<number, number>()
   let persistentLeftExpanded = true
@@ -384,9 +389,19 @@
   onMount(() => {
     window.addEventListener('scroll', scheduleActiveRootUpdate, { passive: true })
     scheduleActiveRootUpdate()
+
+    // 观察首页搜索框离屏状态，驱动浮动搜索按钮（REQ-01 / FR-1.1）。排除设置页的 .preview 实例。
+    const heroSearch = document.querySelector('.hero-search:not(.preview)')
+    if (heroSearch) {
+      stopSearchBoxObserver = observeSearchBoxVisibility(heroSearch, (visible) => {
+        searchBoxVisible = visible
+      })
+    }
   })
 
   onDestroy(() => {
+    stopSearchBoxObserver?.()
+    stopSearchBoxObserver = null
     if (typeof window !== 'undefined' && searchFilterTimer) {
       window.clearTimeout(searchFilterTimer)
       searchFilterTimer = null
@@ -421,6 +436,9 @@
     {onOpenLogin}
     topNavigation={isTopNavigation}
     sortActive={homeSortMode || Boolean(homeSortError)}
+    {searchBoxVisible}
+    {searchBoxShow}
+    {onOpenSearch}
   />
 
   <HomeHeroSearch
