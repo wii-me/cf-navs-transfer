@@ -105,4 +105,24 @@ describe('TransferDrawer Component', () => {
     // drawer should close
     expect(screen.queryByTestId('transfer-drawer-panel')).toBeNull()
   })
+
+  it('shows error toast when selecting a file exceeding 80MB', async () => {
+    transferStore.openDrawer()
+    render(TransferDrawer)
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    expect(fileInput).toBeDefined()
+
+    const largeFile = new File(['content'], 'huge.zip', { type: 'application/zip' })
+    Object.defineProperty(largeFile, 'size', { value: 85 * 1024 * 1024 })
+
+    await fireEvent.change(fileInput, {
+      target: { files: [largeFile] },
+    })
+
+    const { toastStore } = await import('../../src/lib/toast')
+    const { get } = await import('svelte/store')
+    const toasts = get(toastStore)
+    expect(toasts.some((t) => t.message.includes('80MB'))).toBe(true)
+  })
 })

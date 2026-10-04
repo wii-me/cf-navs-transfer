@@ -100,8 +100,8 @@
   }
 
   async function uploadSelectedFile(file: File) {
-    if (file.size > 50 * 1024 * 1024) {
-      toastStore.addToast('文件过大，单文件不得超过 50MB', 'error')
+    if (file.size > 80 * 1024 * 1024) {
+      toastStore.addToast('文件过大，单文件不得超过 80MB', 'error')
       return
     }
 

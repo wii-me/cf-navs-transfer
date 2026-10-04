@@ -233,6 +233,24 @@ describe('Transfer Routes', () => {
     expect(forceDownloadRes.headers.get('Content-Disposition')).toContain("filename*=UTF-8''photo.png")
   })
 
+  it('rejects file larger than 80MB with bad request', async () => {
+    const chunk = new Uint8Array(1024 * 1024)
+    const chunks = new Array(81).fill(chunk)
+    const oversizedFile = new File(chunks, 'large.iso', { type: 'application/octet-stream' })
+    const formData = new FormData()
+    formData.append('file', oversizedFile)
+
+    const uploadRes = await app.request('/api/transfers/file', {
+      method: 'POST',
+      body: formData,
+    })
+
+    expect(uploadRes.status).toBe(200)
+    const body = await uploadRes.json<any>()
+    expect(body.code).not.toBe(0)
+    expect(body.msg).toContain('80MB')
+  })
+
   it('deletes note with DELETE /api/transfers/:id', async () => {
     notes.push({
       id: 'del_1',

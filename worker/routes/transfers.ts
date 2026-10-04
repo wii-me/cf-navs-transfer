@@ -12,7 +12,7 @@ import type { HonoEnv } from '../types'
 
 export const transfersRoutes = new Hono<HonoEnv>()
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
+const MAX_FILE_SIZE = 80 * 1024 * 1024 // 80MB
 const MAX_TEXT_LENGTH = 100_000
 
 // 异步惰性清理已过期记录和 R2 文件
@@ -167,7 +167,7 @@ transfersRoutes.post('/file', async (c) => {
   }
 
   if (file.size > MAX_FILE_SIZE) {
-    return badRequest(c, 'file size exceeds 50MB limit')
+    return badRequest(c, 'file size exceeds 80MB limit')
   }
 
   const ttlDaysParam = formData.get('ttlDays')
