@@ -153,8 +153,8 @@
 1. 检查并确认我的 npx wrangler 登录状态（若未登录请引导我登录）；
 2. 检查或自动创建所需的 D1 数据库 (cf-navs-db)、KV 命名空间 (SESSION) 和 R2 存储桶 (cf-navs-storage)；
 3. 生成并配置本地 wrangler.local.toml 资源绑定文件；
-4. 执行远程数据库初始化（运行 schema.sql），完成项目构建与部署；
-5. 部署完成后执行线上健康检查，并向我汇报访问网址与初次访问 /install 设置管理员密码的步骤。
+4. 自动生成一个随机高强度的 SETUP_TOKEN 并写入 Cloudflare Secret，执行远程数据库初始化（运行 schema.sql），完成项目构建与部署；
+5. 部署完成后执行线上健康检查，将随机生成的 SETUP_TOKEN 与访问网址汇报给我，并提醒我初次访问 /install 完成管理员密码设置后删除该 Token。
 ```
 
 ---
