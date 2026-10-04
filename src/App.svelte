@@ -203,9 +203,17 @@
     viewBookmark = null
   }
 
-  // 全局快捷键集中在 App：Ctrl+K / Cmd+K / 「/」 唤起 Spotlight，Esc 关闭。
-  // 排除输入态与 IME；仅首页可见时生效；模态互斥由 openSpotlight 内部把关。
+  // 全局快捷键集中在 App：Ctrl+J / Cmd+J 唤起传输助手，Ctrl+K / Cmd+K / 「/」 唤起 Spotlight，Esc 关闭。
+  // 排除输入态与 IME；模态互斥由内部把关。
   function handleGlobalKeyDown(event: KeyboardEvent): void {
+    if ((event.ctrlKey || event.metaKey) && (event.key === 'j' || event.key === 'J')) {
+      if (isLoggedIn()) {
+        event.preventDefault()
+        transferStore.toggleDrawer()
+        return
+      }
+    }
+
     const target = event.target as HTMLElement | null
     const typing = Boolean(target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable))
     if (event.isComposing || event.key === 'Process' || typing) return
@@ -1117,25 +1125,9 @@
     }
     void initializeApp()
     scheduleBookmarkIconCachePrune()
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener('keydown', handleGlobalKeyDown)
-    }
   })
 
-  function handleGlobalKeyDown(event: KeyboardEvent) {
-    if ((event.ctrlKey || event.metaKey) && (event.key === 'j' || event.key === 'J')) {
-      if (isLoggedIn()) {
-        event.preventDefault()
-        transferStore.toggleDrawer()
-      }
-    }
-  }
-
   onDestroy(() => {
-    if (typeof window !== 'undefined') {
-      window.removeEventListener('keydown', handleGlobalKeyDown)
-    }
     if (mediaQuery && handleSystemThemeChange) {
       mediaQuery.removeEventListener('change', handleSystemThemeChange)
     }
