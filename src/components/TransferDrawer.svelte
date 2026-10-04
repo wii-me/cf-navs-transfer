@@ -10,6 +10,9 @@
   let fileInput: HTMLInputElement | null = null
   let isDragging = false
   let imageErrorMap = new Set<string>()
+  let deletingNoteIds = new Set<string>()
+  let isDeleteCooldown = false
+  let cooldownTimer: ReturnType<typeof setTimeout> | null = null
 
   $: isOpen = $transferStore.drawerOpen
   $: notes = $transferStore.notes
@@ -131,14 +134,32 @@
   }
 
   async function handleDeleteNote(id: string) {
-    const success = await transferStore.deleteNote(id)
-    if (success) {
-      toastStore.addToast('已删除', 'info')
+    if (deletingNoteIds.size > 0 || isDeleteCooldown) {
+      return
+    }
+
+    deletingNoteIds.add(id)
+    deletingNoteIds = new Set(deletingNoteIds)
+
+    try {
+      const success = await transferStore.deleteNote(id)
+      if (success) {
+        toastStore.addToast('已删除', 'info')
+        // 激活 400ms 安全冷却期：防止列表上移瞬间连击误伤新顶上来的相邻记录
+        isDeleteCooldown = true
+        if (cooldownTimer) clearTimeout(cooldownTimer)
+        cooldownTimer = setTimeout(() => {
+          isDeleteCooldown = false
+        }, 400)
+      }
+    } finally {
+      deletingNoteIds.delete(id)
+      deletingNoteIds = new Set(deletingNoteIds)
     }
   }
 
   async function handleClearAll() {
-    if (notes.length === 0) return
+    if (notes.length === 0 || deletingNoteIds.size > 0 || isDeleteCooldown) return
     if (window.confirm('确定要清空所有传输记录与上传的文件吗？此操作不可恢复。')) {
       const success = await transferStore.clearAll()
       if (success) {
@@ -238,6 +259,10 @@
   onDestroy(() => {
     window.removeEventListener('keydown', handleWindowKeyDown)
     window.removeEventListener('paste', handleWindowPaste)
+    if (cooldownTimer) {
+      clearTimeout(cooldownTimer)
+      cooldownTimer = null
+    }
   })
 </script>
 
@@ -328,7 +353,11 @@
         </div>
       {:else}
         {#each notes as note (note.id)}
-          <div class="note-card" class:type-image={note.type === 'image'}>
+          <div
+            class="note-card"
+            class:type-image={note.type === 'image'}
+            class:is-deleting={deletingNoteIds.has(note.id)}
+          >
             <!-- 卡片头部信息 -->
             <div class="note-header">
               <span class="note-time">{formatTime(note.created_at)}</span>
@@ -338,11 +367,18 @@
               <button
                 type="button"
                 class="note-delete-btn"
+                class:is-deleting={deletingNoteIds.has(note.id)}
+                disabled={deletingNoteIds.size > 0 || isDeleteCooldown}
                 on:click={() => handleDeleteNote(note.id)}
-                title="删除此条"
-                aria-label="删除"
+                title={deletingNoteIds.has(note.id) ? '正在删除...' : '删除此条'}
+                aria-label={deletingNoteIds.has(note.id) ? '正在删除' : '删除'}
+                data-testid={`delete-note-${note.id}`}
               >
-                &times;
+                {#if deletingNoteIds.has(note.id)}
+                  <span class="note-delete-spinner" aria-hidden="true"></span>
+                {:else}
+                  &times;
+                {/if}
               </button>
             </div>
 
@@ -717,6 +753,12 @@
     border-radius: 0.25rem;
   }
 
+  .note-card.is-deleting {
+    opacity: 0.5;
+    pointer-events: none;
+    transition: opacity var(--transition-base);
+  }
+
   .note-delete-btn {
     background: transparent;
     border: none;
@@ -725,10 +767,40 @@
     color: #94a3b8;
     cursor: pointer;
     padding: 0 0.2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.25rem;
+    min-height: 1.25rem;
+    transition: color var(--transition-base), opacity var(--transition-base);
   }
 
-  .note-delete-btn:hover {
+  .note-delete-btn:hover:not(:disabled) {
     color: #ef4444;
+  }
+
+  .note-delete-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  .note-delete-spinner {
+    display: inline-block;
+    width: 0.75rem;
+    height: 0.75rem;
+    border: 2px solid rgba(148, 163, 184, 0.35);
+    border-top-color: #ef4444;
+    border-radius: 50%;
+    animation: transfer-delete-spin 0.6s linear infinite;
+  }
+
+  @keyframes transfer-delete-spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .text-content {

@@ -125,4 +125,80 @@ describe('TransferDrawer Component', () => {
     const toasts = get(toastStore)
     expect(toasts.some((t) => t.message.includes('80MB'))).toBe(true)
   })
+
+  it('disables delete button and prevents repeated clicks during in-flight deletion and cooldown', async () => {
+    transferStore.openDrawer()
+    const state = {
+      notes: [
+        {
+          id: 'note_1',
+          type: 'text' as const,
+          content: 'Note 1',
+          file_key: null,
+          file_name: null,
+          file_size: null,
+          mime_type: null,
+          created_at: Date.now(),
+          expires_at: null,
+        },
+        {
+          id: 'note_2',
+          type: 'text' as const,
+          content: 'Note 2',
+          file_key: null,
+          file_name: null,
+          file_size: null,
+          mime_type: null,
+          created_at: Date.now() - 1000,
+          expires_at: null,
+        },
+      ],
+      loading: false,
+      uploading: false,
+      hasMore: false,
+      drawerOpen: true,
+      activeLightboxImage: null,
+      error: null,
+    }
+    // @ts-ignore
+    transferStore.set ? transferStore.set(state) : null
+
+    render(TransferDrawer)
+
+    let resolveDelete: (val: boolean) => void
+    const deletePromise = new Promise<boolean>((resolve) => {
+      resolveDelete = resolve
+    })
+    const deleteSpy = vi.spyOn(transferStore, 'deleteNote').mockReturnValue(deletePromise)
+
+    const deleteBtn1 = screen.getByTestId('delete-note-note_1') as HTMLButtonElement
+    const deleteBtn2 = screen.getByTestId('delete-note-note_2') as HTMLButtonElement
+
+    expect(deleteBtn1.disabled).toBe(false)
+    expect(deleteBtn2.disabled).toBe(false)
+
+    // First click on note_1
+    await fireEvent.click(deleteBtn1)
+
+    // While in-flight: both buttons disabled to prevent layout shift mis-clicks
+    expect(deleteBtn1.disabled).toBe(true)
+    expect(deleteBtn2.disabled).toBe(true)
+    expect(deleteSpy).toHaveBeenCalledTimes(1)
+    expect(deleteSpy).toHaveBeenCalledWith('note_1')
+
+    // Rapid second click during in-flight is blocked
+    await fireEvent.click(deleteBtn1)
+    await fireEvent.click(deleteBtn2)
+    expect(deleteSpy).toHaveBeenCalledTimes(1)
+
+    // Complete delete request
+    resolveDelete!(true)
+    await Promise.resolve()
+
+    // During cooldown, clicks are still blocked
+    await fireEvent.click(deleteBtn2)
+    expect(deleteSpy).toHaveBeenCalledTimes(1)
+
+    deleteSpy.mockRestore()
+  })
 })
