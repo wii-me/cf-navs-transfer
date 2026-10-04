@@ -1,14 +1,16 @@
 <div align="center">
   <img src="public/icon.png" alt="CF-Navs Transfer 项目图标" width="110" height="110">
   <h1>CF-Navs Transfer</h1>
-  <p><strong>基于 CF-Navs 增强的云原生个人起始页 · 新增跨设备跨平台传输功能</strong></p>
+  <p><strong>基于 CF-Navs 增强的云原生个人起始页 · 新增跨设备跨平台传输助手</strong></p>
   <p>
     本项目基于优秀开源项目 <a href="https://github.com/lbjxr/CF-Navs" target="_blank"><strong>CF-Navs</strong></a> 进行二次开发与功能扩展。<br>
     在完整保留原版优雅起始页、两级书签收纳、22 套内置主题与 Serverless 零运维特性的基础上，<br>
     <strong>新增了跨设备、跨平台的传输助手（支持便笺记事与 80MB 大文件极速传输）</strong>，让个人导航页无缝升级为多端协同的数字中枢。
   </p>
 
+  <p>
     <a href="https://github.com/lbjxr/CF-Navs"><img src="https://img.shields.io/badge/Based%20On-CF--Navs-0052CC?logo=bookmark&logoColor=white" alt="Based on CF-Navs"></a>
+    <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-更新日志-2ea44f?logo=git&logoColor=white" alt="Changelog"></a>
     <a href="https://workers.cloudflare.com/"><img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare Workers"></a>
     <a href="https://developers.cloudflare.com/d1/"><img src="https://img.shields.io/badge/Cloudflare-D1-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare D1"></a>
     <a href="https://developers.cloudflare.com/kv/"><img src="https://img.shields.io/badge/Cloudflare-KV-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare KV"></a>
@@ -19,15 +21,15 @@
   </p>
 
   <p>
-    <a href="#-项目定位与背景">项目背景</a> ·
-    <a href="#-核心功能矩阵">功能特性</a> ·
+    <a href="#-近期更新日志">📢 更新日志</a> ·
+    <a href="#-核心功能矩阵">功能矩阵</a> ·
     <a href="#-增强特性跨设备跨平台传输助手">传输助手</a> ·
     <a href="#️-界面展示">界面展示</a> ·
-    <a href="#-原版-cf-navs-无缝升级指南">平滑升级</a> ·
-    <a href="#-快速部署指南">快速部署</a> ·
+    <a href="#-快速部署指南3分钟极速上线">快速部署</a> ·
     <a href="#-部署后初始化与新手使用指引">初始化设置</a> ·
     <a href="#️-快捷键速查">快捷键</a> ·
-    <a href="#-致谢与开源协议">致谢</a>
+    <a href="#-常见问题-faq">常见问题</a> ·
+    <a href="CHANGELOG.md">完整变更记录</a>
   </p>
 
   <p>
@@ -42,53 +44,55 @@
 
 ---
 
+## 📢 近期更新日志
+
+> 详细历史与代码提交记录请查阅项目完整文件：[`CHANGELOG.md`](CHANGELOG.md)。
+
+<details open>
+<summary><b>🔥 最新版本亮点：v0.7.3-transfer（2026-10-04）</b></summary>
+<br>
+
+* 🛡️ **传输助手删除防误触与位移冷却重构**：
+  * **瞬时状态锁定与 Loading 反馈**：点击删除（`×`）瞬间立刻锁定当前卡片（半透明并禁用操作），按钮转为微型 Spinner 动画，彻底杜绝网络慢时因无视觉反馈导致的重复连点；
+  * **400ms 列表位移安全冷却**：记录被删除且从列表移出时，自动激活 400 毫秒的安全点击冷却，杜绝鼠标连击穿透误删刚顶上来的下一条记录。
+* 🚀 **单文件上传上限放宽至 80MB**：
+  * 前后端及文档全面放宽至 80MB，预留近 20MB 安全缓冲，完美规避 Cloudflare Workers 100MB 边缘拦截与 128MB 内存上限溢出。
+* 🔄 **同步官方主仓库最新修复（v0.7.2 & v0.7.3）**：
+  * 解决切回标签页私密书签丢失问题（#29）；
+  * 首页私密书签直接渲染高清真实图标（#28）；
+  * 页面底部书签右键菜单边缘防裁切（#30）；
+  * 拖拽排序模式下固定底栏自适应避让（PROB-39）；
+  * 搜索引擎切换即时联动与跨标签页同步（#25）。
+</details>
+
+---
+
 ## 💡 项目定位与背景
 
-### 为什么会有 CF-Navs Transfer？
-
-- **原版 CF-Navs 的卓越基因**：
-  由 [lbjxr](https://github.com/lbjxr) 开发的 [CF-Navs](https://github.com/lbjxr/CF-Navs) 是一款非常优雅的个人书签导航系统。它完全依托于 Cloudflare Workers + D1 + KV 的云原生架构，实现了**免服务器自建、零运维成本、秒级极速响应**。其两级分类体系、全站模糊搜索、22 款预设主题（纯色护眼与磨砂毛玻璃）以及严密的私密链接防护，深受广大极客与生产力爱好者的喜爱。
-
-- **日常痛点：多设备间的信息流转**：
-  在多设备（PC、Mac、iPhone、Android 手机、平板）协同办公与日常使用中，我们经常需要临时在各端之间互传一段验证码、一段备忘文本、一条临时链接、截屏图片或安装包。
-  以往不得不借助微信/QQ的“文件传输助手”或第三方网盘，步骤繁琐且依赖客户端与第三方账号。
-
-- **CF-Navs Transfer 的解法**：
-  本项目以 **CF-Navs 为坚实基石**，在原生架构中深度融合了 Cloudflare R2 对象存储，开发了开箱即用的**传输助手**。无需打开任何额外软件，在浏览器起始页内随时按下 <kbd>Ctrl</kbd> + <kbd>J</kbd> 即可呼出面板，支持剪贴板截屏直接粘贴发送、80MB 大文件上传、原图灯箱缩放以及到期自动销毁清理。
-  **既是强大赏心的浏览器起始页，又是触手可及的多端中转站。**
+- **原版 CF-Navs 的卓越基因**：由 [lbjxr](https://github.com/lbjxr) 开发的原版 [CF-Navs](https://github.com/lbjxr/CF-Navs) 依托 Cloudflare Workers + D1 + KV 架构，实现了**免服务器、零成本、秒开响应**的优秀个人起始页。
+- **日常痛点：跨设备流转繁琐**：多设备（PC、Mac、手机、平板）协同中，临时互传验证码、备忘文本、截屏或安装包，以往需依赖微信/QQ文件传输助手或第三方网盘。
+- **CF-Navs Transfer 的解法**：在原生架构中深度整合 Cloudflare R2 对象存储，内置开箱即用的**传输助手**。在起始页内随时按下 <kbd>Ctrl</kbd> + <kbd>J</kbd> 唤出，支持剪贴板截屏直接粘贴发送、80MB 大文件极速中转、大图无损灯箱缩放与自动到期销毁。**既是好看好用的浏览器起始页，又是触手可及的多端中转站。**
 
 ---
 
 ## ✨ 核心功能矩阵
 
 ### 🧭 1. 卓越的个人起始页与书签管理（完整继承自 CF-Navs）
-- **Spotlight 命令面板与离屏浮动搜索**：支持随时按下 <kbd>Ctrl</kbd> + <kbd>K</kbd> / <kbd>Cmd</kbd> + <kbd>K</kbd> 或输入 <kbd>/</kbd> 唤起居中 Spotlight 搜索面板，支持键盘高亮滚入、回车直达；页面滚动离开大搜索框时右上角自动滑出搜索按钮。
-- **两级分类层级**：清晰的一级分组与二级子分类架构，支持一键折叠、顶部导航分行与自适应左侧栏。
-- **毫秒级全站检索**：支持对书签标题、URL、描述以及所属分类完整路径进行模糊搜索，支持快捷键随时聚焦。
-- **自由拖拽与批量整理**：桌面端支持跨分类自由拖拽排序；手机端提供便捷的穿梭选项；后台支持多选批量迁移。
-- **私密书签与私密分类**：一键设置“仅登录可见”。在未登录的访客模式下，接口层严格过滤私密数据，隐私安全无懈可击。
-- **22 款内置精美主题**：提供纯色护眼、现代磨砂毛玻璃与暗黑深色外观，可微调卡片尺寸（统一 160px 规范并支持最低 40px 极窄布局）与自定义 CSS/JS。
-- **图标本地优先缓存与公开对象匿名共享**：聚合数据支持 CacheStorage 本地持久化，公开对象恢复共享缓存，秒级直出且极大降低边缘回源。
-- **现代化后台设置与无障碍优化**：后台细化为 7 大独立分区，移除三层嵌套内滚改为全页自然滚动，桌面端预览列粘性吸顶，全面支持 `:focus-visible` 与 WCAG AA 级高对比度。
-- **免重新部署密码恢复 (`/recover`)**：遗忘管理员密码时，持有部署密钥即可通过 `/recover` 页面一键重置，无需去控制台重新部署。
-- **Chrome / Edge 扩展单向同步**：内置浏览器扩展，浏览网页时可一键将新增书签同步至起始页指定分类，不覆盖原有数据。
-- **访问频次统计**：首页书签点击自动累计，后台提供访问量排行与零访问书签筛选。
-- **无痛数据导入与备份**：完美支持 CF-Navs 原生 JSON 备份（增量或覆盖）、Sun-Panel 数据迁移以及浏览器标准书签 HTML 导入。
+- **Spotlight 居中搜索 (<kbd>Ctrl</kbd>+<kbd>K</kbd>)**：全站书签毫秒级模糊检索，支持键盘直达与真实高清图标展示。
+- **两级分类体系**：清晰的一级分组与二级子分类架构，支持一键折叠、顶部导航分行与自适应左侧栏。
+- **私密书签与分类**：一键“仅登录可见”，未登录访客模式下严格物理隔离剥离私密数据。
+- **22 款内置精美主题**：莫兰迪护眼纯色、现代磨砂毛玻璃与暗黑深色外观，支持统一卡片规范与极窄模式。
+- **本地优先缓存**：CacheStorage 智能加速，公开图标聚合共享，秒级直出且极大降低边缘回源。
+- **免重新部署密码恢复 (`/recover`)**：遗忘管理员密码时，持有部署密钥即可一键重置凭据。
+- **数据无痛导入与备份**：支持原生 JSON、Sun-Panel 数据迁移及浏览器标准书签 HTML 导入。
 
 ### 🚀 2. 深度增强的传输助手（本项目新增特性）
-- **剪贴板即贴即传 (`Ctrl+V`)**：在传输助手面板按下 `Ctrl+V`（或移动端长按粘贴），自动识别纯文本或将剪贴板中的截屏图片直接上传发送，省去手动存图流程。
-- **R2 80MB 大文件极速传输**：原生集成 Cloudflare R2 对象存储，支持文档、压缩包、图片、音视频及安装包等任意格式，单文件上限 **80 MB**，不消耗 D1 数据库配额。
-- **图片高清全屏灯箱预览**：图片附件自动生成高清缩略图，点击即刻进入全屏灯箱无损查看与平滑缩放，支持一键安全重命名下载。
-- **多档 TTL 自动销毁策略**：支持 **1小时**、**1天**、**7天** 及 **永久** 4 种保留策略，到期由边缘调度机制安全清理，避免闲置占用存储空间。
-- **全局快捷唤起 (`Ctrl+J`)**：在导航首页及各页面随时按下 `Ctrl+J` / `Cmd+J`（或点击右上角传输图标），半浮动呼出传输助手，即用即走。
-
-### 🛡️ 3. 银行级边缘安全与性能架构
-- **全边缘无服务器架构**：运行于 Cloudflare 遍布全球的边缘节点，首屏毫秒级直出。
-- **严密安全策略**：
-  - 会话采用 PBKDF2 强哈希算法与 JWT 鉴权，支持 KV 撤销黑名单与防暴力破解频控。
-  - 全站强制注入 `X-Frame-Options: DENY` 防点击劫持与 `X-Content-Type-Options: nosniff`。
-  - 文件下载采用沙箱化 CSP 与 Attachment 强制隔离下载，切断存储型 XSS 隐患。
-  - 服务端代理具备内网 SSRF 拦截与私密图标隔离。
+- **剪贴板即贴即传 (`Ctrl+V`)**：传输面板内按 `Ctrl+V`，自动识别纯文本或直接将剪贴板截屏图片上传发送。
+- **R2 80MB 大文件极速传输**：原生集成 Cloudflare R2 对象存储，支持文档、图片、音视频及安装包等任意格式，不消耗 D1 数据库配额。
+- **图片高清全屏灯箱预览**：附件自动生成高清预览，点击即刻进入全屏灯箱无损查看与平滑缩放，支持一键下载。
+- **防误触与位移冷却保护**：删除操作提供即时 Loading 锁定与 400ms 位移安全冷却，杜绝连击误删。
+- **多档生命周期自动清理**：支持 **1小时**、**1天**、**7天** 及 **永久** 4 种保留策略，到期自动调度清理。
+- **全局快捷唤起 (<kbd>Ctrl</kbd>+<kbd>J</kbd>)**：站内任意页面随时唤出，半浮动右侧抽屉，即用即走。
 
 ---
 
@@ -98,271 +102,136 @@
   <img src="docs/screenshots/cf-navs-transfer-assistant.png" alt="CF-Navs Transfer 传输助手界面" width="380" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
 </div>
 
-针对跨设备日常协同，CF-Navs Transfer 在原生起始页上实现了轻量无感的传输体验：
-
 | 维度 | 体验细节 |
 |---|---|
 | **协同场景** | 电脑端截图后 `Ctrl+V` 发送，手机端打开起始页直接下载或预览；手机随手记下文字备忘，电脑端即时复制 |
-| **存储介质** | Cloudflare R2 对象存储，**出网流量完全免费**，免去服务器硬盘与带宽负担，单文件上限 **80 MB** |
+| **存储介质** | Cloudflare R2 对象存储，**出网流量完全免费**，单文件上限 **80 MB** |
 | **文件兼容** | 支持全格式：图片 (`.png`, `.jpg`, `.webp`)、文档 (`.pdf`, `.docx`, `.xlsx`)、压缩包 (`.zip`, `.rar`)、安装包 (`.apk`, `.dmg`) 等 |
 | **图片灯箱** | 图片附件自动生成预览，点击唤起全屏灯箱，支持鼠标滚轮缩放、原图查看与安全下载 |
-| **自毁策略** | 内置 1 小时、1 天、7 天及永久有效 4 档生命周期，过期自动清理，支持手动一键即时销毁 |
+| **安全机制** | 删除即时锁定防连击、400ms 位移冷却防误删；内置 1 小时至永久自毁周期，到期自动释放 R2 空间 |
 | **交互设计** | 快捷键 <kbd>Ctrl</kbd> + <kbd>J</kbd> 全局唤起/收起，采用右侧滑入/半浮动设计，不遮挡起始页主要内容 |
 
 ---
 
 ## 🖼️ 界面展示
 
-### 1. 桌面端双主题对比（护眼纯色 vs 现代毛玻璃）
 <table>
   <tr>
     <td align="center" width="50%">
-      <strong>亮色模式（护眼 / 毛玻璃对角线对比）</strong><br><br>
-      <img src="docs/screenshots/cf-navs-light.webp" alt="CF-Navs 亮色首页：护眼与毛玻璃对角线对比">
+      <strong>亮色模式（护眼 / 毛玻璃对比）</strong><br><br>
+      <img src="docs/screenshots/cf-navs-light.webp" alt="亮色首页">
     </td>
     <td align="center" width="50%">
-      <strong>暗色模式（护眼 / 毛玻璃对角线对比）</strong><br><br>
-      <img src="docs/screenshots/cf-navs-dark.webp" alt="CF-Navs 暗色首页：护眼与毛玻璃对角线对比">
+      <strong>暗色模式（护眼 / 毛玻璃对比）</strong><br><br>
+      <img src="docs/screenshots/cf-navs-dark.webp" alt="暗色首页">
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <strong>移动端自适应布局</strong><br><br>
+      <img src="docs/screenshots/cf-navs-light-mobile.webp" alt="移动端首页" width="260">
+    </td>
+    <td align="center" width="50%">
+      <strong>个性化后台设置面板</strong><br><br>
+      <img src="docs/screenshots/cf-navs-admin-setting.webp" alt="主题与站点设置面板" width="400">
     </td>
   </tr>
 </table>
 
-### 2. 移动端自适应布局
-<table>
-  <tr>
-    <td align="center" width="50%">
-      <strong>移动端 · 亮色模式</strong><br><br>
-      <img src="docs/screenshots/cf-navs-light-mobile.webp" alt="CF-Navs 移动端亮色首页" width="280">
-    </td>
-    <td align="center" width="50%">
-      <strong>移动端 · 暗色模式</strong><br><br>
-      <img src="docs/screenshots/cf-navs-dark-mobile.webp" alt="CF-Navs 移动端暗色首页" width="280">
-    </td>
-  </tr>
-</table>
+---
 
-### 3. 传输助手（新增功能实机效果）
-<p align="center">
-  <img src="docs/screenshots/cf-navs-transfer-assistant.png" alt="CF-Navs Transfer 传输助手：文件下载、图片缩略与便笺备忘" width="360">
-  <br>
-  <em>手机与 PC 均支持随时唤出，支持大图灯箱预览、文件一键下载与便笺复制</em>
-</p>
+## 🚀 快速部署指南（3分钟极速上线）
 
-### 4. 丰富的个性化设置与主题定制
-<p align="center">
-  <img src="docs/screenshots/cf-navs-admin-setting.webp" alt="CF-Navs 主题与站点设置面板" width="800">
-  <br>
-  <em>22 款预设主题、卡片宽度与圆角调节、自定义 CSS/JS 注入预览</em>
-</p>
+本项目基于 Cloudflare 全边缘无服务器架构，**无需自备服务器，零成本免费托管**。
+
+### 🤖 方式一：让 AI 编程助手帮你全自动部署（最省心 ⭐）
+
+> 💡 如果你在使用 **Cursor**、**Claude Code**、**Windsurf**、**GitHub Copilot** 或 **Google Antigravity** 等支持运行命令的 AI 编程助手，把仓库拉取到本地后，**直接把下面这句提示词复制发送给 AI 即可**：
+
+```text
+请帮我将当前项目完整部署到我的 Cloudflare 账号下：
+1. 检查并确认我的 npx wrangler 登录状态（若未登录请引导我登录）；
+2. 检查或自动创建所需的 D1 数据库 (cf-navs-db)、KV 命名空间 (SESSION) 和 R2 存储桶 (cf-navs-storage)；
+3. 生成并配置本地 wrangler.local.toml 资源绑定文件；
+4. 执行远程数据库初始化（运行 schema.sql），完成项目构建与部署；
+5. 部署完成后执行线上健康检查，并向我汇报访问网址与初次访问 /install 设置管理员密码的步骤。
+```
 
 ---
 
-## 🔄 原版 CF-Navs 无缝升级指南
+### 🌐 方式二：Cloudflare 控制台 0 代码一键部署（小白推荐）
 
-如果你已经是 [CF-Navs](https://github.com/lbjxr/CF-Navs) 的老用户，想要在保留原有分类、书签和设置的前提下获得**传输助手**，升级非常平滑：
+1. **开通 R2 存储桶**：登录 [Cloudflare 控制台](https://dash.cloudflare.com/) → **R2 对象存储** → 创建存储桶 `cf-navs-storage`。
+2. **Fork 仓库**：点击右上角 **[Fork 本仓库](https://github.com/wii-me/cf-navs-transfer/fork)**。
+3. **导入 Cloudflare**：进入 **Workers & Pages** → 点击 **Create** → **务必选择「Workers」标签**（切勿选 Pages）并导入你的 GitHub 仓库。
+4. **构建配置**：构建命令填 `npm run build`，部署命令填 `npx wrangler deploy`，并在环境变量添加 `NODE_VERSION` = `24`。
+5. **添加资源绑定 (Bindings)**：进入该 Worker **设置 → 绑定**，添加：
+   * D1 数据库：变量名 `DB`，数据库选择 `cf-navs-db`；
+   * KV 命名空间：变量名 `SESSION`，命名空间选择 `cf-navs-session`；
+   * R2 存储桶：变量名 **`STORAGE`**（大写），选择 `cf-navs-storage`。
+6. **添加初始化密钥 (`SETUP_TOKEN`)**：在 **设置 → 变量和机密** 中添加 **Secret**（加密密钥）`SETUP_TOKEN`，填入一段复杂随机字符，保存后**在 Deployments 页面点击「Retry deployment (重新部署)」生效**。
+7. **执行建表 SQL**：进入 **D1 SQL Database** → 点击数据库 → **Console**，把根目录下的 [`schema.sql`](schema.sql) 完整内容复制进去并执行。
+8. **访问 `/install` 初始化**：打开你的 Worker 域名并在末尾追加 `/install`（如 `https://cf-navs.xxx.workers.dev/install`），输入 `SETUP_TOKEN` 并设置管理员密码（**系统强制要求 ≥12 位**）即告完成！
 
-1. **更新仓库代码**：将你的 Fork 仓库更新并同步为本仓库 `wii-me/cf-navs-transfer` 的 `main` 分支代码。
-2. **在 Cloudflare 创建并绑定 R2 存储桶**：
-   - 在控制台 **R2 Object Storage** 中创建一个存储桶（例如命名为 `cf-navs-storage`）。
-   - 进入你的 Worker **Settings (设置)** → **Bindings (绑定)**，添加一个 R2 存储桶绑定，变量名填 `STORAGE`，选择刚创建的桶。
-3. **在 D1 中执行数据表增量升级 SQL**：
-   打开 Cloudflare 控制台的 **D1 SQL Database** → 点击你原有的数据库 → 进入 **Console**，执行以下 SQL 语句（仅新增传输记录表，**不会影响原有书签数据**）：
-   ```sql
-   CREATE TABLE IF NOT EXISTS transfer_notes (
-       id TEXT PRIMARY KEY,
-       type TEXT NOT NULL,
-       content TEXT,
-       file_key TEXT,
-       file_name TEXT,
-       file_size INTEGER,
-       mime_type TEXT,
-       created_at INTEGER NOT NULL,
-       expires_at INTEGER
-   );
-   CREATE INDEX IF NOT EXISTS idx_transfer_notes_created_at ON transfer_notes(created_at DESC);
-   CREATE INDEX IF NOT EXISTS idx_transfer_notes_expires_at ON transfer_notes(expires_at);
-   ```
-4. **重新部署**：在 Deployments 页面点击重新部署，升级即告完成！原有数据丝毫不受影响，右上角将立即出现传输助手入口。
+> 📖 如需查阅带每一步后台截图的详细教程，请参考 [完整图文部署指南 (DEPLOYMENT.md)](docs/guides/DEPLOYMENT.md)。
 
 ---
 
-## 🚀 快速部署指南
+### 💻 方式三：Wrangler CLI 极速部署（开发者推荐）
 
-适合初次接触的新用户。CF-Navs Transfer 基于 Cloudflare 原生无服务器生态，**无需自备服务器，零门槛免费部署**。
-
-### 📋 所需 Cloudflare 资源清单
-
-| 资源类别 | 绑定变量名 (Binding) | 默认命名建议 | 用途说明 |
-|---|---|---|---|
-| **Cloudflare D1** | `DB` | `cf-navs-db` | 存储分类、书签数据、站点配置以及传输助手元数据 |
-| **Cloudflare KV** | `SESSION` | `cf-navs-session` | 存储管理员登录态、会话撤销黑名单、API 频控防爆破记录 |
-| **Cloudflare R2** | `STORAGE` | `cf-navs-storage` | 存储传输助手上传的文件、图片与附件对象 |
-| **Secret 密钥** | `SETUP_TOKEN` | 自定义高强度字符串 | 仅用于首次初始化 `/install` 创建管理员账号时的身份凭证 |
-
----
-
-### 方式一：Cloudflare 控制台 0 代码一键部署（新手推荐）
-
-适合绝大多数用户，在网页端点击即可完成全部配置与上线，全程零代码。
-
-#### 步骤 0：前置准备（开通并创建 R2 存储桶）
-> 💡 传输助手需要使用 Cloudflare R2 存储上传的文件与截屏（每月免费提供 10GB 存储，且**出网流量完全免费**）。由于 Cloudflare Git 导入无法自动创建 R2，建议在部署前提前开通：
-1. 登录 [Cloudflare 控制台](https://dash.cloudflare.com/)，在左侧导航栏点击 **Storage & Databases** → **R2 对象存储 (R2 Object Storage)**。
-2. 首次使用请根据提示点击开启（无需产生费用）。
-3. 点击 **Create bucket (创建存储桶)**，桶名称填入 `cf-navs-storage`，位置建议选择默认或亚太，点击完成创建。
-
-#### 步骤 1：Fork 仓库
-点击右上角 **[Fork 本仓库](https://github.com/wii-me/cf-navs-transfer/fork)** 到你的 GitHub 个人账号下。
-
-#### 步骤 2：在 Cloudflare 中导入仓库
-1. 进入 Cloudflare 控制台，点击左侧导航栏 **Compute (Workers & Pages)**。
-2. 点击右上角 **Create** 按钮。
-3. > [!WARNING]
-   > **关键注意（切勿选错）**：页面上方有 **Workers** 和 **Pages** 两个标签页。本项目基于 Workers with Assets 边缘架构，**必须在 Workers 标签下点击「Import a repository (导入代码库)」**（或 Connect to Git）。**请勿选择 Pages**，否则构建流程与后端路由将无法正常工作！
-4. 授权并选择你在步骤 1 Fork 的 GitHub 仓库。
-
-#### 步骤 3：填写构建参数
-在配置页面中，准确填写以下构建参数：
-
-| 配置项 | 填写内容 | 说明 |
-|---|---|---|
-| **项目名称 (Project Name)** | `cf-navs`（可自定义） | 部署生成的二级域名将基于此名称 |
-| **生产分支 (Production Branch)** | `main` | 生产发布分支 |
-| **构建命令 (Build command)** | `npm run build` | 编译打包 Svelte 5 前端 |
-| **部署命令 (Deploy command)** | `npx wrangler deploy` | 部署 Worker 边缘后端及静态资产 |
-| **环境变量 (Environment Variables)** | `NODE_VERSION` = `24` | **必填**！项目依赖 Vite 7，需指定 Node 22+ 环境，避免构建引擎过低报错 |
-
-填写完毕后，点击 **Save and Deploy (保存并部署)**。等待首轮自动构建完成。
-
-#### 步骤 4：检查并补齐边缘资源绑定 (Bindings)
-构建完成后，进入该 Worker 的 **Settings (设置)** → **Bindings (绑定)**（或 Variables and Bindings）：
-- 检查是否存在以下 3 项资源绑定。若缺少某项，点击 **Add binding** 手动补齐：
-  1. **D1 数据库**：类型选择 `D1 Database`，变量名称填 `DB`，数据库选择 `cf-navs-db`（如未自动生成，点击创建同名数据库即可）。
-  2. **KV 命名空间**：类型选择 `KV Namespace`，变量名称填 `SESSION`，命名空间选择 `cf-navs-session`。
-  3. **R2 存储桶**：类型选择 `R2 Bucket`，变量名称必须填 **`STORAGE`**（全大写），存储桶选择步骤 0 创建的 `cf-navs-storage`。
-
-#### 步骤 5：添加安装初始化密钥 (`SETUP_TOKEN`)
-1. 进入该 Worker 的 **Settings (设置)** → **Variables and Secrets (变量与机密)**，选择**生产环境 (Production)**。
-2. 点击 **Add secret (添加机密)**：
-   - **名称 (Name)**：`SETUP_TOKEN`（全大写）
-   - **类型**：**Secret (加密密钥)**（切勿勾选为纯文本；若列表中已有同名普通变量，请先删除）
-   - **值 (Value)**：自定义一段复杂随机密码（例如 `Setup@2026TokenSecret`，务必临时复制记下）
-3. 点击 **Save (保存)**。
-   <p align="center">
-     <img src="docs/screenshots/cf-deploy3.jpg" alt="Cloudflare 控制台变量和密钥设置示意" width="700">
-   </p>
-4. > [!IMPORTANT]
-   > **关键必须操作**：添加完 Secret 后，进入 Worker 顶部的 **Deployments (部署)** 页面，找到最新一条部署记录，点击右侧的 **`...`** 并选择 **Retry deployment (重新部署)**。
-   > *（原因：Cloudflare Worker 边缘实例只有在重新部署后才能热读取最新注入的 Secret，否则访问 `/install` 会提示「还缺少部署密钥」）*。
-
-#### 步骤 6：执行 D1 数据库初始化建表
-为避免在 Worker 边缘冷启动时执行 14 张数据表因超时导致偶发错误，建议在控制台直观完成 SQL 执行：
-1. 在 Cloudflare 左侧导航栏点击 **Storage & Databases** → **D1 SQL Database**。
-2. 点击进入你的数据库 `cf-navs-db`，切换到顶部的 **Console (控制台)** 标签。
-3. 打开本项目根目录的 [`schema.sql`](schema.sql)（或在 GitHub 仓库中打开），**复制其中的全部内容**，粘贴进控制台输入框。
-4. 点击 **Execute (执行)**，下方出现 `Query executed successfully` 即表示书签与传输助手的全部数据表准备完毕。
-
-#### 步骤 7：访问 `/install` 创建管理员账号
-1. 打开浏览器，访问你 Worker 的访问域名并在末尾追加 `/install`（例如：`https://cf-navs.xxx.workers.dev/install`）。
-2. 输入你在步骤 5 设置的 `SETUP_TOKEN`。
-3. 设定你的管理员用户名（建议 `admin`）。
-4. 设定管理员密码：
-   > [!IMPORTANT]
-   > **密码长度安全限制**：系统底层强制要求**密码长度至少 12 个字符**（少于 12 位无法提交，例如请设置如 `Admin@2026SecureNav`）。
-5. 点击 **「完成安装」**，系统自动完成加密并自动登录跳转至前台首页！
-
-#### 步骤 8：安全收尾与自定义域名（推荐）
-- **删除临时密钥**：回到 Worker 的 **设置 → 变量和机密** 中，**删除 `SETUP_TOKEN`**。站点已就绪，删除可杜绝未授权访问风险（若后续不慎遗忘密码，随时可通过 `/recover` 页面安全恢复）。
-- **自定义独立域名**：在 Worker 的 **Settings → Domains & Routes (域和路由)** 中点击 **Add**，绑定你在 Cloudflare 托管的个性化独立域名。
-
----
-
-### 方式二：Wrangler CLI 极速部署（开发者推荐）
-
-本地具备 Node.js 22+ 或 24 LTS 环境，只需 3 分钟即可通过命令行全自动完成：
+本地具备 Node.js 22+ 或 24 LTS 环境，在终端中执行以下命令：
 
 ```bash
-# 1. 克隆代码并安装依赖
-git clone https://github.com/wii-me/cf-navs-transfer.git
-cd cf-navs-transfer
-npm install
+# 1. 克隆并安装依赖
+git clone https://github.com/wii-me/cf-navs-transfer.git && cd cf-navs-transfer && npm install
 
-# 2. 登录 Cloudflare 账号并确认身份
+# 2. 登录 Cloudflare 并创建资源
 npx wrangler login
-npx wrangler whoami
-
-# 3. 创建所需边缘资源（云端若已存在同名资源可跳过）
 npx wrangler d1 create cf-navs-db
 npx wrangler kv namespace create SESSION
-npx wrangler r2 bucket create cf-navs-storage # 首次使用 R2 请确认控制台已开通免费额度
+npx wrangler r2 bucket create cf-navs-storage
 
-# 4. 自动识别云端真实资源 ID 并生成本地 wrangler.local.toml
-npm run setup:wrangler
+# 3. 自动匹配资源 ID 生成本地配置并首次部署
+npm run setup:wrangler && npm run deploy
 
-# 5. 首次部署：在云端创建 Worker 实例
-npm run deploy
-
-# 6. 设置安装授权机密密钥（必须在实例创建后执行）
+# 4. 设置初始化密钥并初始化数据库
 npx wrangler secret put SETUP_TOKEN
-
-# 7. 一键初始化远程 D1 数据库完整表结构（含导航与传输助手数据表）
 npm run db:init:remote
 
-# 8. 重新部署使所有绑定与机密配置完全就绪
+# 5. 重新部署使所有配置生效
 npm run deploy
 ```
 
-部署完成后访问 `https://<your-worker>.workers.dev/install`，输入 `SETUP_TOKEN` 设置管理员账号密码（≥ 12 位）即可完成初始化。安装成功后，可运行 `npx wrangler secret delete SETUP_TOKEN` 删除一次性安装令牌。
+部署完成后访问 `https://<your-worker>.workers.dev/install` 设定管理员密码即可。
 
 ---
 
-### 🚨 常见部署与初始化坑点速查表
-
-如果在部署或初始化过程中遇到问题，请对照下表自查，通常可在 1 分钟内迅速解决：
+<details>
+<summary><b>🚨 部署与排坑对照速查表（点击展开）</b></summary>
+<br>
 
 | 异常现象 / 报错信息 | 根本原因 | 一分钟排查与解决方案 |
 |---|---|---|
-| **构建报错**：`unsupported engine` 或打包语法错误 | Cloudflare 默认构建镜像的 Node.js 版本过低（低于 22.12） | 在 Worker **Settings → Builds** 的环境变量中添加 `NODE_VERSION` = `24`，然后重新触发构建。 |
-| **部署后访问**：直接出现 `404 Not Found` 无法进入任何页面 | 在 Cloudflare 导入仓库时误点击了 **Pages** 标签而非 **Workers** | 本项目采用 Worker with Assets 架构。删除该 Pages 项目，在 **Workers & Pages** 下确保选择 **Workers** 标签重新导入。 |
-| **访问 `/install` 提示**：「还缺少部署密钥 (setup_token_missing)」 | ① 未添加 Secret，或误设为 Plaintext 纯文本变量；<br>② 添加 Secret 后**未重新部署**，实例未加载 | 检查 Worker **设置 → 变量和机密** 中 `SETUP_TOKEN` 是否为 **Secret** 类型；然后在 **Deployments** 页面点击最新部署右侧的 **Retry deployment (重新部署)**。 |
-| **访问 `/install` 提示**：「还缺少存储绑定 (missing DB/SESSION/STORAGE)」 | Worker 未正确绑定 D1、KV 或 R2 存储桶 | 进入 Worker **设置 → 绑定**，确认是否有名为 `DB` (D1)、`SESSION` (KV) 和 `STORAGE` (R2) 的三个大写绑定。 |
-| **传输助手上传附件报错**：`R2 storage is not configured` (HTTP 500) | Worker 缺少 R2 绑定，或绑定变量名未大写为 `STORAGE` | 在控制台开通 R2 并创建 `cf-navs-storage` 桶；进入 Worker 绑定设置添加 R2 绑定，**变量名务必填写大写 `STORAGE`**。 |
+| **构建报错**：`unsupported engine` 或打包语法错误 | Cloudflare 默认 Node.js 版本过低（低于 22.12） | 在 Worker **Settings → Builds** 环境变量中添加 `NODE_VERSION` = `24` 并重新部署。 |
+| **部署后访问**：直接出现 `404 Not Found` 无法进入任何页面 | 在 Cloudflare 导入仓库时误选了 **Pages** 而非 **Workers** | 删除该 Pages 项目，在 **Workers & Pages** 下务必选择 **Workers** 标签重新导入。 |
+| **访问 `/install` 提示**：「还缺少部署密钥 (setup_token_missing)」 | 未添加 Secret，或添加后**未重新部署**实例未热加载 | 确认 `SETUP_TOKEN` 为 **Secret** 类型；在 **Deployments** 页面点击最新部署右侧的 **Retry deployment (重新部署)**。 |
+| **访问 `/install` 提示**：「还缺少存储绑定 (missing DB/SESSION/STORAGE)」 | Worker 未正确绑定 D1、KV 或 R2 存储桶 | 进入 Worker **设置 → 绑定**，确认名为 `DB` (D1)、`SESSION` (KV) 和 `STORAGE` (R2) 的三个大写绑定。 |
+| **传输助手上传附件报错**：`R2 storage is not configured` (HTTP 500) | Worker 缺少 R2 绑定，或绑定变量名未大写为 `STORAGE` | 控制台开通 R2 并创建 `cf-navs-storage`；Worker 绑定中添加 R2 绑定，**变量名务必填写大写 `STORAGE`**。 |
 | **创建管理员提示**：「密码不符合安全规范」或提交无响应 | 管理员密码少于 12 位（底层强校验 `MIN_PASSWORD_LENGTH = 12`） | 设置 12 位及以上的强密码（例如字母、数字和符号组合 `Admin@2026SecureNav`）。 |
-| **访问首页或 `/install` 提示**：数据表不存在或 SQL 执行错误 | D1 数据库未执行建表脚本 | 进入 Cloudflare 控制台 **D1** → `cf-navs-db` → **Console**，完整复制粘贴 [`schema.sql`](schema.sql) 并点击 Execute 执行。 |
+| **访问首页或 `/install` 提示**：数据表不存在或 SQL 错误 | D1 数据库未执行建表脚本 | 进入 Cloudflare 控制台 **D1** → **Console**，完整粘贴 [`schema.sql`](schema.sql) 并执行。 |
 | **CLI 命令行部署报错**：`Worker not found` 或 `secret put` 失败 | 在首次执行 `npm run deploy` 之前就尝试写入 Secret | 遵循正确顺序：先运行 `npm run deploy` 创建 Worker 实例，然后再运行 `npx wrangler secret put SETUP_TOKEN`。 |
+
+</details>
 
 ---
 
 ## 🎯 部署后初始化与新手使用指引
 
-无论采用控制台部署还是 CLI 部署，首次部署上线后都需通过内置的初始化向导（`/install`）创建管理员凭据。
-
-### 1. 访问 `/install` 初始化向导设置密码
-打开浏览器访问你的站点地址并在末尾追加 `/install`（例如 `https://your-nav.workers.dev/install`）：
-- **安装密钥 (`SETUP_TOKEN`)**：输入部署阶段在 Cloudflare Worker 的「变量和机密」中填写的 `SETUP_TOKEN` 字符串。
-- **管理员用户名**：自定义你的后台管理账号（默认建议 `admin`，支持 1-64 位字符）。
-- **管理员密码（重要）**：
-  > [!IMPORTANT]
-  > **系统强制要求密码长度至少 12 个字符**（长度范围 12-256 位，输入少于 12 位将无法提交并提示错误；建议混合大小写字母、数字与特殊符号以保障边缘账号安全）。
-- **确认密码**：再次输入密码确保两次输入完全一致。
-
-点击 **「完成安装」**，系统将在 D1 数据库中写入 PBKDF2 强哈希加密凭据，并**自动完成首次登录直接进入前台首页**。
-
-### 2. 管理员日常登录入口
-- **日常登录**：若会话过期或在手机、平板等新设备上访问，点击页面右上角或右下角浮动工具栏中的 **管理入口**（图标形如锁/钥匙），或直接访问 `/admin` 或 `/login`，输入账号与密码即可解锁全部管理权限。
-- **修改密码**：管理员登录后，在后台「设置 → 账号安全」中可随时修改密码。
-- **紧急凭据恢复**：若不慎遗忘密码导致无法登录，无需清空数据库，只需在 Cloudflare 控制台该 Worker 的 **变量和机密** 中添加 Secret `INIT_ADMIN_PASSWORD`、文本变量 `INIT_ADMIN_USER` 与 `RESET_ADMIN_CREDENTIALS`（填入任意新值，如 `reset-2026`），重新部署一次即可强制重置密码。
-
-### 3. 新手开箱推荐 4 步走
-1. **一键导入现有书签**：进入后台「数据管理 → 备份与恢复」，支持直接上传从 Chrome、Edge、Firefox 导出的 HTML 书签文件，或从 Sun-Panel / 原版 CF-Navs JSON 备份导入，全自动映射双层分类，省去手动逐条录入。
-2. **设置站点公开/私密模式**：在后台「设置 → 站点设置」中按需配置：
-   - **开启公开模式**：未登录访客可自由浏览非私密书签与分类，私密链接仅管理员登录后可见。
-   - **关闭公开模式**：整站完全锁定，未登录访客无法查看任何分类与链接，打造 100% 纯个人私密导航站。
-3. **定制精美主题与外观**：在后台「设置 → 主题与外观」中从 22 款预设主题（纯色护眼莫兰迪色、现代磨砂毛玻璃、极客暗黑深色等）中一键选用，并可自定义卡片尺寸（默认标准 160px，极窄模式可设为 40px）。
-4. **畅享跨设备传输助手**：在站内任意页面随时按下快捷键 <kbd>Ctrl</kbd> + <kbd>J</kbd>（Mac 上为 <kbd>Cmd</kbd> + <kbd>J</kbd>）呼出传输助手，测试粘贴文字、直接按下 `Ctrl+V` 上传剪贴板截屏，或拖拽上传最大 80MB 的大文件。
-
-### 4. 安全收尾建议
-- 首次安装并确认能够正常登录后台后，请前往 Cloudflare 控制台的该 Worker **设置 → 变量和机密** 中，**删除 `SETUP_TOKEN`**。站点完成初始化后不再需要该令牌，删除可彻底阻断后续潜在未授权调用的风险。
+1. **设置管理员密码 (`/install`)**：访问站点末尾追加 `/install`，输入 `SETUP_TOKEN`，设置管理员账号与密码（**强制 ≥12 位**），提交后系统自动完成首次登录并进入首页。
+2. **安全收尾**：首次安装成功后，请前往 Worker **设置 → 变量和机密** 中**删除 `SETUP_TOKEN`**（彻底消除未授权访问隐患，后续若遗忘密码可通过 `/recover` 安全恢复）。
+3. **日常登录入口**：点击页面右上角或浮动条的管理入口（锁形图标），或直接访问 `/admin`。
+4. **一键导入书签**：进入后台「数据管理 → 备份与恢复」，支持直接导入浏览器导出的 HTML 书签或 Sun-Panel / 原版 CF-Navs JSON 备份，自动映射两层分类。
+5. **畅享传输助手**：随时按下快捷键 <kbd>Ctrl</kbd> + <kbd>J</kbd>（Mac 上为 <kbd>Cmd</kbd> + <kbd>J</kbd>），体验剪贴板 `Ctrl+V` 贴图、80MB 大文件上传与防误删特性。
 
 ---
 
@@ -380,66 +249,36 @@ npm run deploy
 
 ---
 
-## 🛠️ 本地开发与项目结构
-
-```bash
-# 终端 1：启动本地 Worker 模拟后端 (Miniflare)
-npm run dev
-
-# 终端 2：启动前端 Vite 开发热更新服务器
-npm run dev:web
-```
-
-访问 `http://localhost:5173` 即可进行开发。
-
-```text
-cf-navs-transfer/
-├── src/                 # Svelte 5 前端视图与交互组件
-│   ├── components/      # 传输助手 (TransferDrawer)、书签卡片、灯箱预览等
-│   ├── routes/          # 首页、后台管理 (/admin)、初始化 (/install) 路由
-│   └── stores/          # 全局响应式状态
-├── worker/              # Cloudflare Workers 后端核心 (Hono)
-│   ├── routes/          # 导航数据、分类管理、传输助手与 R2 文件中转接口
-│   ├── middleware/      # 安全鉴权、频控限流、安全响应头中间件
-│   └── services/        # D1 数据库交互、R2 上传与 TTL 生命周期清理
-├── shared/              # 前后端共享类型定义
-├── browser-extension/   # Chrome / Edge 浏览器新增书签自动同步插件
-├── schema.sql           # D1 完整表结构定义（含书签与传输记录表）
-└── wrangler.toml        # Cloudflare 架构配置文件
-```
-
----
-
 ## ❓ 常见问题 (FAQ)
 
 <details>
 <summary><b>Q1: 本项目与原版 CF-Navs 有什么区别？</b></summary>
 <br>
-本项目基于原版 CF-Navs 进行深度增强。完全继承了 CF-Navs 的极简无服务器架构、两级书签收纳、22 款主题、拖拽整理和高私密性；同时通过深度结合 Cloudflare R2 对象存储，<b>新增了跨设备、跨平台的传输助手（支持便笺记事与 80MB 大文件极速传输功能）</b>，让日常使用的起始页同时承担个人中转站的角色。
+本项目基于原版 CF-Navs 深度增强。完整继承了极简无服务器架构、两级书签收纳、22 款主题、拖拽整理和高私密性；同时深度融合 Cloudflare R2 对象存储，<b>新增跨设备跨平台传输助手（支持剪贴板贴图、便笺记事、80MB 大文件传输及防误删保护）</b>，让日常使用的起始页同时承担个人中转站角色。
 </details>
 
 <details>
-<summary><b>Q2: 原版 CF-Navs 用户升级会丢失数据吗？</b></summary>
+<summary><b>Q2: 原版 CF-Navs 老用户升级会丢失数据吗？</b></summary>
 <br>
-<b>完全不会。</b> 本项目的数据库结构对原版 CF-Navs 保持 100% 向下兼容。升级只需增加一个 R2 绑定并在 D1 中执行 <code>transfer_notes</code> 建表 SQL，原有书签、分类、站点设置均原封不动保留。
+<b>完全不会。</b> 本项目的数据库结构对原版保持 100% 向下兼容。升级只需增加一个 R2 绑定（变量名 <code>STORAGE</code>），并在 D1 中执行增加 <code>transfer_notes</code> 表的 SQL，原有分类、书签与站点设置原封不动保留。
 </details>
 
 <details>
 <summary><b>Q3: 上传的文件存放在哪里？会产生额外费用吗？</b></summary>
 <br>
-文件完全存放在你自己 Cloudflare 账号下的 R2 存储桶中。Cloudflare R2 具备极其实惠的免费额度（每月 10GB 免费存储容量，且<b>出网流量完全免费</b>）。对于日常多设备间的文档、截屏和便笺互传，完全在免费额度范围内。
+文件完全存放在你自己的 Cloudflare R2 存储桶中。Cloudflare R2 每月提供 <b>10GB 免费存储容量，且出网流量完全免费</b>。对于日常多设备间的文档、截屏和备忘互传，完全在免费额度之内。
 </details>
 
 <details>
 <summary><b>Q4: 首次部署后访问 <code>/install</code> 提示数据库表不存在？</b></summary>
 <br>
-请进入 Cloudflare 控制台的 D1 数据库控制台（Console），将项目根目录下的 <a href="schema.sql"><code>schema.sql</code></a> 内容粘贴进去执行一次，执行成功后刷新 <code>/install</code> 即可正常设置管理员密码。
+请进入 Cloudflare 控制台的 D1 数据库控制台（Console），将项目根目录下的 <a href="schema.sql"><code>schema.sql</code></a> 内容完整粘贴进去执行一次，执行成功后刷新 <code>/install</code> 即可正常设置管理员密码。
 </details>
 
 <details>
 <summary><b>Q5: 如何设置私密书签与分类？</b></summary>
 <br>
-管理员登录后，在新建或编辑书签时勾选“设为私密链接”，或在分类设置中勾选“访客不可见”。未登录的访客将无法查看这些数据，接口层也会彻底剥离私密字段。
+管理员登录后，在新建或编辑书签时勾选“设为私密链接”，或在分类设置中勾选“访客不可见”。未登录访客将无法查看这些数据，接口层会彻底物理过滤私密字段。
 </details>
 
 ---
@@ -448,81 +287,8 @@ cf-navs-transfer/
 
 - 🌟 **核心致谢**：本项目基于 **[CF-Navs](https://github.com/lbjxr/CF-Navs)**（原作者：[@lbjxr](https://github.com/lbjxr)）进行二次开发与功能增强。衷心感谢原作者的优秀构想与杰出贡献！
 - 项目同时参考了 [Sun-Panel](https://github.com/hslr-s/sun-panel) 的设计理念，部分图标获取逻辑受到 [iori-nav](https://github.com/jy02739244/iori-nav) 的启发。
-- 本项目采用 [MIT License](LICENSE) 开源协议，保持自由与开放。
-
-<div align="center">
-  <details>
-    <summary><b>☕️ 喜欢 CF-Navs Transfer？请原作者与维护者喝杯咖啡 / Sponsor</b></summary>
-    <br>
-    <p>如果这个项目对你的日常工作有所帮助，欢迎赞助支持原作者团队！❤️</p>
-    <a href="https://afdian.com/a/benjian" target="_blank">
-      <img src="https://img.shields.io/badge/爱发电-前往赞助-946CE6?style=for-the-badge&logo=afdian&logoColor=white" alt="爱发电赞助">
-    </a>
-  </details>
-</div>
-
----
-
-## 环境配置
-
-| 名称 | 类型 | 必需 | 说明 |
-|---|---|---|---|
-| `DB` | D1 binding | 是 | 数据库绑定 |
-| `SESSION` | KV binding | 是 | 登录/点击限流和会话撤销名单存储 |
-| `STORAGE` | R2 binding | 否 (增强) | 传输助手文件与图片存储桶绑定（未配置时传输助手仅支持文本便笺） |
-| `SETUP_TOKEN` | Secret | 首次安装 | 授权 `/install`，安装成功后建议删除或轮换 |
-| `SESSION_TTL` | Variable | 否 | 会话有效期，`wrangler.toml` 默认 `2592000` 秒（30 天）；未设置时 Worker 回退为 7 天 |
-| `INIT_ADMIN_USER` | Variable | 否 | 仅用于旧数据库升级或凭据恢复 |
-| `INIT_ADMIN_PASSWORD` | Secret | 否 | 仅用于旧数据库升级或凭据恢复 |
-| `RESET_ADMIN_CREDENTIALS` | Variable | 否 | 旧数据库强制重置凭据时使用的一次性标记 |
-
-不要把真实资源 ID、密码、Token 或其他 Secret 写入仓库。
-
-## 数据导入
-
-已有收藏不用重新录入，后台支持以下数据格式：
-
-- **CF-Navs JSON 备份**：支持全量或按分类导出，保留两层分类关系，并可选择是否携带站点设置；导入时支持按完整路径追加合并或覆盖恢复。
-- **Sun-Panel 数据**：分类按一级导入，并转换书签与兼容图标字段，迁移现有导航不必从零开始。
-- **浏览器书签 HTML**：导入浏览器导出的标准文件，有效文件夹映射为两层分类，更深路径压平到二级标题。
-
-**只搬需要的那一部分**：可以导出某个主分类及其子分类，也可以只选二级分类，系统会补齐必需的父分类记录，不夹带未选分类的书签。适合把一组工作资源迁到另一套 CF-Navs，或为重点分类单独留一份备份。
-
-导入前请先备份现有数据：**追加模式保留重复链接，覆盖模式会替换全部分类与书签**。部分导出是备份与迁移能力，不是自动去重或双向同步；备份可能包含私密链接和站点设置，请妥善保管。
-
-参阅 [Sun-Panel 数据导入](docs/guides/SUNPANEL_IMPORT.md) 和 [浏览器书签导入](docs/guides/BROWSER_BOOKMARK_IMPORT.md)。
-
-## 贡献
-
-欢迎通过 Issue 反馈使用体验、通过 Pull Request 贡献改进。开始前请阅读 [参与开发](CONTRIBUTING.md)，按改动范围完成验证；安全问题请使用 [私密报告渠道](SECURITY.md)，不要在公开 Issue 中粘贴凭据或私密书签。
-
-## 致谢
-
-项目参考了 [Sun-Panel](https://github.com/hslr-s/sun-panel) 的设计思路，部分图标获取逻辑受 [iori-nav](https://github.com/jy02739244/iori-nav) 启发。
-
-## Star History
-
-<a href="https://www.star-history.com/?repos=lbjxr%2FCF-Navs&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=lbjxr/CF-Navs&type=date&theme=dark&legend=top-left&sealed_token=7kyATdN3x5tJ6WJAhA5MwxWL93j-C9ZnSxJli_vTqztkkZF54Sp95nJzSMW-Xggc19KoraDrqDNjCWN6VuQrSEmOX8CAbyYqMi0I_6K3DS2GEr0x1rgf8VDa2kBJIgOP74JqDldlCFRRbGGNjvrDVJ12e4SIShmH78leu6Vxg6WQzidKg4PULPCzlwi-" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=lbjxr/CF-Navs&type=date&legend=top-left&sealed_token=7kyATdN3x5tJ6WJAhA5MwxWL93j-C9ZnSxJli_vTqztkkZF54Sp95nJzSMW-Xggc19KoraDrqDNjCWN6VuQrSEmOX8CAbyYqMi0I_6K3DS2GEr0x1rgf8VDa2kBJIgOP74JqDldlCFRRbGGNjvrDVJ12e4SIShmH78leu6Vxg6WQzidKg4PULPCzlwi-" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=lbjxr/CF-Navs&type=date&legend=top-left&sealed_token=7kyATdN3x5tJ6WJAhA5MwxWL93j-C9ZnSxJli_vTqztkkZF54Sp95nJzSMW-Xggc19KoraDrqDNjCWN6VuQrSEmOX8CAbyYqMi0I_6K3DS2GEr0x1rgf8VDa2kBJIgOP74JqDldlCFRRbGGNjvrDVJ12e4SIShmH78leu6Vxg6WQzidKg4PULPCzlwi-" />
- </picture>
-</a>
-
-## 许可证
-
-本项目采用 [Apache License 2.0](LICENSE)，项目归属信息见 [`NOTICE`](NOTICE)。
-
-### Fork 与归属说明
-
-如果你 Fork、重新分发或发布基于 CF-Navs 的修改版本，请：
-
-- 保留 `LICENSE`、`NOTICE` 以及源文件中已有的版权、许可和归属声明。
-- 按 Apache License 2.0 的要求，在修改过的文件中保留清晰的修改说明。
-- 在 README 或产品文档中明确说明项目基于 CF-Navs，并链接上游仓库；不要暗示修改版本由原项目作者官方发布或认可。
-
-以上说明用于帮助用户识别衍生版本；具体许可权利和义务以 [LICENSE](LICENSE) 为准。
+- 本项目遵循 [Apache-2.0 License](LICENSE) 开源协议，项目归属信息详见 [`NOTICE`](NOTICE)。
+- 如果你 Fork 或重新分发基于本项目的修改版本，请保留 `LICENSE`、`NOTICE` 与原版权声明，并明确注明基于 CF-Navs。
 
 <!-- 爱发电赞助区 (折叠卡片) -->
 <hr>
