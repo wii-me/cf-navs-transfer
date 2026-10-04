@@ -68,7 +68,7 @@
 - 鼠标：结果行 hover 高亮、点击即打开（与键盘共用同一打开入口）。
 - 打开语义：`open_method` 数值 `1|2|3`——`1`→`window.open(_blank)`、`2`→`location.assign`、`3`→复用 `BookmarkLinkModal`（D-b，见开发文档 §3.5）；三者都同样登记访问计数（`incrementClick` + `registerClick`）。
 - 结果上限 **50** 条 + 「还有 N 条」提示；空结果无额外网络请求。
-- **不渲染 `BookmarkCard`**（避免 50 张卡的图标请求），结果行用轻量图标或 `aria-hidden` 装饰。
+- **不渲染 `BookmarkCard`**（保留轻量结果行，避免卡片行为进入面板），但结果行图标复用首页图标解析/本地缓存/代理/失败回退链路；有真实图标时显示图片，加载失败或无图标时稳定回退到文字图标。
 
 ### FR-1.6 状态独立（D-1）
 - Spotlight 是**独立通道**：不写 `Home.searchQuery`、不触发 `handleNavigate`/`clearSearchImmediately`。关闭 Spotlight 后页面过滤态保持原样，两套搜索互不污染。
@@ -124,7 +124,7 @@
 
 ## 8. 风险清单
 
-- **R1 图标请求预算**：50 条结果若带真实图标请求可能顶破 C-5 ≤260——轻量行 + `aria-hidden` 图标规避，L3 实测。
+- **R1 图标请求预算（实现口径已更新）**：结果行现在显示真实图标，可能增加最多 50 条图标链路请求；仍不渲染 `BookmarkCard`，必须在 L3「Spotlight 出满 50 条结果」场景实测 C-5 图标请求 ≤260 与 Cache Storage ≤5 MiB。
 - **R2 Esc 层级/模态互斥**：全局 keydown 多方监听 + 单槽滚动锁——App 集中 Spotlight 优先级 + 模态打开时不唤起（D-e），L2 逐层验证。
 - **R3 与其它模块串行**：`App.svelte`/`Home.svelte` 与 REQ-02/03、需求 C 共改须串行。
 - **R4 jsdom 盲区**：焦点陷阱/IME/滚动锁/安全区只能 L2（PROB-18c 基座），否则登记发版前清单。

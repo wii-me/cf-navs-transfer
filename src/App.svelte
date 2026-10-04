@@ -82,6 +82,7 @@
   import { getNextThemePreference, resolveAppThemeState } from './lib/appThemeState'
   import type { ImportSource } from './lib/importData'
   import { pruneBookmarkIconCacheStorageBackedByLocalStorage } from './lib/localBookmarkIconCache'
+  import { installPublicDataFocusRefresh } from './lib/publicDataFocusRefresh'
   import { adminStore, authStore, configStore, isAuthenticated, publicStore } from './lib/stores'
   import { readPreferredThemeMode, writePreferredThemeMode } from './lib/themePreference'
   import {
@@ -100,6 +101,7 @@
     refreshBookmarkIconCacheInBackground,
     refreshLoggedInData,
     refreshPublicData,
+    refreshVisibleData,
   } from './lib/dataService'
 
   type SettingsSubset = SettingsFormValue
@@ -293,6 +295,7 @@
   let systemPrefersDark = false
   let mediaQuery: MediaQueryList | null = null
   let handleSystemThemeChange: ((event: MediaQueryListEvent) => void) | null = null
+  let stopPublicDataFocusRefresh: (() => void) | null = null
 
   $: resolvedThemeState = resolveAppThemeState({
     preferredThemeMode,
@@ -391,7 +394,7 @@
 
     try {
       await refreshLoggedInData()
-      return true
+      return isLoggedIn() && get(adminStore).loaded
     } catch (error) {
       if (isUnauthorizedError(error)) {
         authStore.setSession(null)
@@ -1125,6 +1128,9 @@
     }
     void initializeApp()
     scheduleBookmarkIconCachePrune()
+    // 切回已打开的标签页时按会话状态刷新（Issue #25 跨标签页设置同步 / Issue #29
+    // 登录态保留私密视图）：登录态走登录态聚合刷新，未登录走公开刷新。
+    stopPublicDataFocusRefresh = installPublicDataFocusRefresh(() => refreshVisibleData())
   })
 
   onDestroy(() => {
@@ -1133,6 +1139,7 @@
     }
     // 不 revoke 的话每次重建都会漏一个 blob URL。
     customScriptController?.destroy()
+    stopPublicDataFocusRefresh?.()
   })
 </script>
 

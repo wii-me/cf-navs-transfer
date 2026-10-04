@@ -1,21 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  ICON_BROWSER_CACHE_SECONDS,
-  ICON_EDGE_CACHE_SECONDS,
-  ICON_SUCCESS_CACHE,
-  iconCacheKey,
-} from '../../worker/lib/iconResponses'
-
-describe('icon response cache policy', () => {
-  it('keeps the edge TTL one day shorter than the browser TTL', () => {
-    expect(ICON_BROWSER_CACHE_SECONDS).toBe(7 * 24 * 60 * 60)
-    expect(ICON_EDGE_CACHE_SECONDS).toBe(6 * 24 * 60 * 60)
-    expect(ICON_EDGE_CACHE_SECONDS).toBeLessThan(ICON_BROWSER_CACHE_SECONDS)
-    expect(ICON_SUCCESS_CACHE).toBe(
-      'public, max-age=604800, s-maxage=518400, immutable',
-    )
-  })
-})
+import { iconCacheKey } from '../../worker/lib/iconResponses'
 
 describe('icon proxy cache key', () => {
   function key(url: string) {
@@ -42,6 +26,9 @@ describe('icon proxy cache key', () => {
     expect(a).not.toBe(b)
     expect(a).toContain('v=abc123')
     expect(a).toBe(key('https://nav.example.com/api/category-icon/3?v=abc123&other=1'))
+    // cv migrates browser URLs only; the same safe edge bytes remain reusable.
+    expect(a).toBe(key('https://nav.example.com/api/category-icon/3?v=abc123&cv=3'))
+    expect(a).toBe(key('https://nav.example.com/api/category-icon/3?v=abc123&cv=4'))
   })
 
   it('keeps different resources on different keys', () => {
@@ -52,8 +39,8 @@ describe('icon proxy cache key', () => {
   it('namespaces the key so pre-PROB-20 cache entries become unreachable', () => {
     // 旧条目是在没有可见性判定的情况下写入的，而命中查询发生在判定之前；
     // 递增命名空间后旧键不可达，之后写入的条目一定过了可见性判定。
-    expect(key('https://nav.example.com/api/icon/1')).toContain('ns=2')
-    expect(key('https://nav.example.com/api/category-icon/1')).toContain('ns=2')
-    expect(key('https://nav.example.com/api/iconify/mdi/home.svg')).toContain('ns=2')
+    expect(key('https://nav.example.com/api/icon/1')).toContain('ns=3')
+    expect(key('https://nav.example.com/api/category-icon/1')).toContain('ns=3')
+    expect(key('https://nav.example.com/api/iconify/mdi/home.svg')).toContain('ns=3')
   })
 })

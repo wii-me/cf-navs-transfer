@@ -16,7 +16,7 @@ describe('category icon display', () => {
     }
 
     expect(normalizeCategoryIcon(category)).toBe('https://api.iconify.design/mdi/code-tags.svg')
-    expect(getCategoryImageIconUrl(category)).toMatch(/^\/api\/category-icon\/7\?v=[a-z0-9]+$/)
+    expect(getCategoryImageIconUrl(category)).toMatch(/^\/api\/category-icon\/7\?v=[a-z0-9]+&cv=4$/)
     expect(hasCategoryImageIcon(category)).toBe(true)
     expect(getCategoryTextIcon(category)).toBe('')
   })
@@ -24,7 +24,7 @@ describe('category icon display', () => {
   it('recognizes bare Iconify names as image sources', () => {
     const category = { id: 12, title: 'Home', icon: 'mdi:home' }
 
-    expect(getCategoryImageIconUrl(category)).toMatch(/^\/api\/category-icon\/12\?v=[a-z0-9]+$/)
+    expect(getCategoryImageIconUrl(category)).toMatch(/^\/api\/category-icon\/12\?v=[a-z0-9]+&cv=4$/)
     expect(getCategoryTextIcon(category)).toBe('')
   })
 

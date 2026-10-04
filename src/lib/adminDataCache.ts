@@ -31,19 +31,47 @@ function sessionCacheKey(): string | null {
   return `${hashSnapshotScope(currentSnapshotOrigin())}-${hashSnapshotScope(`${session.username}:${session.token}:${session.expires_at}`)}`
 }
 
-export async function readCachedAdminDataEntry(): Promise<CachedAdminDataEntry | null> {
-  const key = sessionCacheKey()
-  if (!key) return null
-  await pruneOtherSnapshots(storage, key)
-  return readSnapshot(storage, key)
+// A clear must finish after an already-started write, and before a new session's
+// write. Serializing this small persistence boundary prevents cache resurrection
+// without coupling storage to stores or UI lifecycles.
+let pendingStorage: Promise<void> = Promise.resolve()
+function withStorage<T>(operation: () => Promise<T>): Promise<T> {
+  const result = pendingStorage.then(operation)
+  pendingStorage = result.then(() => undefined, () => undefined)
+  return result
 }
 
-export async function writeCachedAdminData(data: AdminData, version: string | null = null): Promise<void> {
+export function readCachedAdminDataEntry(isCurrent: () => boolean = () => true): Promise<CachedAdminDataEntry | null> {
   const key = sessionCacheKey()
-  if (!key || !data.settings) return
-  await pruneOtherSnapshots(storage, key)
-  const payload: CachedAdminDataPayload = { saved_at: Date.now(), version, data }
-  await writeSnapshot(storage, key, payload)
+  const valid = () => key !== null && isCurrent() && sessionCacheKey() === key
+  return withStorage(async () => {
+    if (!valid() || !key) return null
+    await pruneOtherSnapshots(storage, key)
+    if (!valid()) return null
+    const entry = await readSnapshot(storage, key)
+    return valid() ? entry : null
+  })
 }
 
-export async function clearCachedAdminData(): Promise<void> { await clearSnapshots(storage) }
+export function writeCachedAdminData(
+  data: AdminData,
+  version: string | null = null,
+  isCurrent: () => boolean = () => true,
+): Promise<void> {
+  const key = sessionCacheKey()
+  const valid = () => key !== null && isCurrent() && sessionCacheKey() === key
+  return withStorage(async () => {
+    if (!valid() || !key || !data.settings) return
+    await pruneOtherSnapshots(storage, key)
+    if (!valid()) return
+    const payload: CachedAdminDataPayload = { saved_at: Date.now(), version, data }
+    await writeSnapshot(storage, key, payload)
+    // A native Cache.put already in flight cannot be aborted. Remove its result
+    // before letting the next queued operation (including a new login) proceed.
+    if (!valid()) await clearSnapshots(storage)
+  })
+}
+
+export function clearCachedAdminData(): Promise<void> {
+  return withStorage(() => clearSnapshots(storage))
+}

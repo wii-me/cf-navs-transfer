@@ -6,8 +6,7 @@
 //   - 临近过期前提前续签，避免整页图标同时退化成兜底图；
 //   - 登出/改密码后立刻丢弃，不把过期 key 继续挂在 URL 上。
 //
-// 只在后台使用：首页公开卡片不带 key，否则公开图标响应会变成 `private, no-store`，
-// 白丢 edge cache 与 Service Worker 缓存。
+// 只在后台使用：首页公开卡片不带 key；对象图标客户端响应统一 no-store，公开正文复用由 Worker edge cache 承担。
 
 import { get, writable } from 'svelte/store'
 import type { IconAccessResp } from '../../shared/types'
@@ -22,6 +21,9 @@ type GrantState = {
 
 const grantStore = writable<GrantState | null>(null)
 let inflight: Promise<string> | null = null
+// 授权代次。clearIconAccessKey() 无法取消已发出的请求，但可以让它的回调作废：
+// 登出/改密后旧 promise 若仍能 publish，过期 key 会被重新挂到图标 URL 上。
+let generation = 0
 
 /** 当前可用的 key；组件订阅它，key 到位后图标 URL 自动带上参数。 */
 export const iconAccessKey = writable('')
@@ -37,6 +39,7 @@ export function readIconAccessKey(now = Date.now()): string {
 }
 
 export function clearIconAccessKey(): void {
+ generation += 1
  grantStore.set(null)
  inflight = null
  iconAccessKey.set('')
@@ -54,17 +57,22 @@ export async function ensureIconAccessKey(
  if (cached) return cached
  if (inflight) return await inflight
 
+ const requestGeneration = generation
+
  inflight = (async () => {
   try {
    const next = await fetchGrant()
    if (typeof next?.key !== 'string' || !next.key || typeof next.expires_at !== 'number') return ''
+   // 期间发生过 clear（登出/改密）：丢弃这次结果，不把旧 key 重新发布出去。
+   if (requestGeneration !== generation) return ''
    const state: GrantState = { key: next.key, expiresAt: next.expires_at }
    grantStore.set(state)
    return publish(state)
   } catch {
    return ''
   } finally {
-   inflight = null
+   // 只清理属于本次代次的 in-flight 标记，避免把后来者的请求标记抹掉。
+   if (requestGeneration === generation) inflight = null
   }
  })()
 

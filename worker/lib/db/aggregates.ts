@@ -58,6 +58,7 @@ export function getPublicCategoryIds(categories: PublicCategory[]): Set<number> 
   for (const category of categories) {
     let current: PublicCategory | undefined = category
     let hidden = false
+    let reachedRoot = false
     const visited = new Set<number>()
     while (current) {
       if (visited.has(current.id)) {
@@ -69,14 +70,18 @@ export function getPublicCategoryIds(categories: PublicCategory[]): Set<number> 
         hidden = true
         break
       }
-      current = current.parent_id == null ? undefined : byId.get(current.parent_id)
+      if (current.parent_id == null) {
+        reachedRoot = true
+        break
+      }
+      current = byId.get(current.parent_id)
     }
+    if (!reachedRoot) hidden = true
     if (!hidden) visible.add(category.id)
   }
 
   return visible
 }
-
 /**
  * 匿名图标端点的可见性判定。口径必须与 `getPublicCategoryIds` 保持一致：
  * 私密书签自身不可见；公开书签只要挂在私密分类（或私密分类的后代）下同样不可见。

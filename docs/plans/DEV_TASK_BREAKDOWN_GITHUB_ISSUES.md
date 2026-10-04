@@ -682,7 +682,7 @@ graph TD
 | R-05 PC 批量工具栏遮挡 | `BookmarkListPanel.svelte` 将工具栏与列表滚动容器拆分为独立网格行 | 已完成 | 隔离 Chrome 1440px：工具栏 bottom=263 与列表 scroll top=263 对齐，滚动列表不覆盖按钮；新增 admin layout 测试通过 |
 | R-05 移动端批量工具栏遮挡 | `BookmarkListPanel.svelte` 为固定工具栏预留内容空间并抬高至后台底部导航上方 | 已完成 | 隔离 Chrome 390×844：工具栏 bottom=772，后台底部导航 top=784，z-index=1001，无遮挡；新增移动端安全区测试通过 |
 | TC-R06-01 PC 二级分类不可滚动 | `HomeCategoryScope.svelte` 增加鼠标滚轮横向转换、可见桌面滚动条和键盘保留 | 已完成 | 隔离 Chrome 1440px、大字号/大图标：tabs scrollWidth=2642、clientWidth=733；真实鼠标滚轮 scrollLeft 由 0→700→1909，末项可见；分类层级测试通过 |
-| TC-R06-01 分类视觉设置位置 | `AdvancedSettingsSection.svelte` 内嵌 `CategoryDisplaySettingsSection`，设置模型和保存契约不变 | 已完成 | 隔离 Chrome：高级设置收起时分类卡片不渲染，展开后卡片位于 `.advanced-content` 内且标题正确；`adminSettingsLayout` 测试通过 |
+| TC-R06-01 分类视觉设置位置 | `AdvancedSettingsSection.svelte` 内嵌 `CategoryDisplaySettingsSection`，并由“高级与视觉”独立二级菜单直接展示；设置模型和保存契约不变 | 已完成 | 独立 Chrome 验证高级与视觉菜单内背景、尺寸、卡片表面和分类视觉控件直接可见，不再提供折叠按钮；`adminSettingsBehavior` / `adminSettingsLayout` 测试与 type-check 通过 |
 | R-08 移动端导出按钮遮挡 | `BackupPanel.svelte` CTA 调整为分类树下方、导入卡片上方的正常流式全宽布局 | 已完成 | 隔离 Chrome 390×844：导出按钮位于分类树下方和导入卡片上方，随内容滚动，不遮挡树或导入卡片；无横向溢出；导出布局测试通过 |
 
 > 当前批次未改变 API/数据库契约；若浏览器回归发现新增问题，需在本节追加反馈，不覆盖原始证据。

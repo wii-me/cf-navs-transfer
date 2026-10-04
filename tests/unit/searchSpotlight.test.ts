@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/svelte'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte'
 import { tick } from 'svelte'
 import SearchSpotlight from '../../src/components/SearchSpotlight.svelte'
 import { api } from '../../src/lib/api'
@@ -37,6 +37,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
 
@@ -62,6 +63,65 @@ describe('SearchSpotlight', () => {
     expect(options[0].textContent).toContain('高频')
     expect(options.some((o) => o.textContent?.includes('低频'))).toBe(true)
     expect(options.some((o) => o.textContent?.includes('零访问'))).toBe(false)
+  })
+
+  it('结果行按书签真实图标显示，并保留文字图标回退', async () => {
+    const items = [
+      bookmark({
+        id: 11,
+        title: '图片书签',
+        icon: 'data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22/%3E',
+        icon_source: 'custom',
+        click_count: 3,
+      }),
+      bookmark({ id: 12, title: 'Iconify 书签', icon: 'mdi:home', icon_source: 'iconify', click_count: 2 }),
+      bookmark({ id: 13, title: '文字书签', icon: 'TXT', icon_source: 'custom', click_count: 1 }),
+    ]
+    render(SearchSpotlight, { props: { open: true, bookmarks: items, categories } })
+    await tick()
+
+    const options = screen.getAllByRole('option')
+    expect(options[0].querySelector('img')?.getAttribute('src')).toContain('data:image/svg+xml')
+    expect(options[1].querySelector('img')?.getAttribute('src')).toBe('/api/iconify/mdi/home.svg')
+    expect(options[2].querySelector('.icon-text')?.textContent).toBe('TXT')
+    expect(options.every((option) => option.querySelector('[aria-hidden="true"]'))).toBe(true)
+  })
+
+  it('真实图标加载失败后回退到稳定文字图标', async () => {
+    const items = [bookmark({ id: 14, title: '失败图标', icon: 'data:image/png;base64,broken', icon_source: 'custom', click_count: 1 })]
+    render(SearchSpotlight, { props: { open: true, bookmarks: items, categories } })
+    await tick()
+
+    const option = screen.getAllByRole('option')[0]
+    const image = option.querySelector('img') as HTMLImageElement
+    await fireEvent.error(image)
+    await tick()
+
+    expect(option.querySelector('img')).toBeNull()
+    expect(option.querySelector('.icon-text')?.textContent).toBe('失')
+  })
+
+  it('icon_cached 书签走 /api/icon 代理路径', async () => {
+    const fetch = vi.fn(async () => new Response('<svg/>', { headers: { 'content-type': 'image/svg+xml' } }))
+    vi.stubGlobal('fetch', fetch)
+    const TestURL = class extends URL {}
+    Object.assign(TestURL, { createObjectURL: () => 'blob:spotlight', revokeObjectURL: vi.fn() })
+    vi.stubGlobal('URL', TestURL)
+    const items = [bookmark({
+      id: 15,
+      title: '缓存图标',
+      icon: 'https://example.com/icon.png',
+      icon_cached: true,
+      click_count: 1,
+    })]
+    render(SearchSpotlight, { props: { open: true, bookmarks: items, categories } })
+    await tick()
+
+    await waitFor(() => {
+      const option = screen.getAllByRole('option')[0]
+      expect(option.querySelector('img')?.getAttribute('src')).toBe('blob:spotlight')
+      expect(fetch.mock.calls[0]?.[0]).toMatch(/^\/api\/icon\/15\?v=/)
+    })
   })
 
   it('输入即时过滤（无防抖延迟）', async () => {

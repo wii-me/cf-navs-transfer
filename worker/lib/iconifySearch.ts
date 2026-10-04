@@ -1,6 +1,6 @@
 import type { IconifyCandidate, IconifySearchResp } from '../../shared/types'
 import { fetchIcon, iconBytesToResponse } from './iconData'
-import { ICON_SUCCESS_CACHE } from './iconResponses'
+import { ICON_SUCCESS_CACHE, iconCacheKey } from './iconResponses'
 import { extractSvgText, svgHasColor } from './svgColor'
 
 const ICONIFY_SEARCH_CACHE_MS = 10 * 60 * 1000
@@ -129,9 +129,9 @@ function iconifyProxyRequest(baseUrl: string, prefix: string, icon: string): Req
   const requestUrl = new URL(baseUrl)
   requestUrl.pathname = iconifyProxyPath(prefix, icon)
   requestUrl.search = ''
-  return new Request(requestUrl.toString(), {
-    method: 'GET',
-  })
+  // Search prewarm and `/api/iconify/:prefix/:name` lookup must share the exact ns/v key;
+  // otherwise prewarm writes an unreachable legacy URL and every preview re-fetches upstream.
+  return iconCacheKey(new Request(requestUrl.toString(), { method: 'GET' }))
 }
 
 function getCachedIconifySearch(query: string): IconifySearchResp | null {

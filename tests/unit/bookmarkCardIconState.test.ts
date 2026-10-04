@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { IconSource, PublicBookmark } from '../../shared/types'
 import {
   deriveBookmarkCardIconBase,
+  createBookmarkCardIconStateKey,
   deriveBookmarkCardIconState,
   shouldReadBookmarkLocalIconCache,
 } from '../../src/lib/bookmarkCardIconState'
@@ -32,6 +33,7 @@ function state(overrides: Partial<PublicBookmark> = {}, input: {
   localCachedIconUrl?: string
   localCachePending?: boolean
   shouldWaitForLocalIconCache?: boolean
+  iconAccessKey?: string
 } = {}) {
   return deriveBookmarkCardIconState({
     bookmark: bookmark(overrides),
@@ -42,6 +44,7 @@ function state(overrides: Partial<PublicBookmark> = {}, input: {
     localCachedIconUrl: input.localCachedIconUrl,
     localCachePending: input.localCachePending,
     shouldWaitForLocalIconCache: input.shouldWaitForLocalIconCache,
+    iconAccessKey: input.iconAccessKey,
   })
 }
 
@@ -196,4 +199,61 @@ describe('bookmark card icon state', () => {
     expect(base.shouldWaitForLocalIconCache).toBe(true)
     expect(base.shouldReadLocalIconCache).toBe(false)
   })
+
+  it('appends the access key to a private bookmark proxy URL', () => {
+    const result = state(
+      { icon: 'https://cdn.example.com/icon.png', icon_cached: true, is_private: 1 },
+      { iconAccessKey: 'GRANT123' },
+    )
+
+    expect(result.proxiedHttpIconUrl).toMatch(/^\/api\/icon\/42\?v=[^&]+&cv=4&key=GRANT123$/)
+    expect(result.iconUrl).toBe(result.proxiedHttpIconUrl)
+  })
+
+  it('leaves the proxy URL anonymous when no access key is supplied', () => {
+    // 公开对象必须拿到匿名 URL（可命中共享缓存）；key 的取舍由调用方按隐私判定决定。
+    const result = state({ icon: 'https://cdn.example.com/icon.png', icon_cached: true, is_private: 0 })
+
+    expect(result.proxiedHttpIconUrl).toMatch(/^\/api\/icon\/42\?v=[^&]+&cv=4$/)
+    expect(result.proxiedHttpIconUrl).not.toContain('key=')
+  })
+
+  it('changes the icon state key when the access key arrives so the fallback state resets', () => {
+    const input = { icon: 'https://cdn.example.com/icon.png', icon_cached: true, is_private: 1 }
+
+    const anonymous = state(input, { iconInView: true })
+    const granted = state(input, { iconInView: true, iconAccessKey: 'GRANT123' })
+
+    expect(anonymous.nextIconStateKey).not.toBe(granted.nextIconStateKey)
+    expect(granted.nextIconStateKey.endsWith(':GRANT123')).toBe(true)
+  })
+  it('keeps a direct HTTP icon but exposes an authorized recovery URL before persistence', () => {
+    const result = state({ icon: 'https://example.test/icon.png', icon_cached: false }, { iconAccessKey: 'test-grant' })
+    expect(result.iconUrl).toBe('https://example.test/icon.png')
+    expect(result.shouldUseIconProxy).toBe(false)
+    expect(result.proxiedHttpIconUrl).toMatch(/^\/api\/icon\/42\?v=.*&cv=4&key=test-grant$/)
+    expect(state({ icon: 'https://example.test/icon.png', icon_cached: false }).proxiedHttpIconUrl).not.toContain('key=')
+  })
+
+  it('invalidates the icon state only when cache availability actually changes', () => {
+    const original = bookmark({ icon: 'https://example.test/icon.png', icon_cached: 0 })
+    const key = createBookmarkCardIconStateKey(original, true)
+    expect(createBookmarkCardIconStateKey({ ...original, icon_cached: false }, true)).toBe(key)
+    expect(createBookmarkCardIconStateKey({ ...original, icon_cached: null }, true)).toBe(key)
+    expect(createBookmarkCardIconStateKey({ ...original, icon_cached: true }, true)).not.toBe(key)
+    expect(createBookmarkCardIconStateKey({ ...original, icon_cached: 1 }, true)).toBe(
+      createBookmarkCardIconStateKey({ ...original, icon_cached: true }, true),
+    )
+  })
+
+  it.each([
+    { id: 0, icon: 'https://example.test/icon.png' },
+    { id: -1, icon: 'https://example.test/icon.png' },
+    { icon: 'ABC', icon_source: 'custom' as const },
+    { icon: 'data:image/svg+xml,<svg/>' },
+    { icon: 'mdi:home', icon_source: 'iconify' as const },
+  ])('does not send non-object icons through object recovery: %o', (overrides) => {
+    expect(state({ ...overrides, icon_cached: false }).proxiedHttpIconUrl).toBe('')
+  })
+
 })

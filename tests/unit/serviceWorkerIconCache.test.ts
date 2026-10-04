@@ -25,6 +25,9 @@ type CachePut = { url: string; cacheControl: string | null }
 
 function loadServiceWorker(networkResponse: (request: Request) => Response) {
   const puts: CachePut[] = []
+  const deletedCaches: string[] = []
+  const installedShells: string[] = []
+  const cacheNames = ['cf-navs-v16', 'cf-navs-v17', 'unrelated-cache']
   const listeners: Record<string, FetchListener> = {}
 
   const cache = {
@@ -32,7 +35,9 @@ function loadServiceWorker(networkResponse: (request: Request) => Response) {
       const url = typeof request === 'string' ? request : request.url
       puts.push({ url, cacheControl: response.headers.get('Cache-Control') })
     },
-    async addAll() { },
+    async addAll(urls: string[]) {
+      installedShells.push(...urls)
+    },
     async delete() {
       return true
     },
@@ -62,9 +67,10 @@ function loadServiceWorker(networkResponse: (request: Request) => Response) {
         return undefined
       },
       async keys() {
-        return []
+        return cacheNames
       },
-      async delete() {
+      async delete(name: string) {
+        deletedCaches.push(name)
         return true
       },
     },
@@ -83,6 +89,8 @@ function loadServiceWorker(networkResponse: (request: Request) => Response) {
 
   return {
     puts,
+    deletedCaches,
+    installedShells,
     async dispatchFetch(url: string) {
       const request = new Request(url)
       let responded: Promise<Response> | Response | null = null
@@ -104,44 +112,105 @@ function loadServiceWorker(networkResponse: (request: Request) => Response) {
       for (let i = 0; i < 3; i += 1) await Promise.resolve()
       return response
     },
+    async dispatchInstall() {
+      const pending: Promise<unknown>[] = []
+      listeners.install?.({
+        request: new Request('https://nav.example.com/install'),
+        respondWith() { },
+        waitUntil(promise) {
+          pending.push(promise)
+        },
+      })
+      await Promise.all(pending)
+      for (let i = 0; i < 3; i += 1) await Promise.resolve()
+    },
+    async dispatchActivate() {
+      const pending: Promise<unknown>[] = []
+      listeners.activate?.({
+        request: new Request('https://nav.example.com/activate'),
+        respondWith() { },
+        waitUntil(promise) {
+          pending.push(promise)
+        },
+      })
+      await Promise.all(pending)
+      return deletedCaches
+    },
   }
 }
 
-function iconResponse(cacheControl: string): Response {
-  return new Response('<svg/>', {
-    status: 200,
-    headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': cacheControl },
-  })
+function iconResponse(cacheControl: string, contentLength?: string): Response {
+  const headers = new Headers({ 'Content-Type': 'image/svg+xml', 'Cache-Control': cacheControl })
+  if (contentLength != null) headers.set('Content-Length', contentLength)
+  return new Response('<svg/>', { status: 200, headers })
 }
 
 describe('service worker icon caching', () => {
-  it('caches a public category icon so repeat visits skip the network', async () => {
-    const sw = loadServiceWorker(() => iconResponse('public, max-age=604800, s-maxage=518400, immutable'))
+  it('leaves category icon proxies on the network path', async () => {
+    // 分类图标的隐私状态可在同一个 URL 下变化；SW 不能撤销旧 Cache Storage 条目。
+    // 因此 SW 不接管 `/api/category-icon/*`，由 Worker 的可见性闸门和 edge cache 处理。
+    const sw = loadServiceWorker(() => iconResponse('public, max-age=0, s-maxage=518400, must-revalidate'))
 
-    const response = await sw.dispatchFetch('https://nav.example.com/api/category-icon/1?v=abc')
-
-    expect(response?.status).toBe(200)
-    expect(sw.puts).toHaveLength(1)
-    expect(sw.puts[0].url).toContain('/api/category-icon/1')
-  })
-
-  it('never writes a no-store category icon to Cache Storage', async () => {
-    // 私密对象的图标只在带签名授权时返回真实内容，服务端标记 `private, no-store`。
-    // Cache Storage 不会自己遵守 Cache-Control：写进去就会被后续访客态 cache-first 命中。
-    const sw = loadServiceWorker(() => iconResponse('private, no-store'))
-
-    const response = await sw.dispatchFetch('https://nav.example.com/api/category-icon/2?key=1799999999999.sig')
-
-    expect(response?.status).toBe(200)
+    expect(await sw.dispatchFetch('https://nav.example.com/api/category-icon/1?v=abc')).toBeNull()
+    expect(await sw.dispatchFetch('https://nav.example.com/api/category-icon/2?v=abc&key=grant')).toBeNull()
     expect(sw.puts).toHaveLength(0)
   })
 
   it('leaves bookmark icon and iconify proxies to HTTP caching', async () => {
-    // 性能契约：/api/icon/* 与 /api/iconify/* 不进 Cache Storage
-    const sw = loadServiceWorker(() => iconResponse('public, max-age=604800'))
+    // 性能契约：/api/icon/* 与 /api/iconify/* 不进 Cache Storage。
+    const sw = loadServiceWorker(() => iconResponse('public, max-age=0, s-maxage=518400, must-revalidate'))
 
     expect(await sw.dispatchFetch('https://nav.example.com/api/icon/1')).toBeNull()
     expect(await sw.dispatchFetch('https://nav.example.com/api/iconify/mdi/home.svg')).toBeNull()
     expect(sw.puts).toHaveLength(0)
+  })
+
+  it('caches a non-opaque cross-origin Iconify response under the size limit', async () => {
+    const sw = loadServiceWorker(() => iconResponse('public, max-age=0, s-maxage=518400', '20'))
+
+    const response = await sw.dispatchFetch('https://api.iconify.design/mdi/home.svg')
+
+    expect(response?.status).toBe(200)
+    expect(sw.puts).toHaveLength(1)
+  })
+
+  it('rejects a cross-origin Iconify response without a reliable content length', async () => {
+    const sw = loadServiceWorker(() => iconResponse('public, max-age=0, s-maxage=518400'))
+
+    const response = await sw.dispatchFetch('https://api.iconify.design/mdi/home.svg')
+
+    expect(response?.status).toBe(200)
+    expect(sw.puts).toHaveLength(0)
+  })
+
+  it('rejects negative, fractional, and oversized Iconify content lengths', async () => {
+    for (const length of ['-1', '1.5', String(512 * 1024 + 1)]) {
+      const sw = loadServiceWorker(() => iconResponse('public, max-age=0, s-maxage=518400', length))
+      const response = await sw.dispatchFetch('https://api.iconify.design/mdi/home.svg')
+
+      expect(response?.status).toBe(200)
+      expect(sw.puts).toHaveLength(0)
+    }
+  })
+  it('rejects non-decimal Iconify content lengths', async () => {
+    for (const length of ['1e2', '+1', '0x10']) {
+      const sw = loadServiceWorker(() => iconResponse('public, max-age=0, s-maxage=518400', length))
+      const response = await sw.dispatchFetch('https://api.iconify.design/mdi/home.svg')
+
+      expect(response?.status).toBe(200)
+      expect(sw.puts, `length=${length}`).toHaveLength(0)
+    }
+  })
+
+  it('runs install and removes the previous runtime cache on activation', async () => {
+    const sw = loadServiceWorker(() => iconResponse('public, max-age=0, s-maxage=518400, must-revalidate'))
+
+    await sw.dispatchInstall()
+    await sw.dispatchActivate()
+
+    expect(sw.installedShells).toEqual(['/index.html', '/manifest.webmanifest', '/icon.ico', '/icon.png'])
+    expect(sw.deletedCaches).toContain('cf-navs-v16')
+    expect(sw.deletedCaches).not.toContain('cf-navs-v17')
+    expect(sw.deletedCaches).not.toContain('unrelated-cache')
   })
 })

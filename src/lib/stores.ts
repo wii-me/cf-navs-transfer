@@ -70,11 +70,15 @@ function createConfigStore() {
 
 function createPublicStore() {
   const { subscribe, set, update } = writable<PublicState>(createLoadableState<PublicData | null>(null))
+  let dataEpoch = 0
 
   return {
     subscribe,
-    reset: () => set(createLoadableState<PublicData | null>(null)),
-    setData: (data: PublicData | null) => set({ data, loading: false, loaded: data !== null, error: null }),
+    reset: () => { dataEpoch += 1; set(createLoadableState<PublicData | null>(null)) },
+    setData: (data: PublicData | null) => {
+      dataEpoch += 1
+      set({ data, loading: false, loaded: data !== null, error: null })
+    },
     incrementClick: (bookmarkId: number) => {
       update((state) => {
         if (!state.data) return state
@@ -88,6 +92,7 @@ function createPublicStore() {
       })
     },
     setDataProgressively: (data: PublicData) => {
+      const epoch = ++dataEpoch
       const BATCH_SIZE = 60
       const all = data.bookmarks
       if (all.length <= BATCH_SIZE) {
@@ -101,10 +106,10 @@ function createPublicStore() {
         loaded: true,
         error: null,
       })
-      // Schedule remaining batches via microtasks
+      // A reset or replacement invalidates the remaining timer batches.
       let offset = BATCH_SIZE
       const addMore = () => {
-        if (offset >= all.length) return
+        if (epoch !== dataEpoch || offset >= all.length) return
         const end = Math.min(offset + BATCH_SIZE, all.length)
         set({
           data: { ...data, bookmarks: all.slice(0, end) },

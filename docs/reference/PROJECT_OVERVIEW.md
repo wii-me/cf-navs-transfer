@@ -258,7 +258,7 @@ SESSION_TTL = "2592000"             # wrangler.toml 默认会话有效期（30�
 - CSS 压缩
 - 首页普通书签图标通过聚合数据的 `icon_cached` 轻量标志判断是否存在持久化缓存；聚合响应不携带 `icon_blob` 二进制。前端再按本地缓存、兼容代理或已保存的普通 HTTP(S) 图标 URL 取图；编辑弹窗先打开，再后台调用短超时刷新接口更新完整实体缓存，保存书签后也会显式刷新。首页图标接近视口后才设置 `src`，并继续使用原生懒加载与异步解码，降低首屏图标解码和请求压力。
 - 前台右上角主题按钮使用浏览器本地偏好快速切换亮暗模式，不触发 Worker 请求；新增/编辑书签弹窗默认收起文字图标配色和 Iconify 输入区，选中对应图标类型后才展开
-- SunPanel 导入会识别 Iconify 图标名和 icon-sets 页面链接，导入后保存为标准 Iconify URL 并标记 `icon_source: iconify`；后台预览走 `/api/iconify/*` 代理，首页展示可直连 `api.iconify.design` 并复用浏览器 HTTP 缓存，避免按书签数量增加 Worker 请求
+- SunPanel 导入会识别 Iconify 图标名和 icon-sets 页面链接，导入后保存为标准 Iconify URL 并标记 `icon_source: iconify`；当前首页、后台预览和编辑候选走同源 `/api/iconify/*` 代理，公开正文可由 Worker edge cache 复用。标准 `https://api.iconify.design/*.svg` 仍作为规范化存储值和兼容外部资源路径保留，Service Worker 对直接请求的可读跨域 Iconify 资源继续执行既有大小限制缓存。
 - 首页搜索预计算书签索引；普通浏览只挂载各一级分组的直属书签，二级内容按标签切换挂载；搜索结果分组使用 `content-visibility: auto` 降低离屏渲染成本
 - 顶部导航使用 `ResizeObserver` 合并更新溢出状态，箭头按约 70% 可视宽度滚动；左侧常显的手动收缩偏好仅保存在浏览器版本化 `localStorage` 键中
 - 登录态启动会先读取后台聚合本地快照，再用 `/api/data/version` 做远端确认；版本相同时不拉完整数据，版本变化、无快照、后台入口需要完整数据或首页管理操作需要回滚时，才使用 `/api/admin/data` 一次拉取分类、书签和完整设置，并从完整设置派生站点配置。后台直达路径恢复快照时不会提前解除启动遮罩
@@ -373,7 +373,9 @@ docs/
 
 ## 📄 License
 
-MIT License - 详见 [LICENSE](../../LICENSE) 文件
+Apache License 2.0 - 详见 [LICENSE](../../LICENSE) 和 [NOTICE](../../NOTICE) 文件。
+
+发布基于 CF-Navs 的修改版本时，请保留许可证、归属和修改说明，并在项目文档中明确注明上游来源。
 
 ## 🙏 致谢
 

@@ -31,6 +31,15 @@
     form = cloneSettingsForm(form)
   }
 
+  function handleEngineSelection(event: Event): void {
+    // 原生 select 先派发 input 再派发 change；Svelte 的 bind:value 只在 change 时提交，
+    // 而 fieldset 的 on:input 会先 cloneSettingsForm（此刻 current 仍是旧值），把用户刚
+    // 选中的选项在 change 到达前重置回旧值——表现为「选了没选中、保存按钮仍禁用」。
+    // 在 select 自身（目标阶段，早于 fieldset 冒泡）于 input 阶段立即提交选择。
+    const select = event.currentTarget as HTMLSelectElement
+    form.search_engine.current = select.value
+  }
+
   function applyFaviconImIcon(index: number): void {
     const engine = form.search_engine.engines[index]
     if (!engine) return
@@ -60,11 +69,16 @@
   <div class="settings-grid search-controls-grid">
     <label class="field field-select">
       <span>默认搜索引擎</span>
-      <select class="native-select" bind:value={form.search_engine.current} disabled={form.search_engine.engines.length === 0}>
+      <select
+        class="native-select"
+        bind:value={form.search_engine.current}
+        disabled={form.search_engine.engines.length === 0}
+        on:input={handleEngineSelection}
+      >
         {#if form.search_engine.engines.length === 0}
           <option value="">无可用引擎</option>
         {:else}
-          {#each form.search_engine.engines as engine (engine)}
+          {#each form.search_engine.engines as engine, index (index)}
             {#if engine.name.trim()}
               <option value={engine.name}>{engine.name}</option>
             {/if}

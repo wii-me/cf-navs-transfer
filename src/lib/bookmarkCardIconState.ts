@@ -1,6 +1,7 @@
 import type { PublicBookmark } from '../../shared/types'
-import { createIconVersion } from './bookmarkIconDisplay'
+import { ICON_CACHE_URL_VERSION, createIconVersion } from './bookmarkIconDisplay'
 import { iconifyProxyIcon, isIconifyIconUrl, logoSurfIcon } from './icons'
+import { withIconAccessKey } from './iconAccessKey'
 import { createBookmarkIconCacheKey } from './localBookmarkIconCache'
 
 export type BookmarkCardIconStateInput = {
@@ -12,12 +13,16 @@ export type BookmarkCardIconStateInput = {
   localCachedIconUrl?: string
   localCachePending?: boolean
   shouldWaitForLocalIconCache?: boolean
+  /** 私密对象的短期授权 key；公开对象必须留空，否则会丢掉共享缓存语义。 */
+  iconAccessKey?: string
 }
 
 export type BookmarkCardIconBaseInput = {
   bookmark: PublicBookmark
   iconInView: boolean
   shouldWaitForLocalIconCache?: boolean
+  /** 私密对象非空：key 必须同时作用于代理 URL 与本地预取 URL。 */
+  iconAccessKey?: string
 }
 
 export type BookmarkCardIconBaseState = {
@@ -55,21 +60,27 @@ export type BookmarkCardIconUrlState = {
 
 export type BookmarkCardIconState = BookmarkCardIconBaseState & BookmarkCardIconUrlState
 
-export function createBookmarkCardIconStateKey(bookmark: PublicBookmark, iconInView: boolean): string {
-  return `${bookmark.id}:${bookmark.icon_source ?? ''}:${bookmark.icon ?? ''}:${bookmark.icon_blob ?? ''}:${bookmark.title}:${bookmark.url}:${iconInView}`
+export function createBookmarkCardIconStateKey(
+  bookmark: PublicBookmark,
+  iconInView: boolean,
+  iconAccessKey = '',
+): string {
+  // key 参与状态键：续签、过期或清除时必须重置 cachedIconFailed/fallbackFailed 并重新加载，
+  // 否则第一次匿名失败态会一直挡住带 key 的真实图标。
+  return `${bookmark.id}:${bookmark.icon_source ?? ''}:${bookmark.icon ?? ''}:${bookmark.icon_blob ?? ''}:${Boolean(bookmark.icon_cached)}:${bookmark.title}:${bookmark.url}:${iconInView}:${iconAccessKey}`
 }
 
 export function deriveBookmarkCardIconBase(input: BookmarkCardIconBaseInput): BookmarkCardIconBaseState {
-  const { bookmark, iconInView, shouldWaitForLocalIconCache = false } = input
+  const { bookmark, iconInView, shouldWaitForLocalIconCache = false, iconAccessKey = '' } = input
   const rawIcon = bookmark.icon?.trim() ?? ''
   const cachedIcon = bookmark.icon_blob?.trim() ?? ''
   const customTextIcon =
     rawIcon &&
-    bookmark.icon_source !== 'logo_surf' &&
-    bookmark.icon_source !== 'iconify' &&
-    !isIconifyIconUrl(rawIcon) &&
-    !/^data:image\//i.test(rawIcon) &&
-    !/^https?:\/\//i.test(rawIcon)
+      bookmark.icon_source !== 'logo_surf' &&
+      bookmark.icon_source !== 'iconify' &&
+      !isIconifyIconUrl(rawIcon) &&
+      !/^data:image\//i.test(rawIcon) &&
+      !/^https?:\/\//i.test(rawIcon)
       ? rawIcon
       : ''
   const iconText = customTextIcon || bookmark.title.trim().slice(0, 1) || '书'
@@ -95,8 +106,17 @@ export function deriveBookmarkCardIconBase(input: BookmarkCardIconBaseInput): Bo
     !hasEmbeddedIcon &&
     !customTextIcon
   const shouldUseIconProxy = hasCachedRemoteIcon
-  const proxiedHttpIconUrl = shouldUseIconProxy
-    ? `/api/icon/${encodeURIComponent(String(bookmark.id))}?v=${createIconVersion(`${bookmark.id}:${rawIcon}:${bookmark.title}:${bookmark.url}`)}`
+  // 私密对象的代理响应是 `private, no-store`，必须带 key 才能拿到真实图标；
+  // 公开对象 iconAccessKey 为空，URL 保持匿名以便命中 Worker edge cache，Service Worker 不接管对象代理。
+  // Keep the successful uncached path as a direct <img> (no extra request and no
+  // CORS dependency). On a direct-image failure the existing bounded recovery can
+  // fetch through the object proxy, even before D1 has an icon_blob.
+  const canRecoverHttpIcon = canUseRawHttpIconFallback && Number.isInteger(bookmark.id) && bookmark.id > 0
+  const proxiedHttpIconUrl = shouldUseIconProxy || canRecoverHttpIcon
+    ? withIconAccessKey(
+      `/api/icon/${encodeURIComponent(String(bookmark.id))}?v=${createIconVersion(`${bookmark.id}:${rawIcon}:${bookmark.title}:${bookmark.url}`)}&cv=${ICON_CACHE_URL_VERSION}`,
+      iconAccessKey,
+    )
     : ''
 
   return {
@@ -114,7 +134,7 @@ export function deriveBookmarkCardIconBase(input: BookmarkCardIconBaseInput): Bo
     shouldUseIconProxy,
     shouldWaitForLocalIconCache,
     proxiedHttpIconUrl,
-    nextIconStateKey: createBookmarkCardIconStateKey(bookmark, iconInView),
+    nextIconStateKey: createBookmarkCardIconStateKey(bookmark, iconInView, iconAccessKey),
   }
 }
 
@@ -171,6 +191,7 @@ export function deriveBookmarkCardIconState(input: BookmarkCardIconStateInput): 
     bookmark: input.bookmark,
     iconInView: input.iconInView,
     shouldWaitForLocalIconCache: input.shouldWaitForLocalIconCache,
+    iconAccessKey: input.iconAccessKey,
   })
   const urlState = deriveBookmarkCardIconUrl({
     bookmark: input.bookmark,

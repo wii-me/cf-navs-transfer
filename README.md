@@ -8,7 +8,6 @@
     <strong>新增了跨设备、跨平台的传输助手（支持便笺记事与 50MB 大文件极速传输）</strong>，让个人导航页无缝升级为多端协同的数字中枢。
   </p>
 
-  <p>
     <a href="https://github.com/lbjxr/CF-Navs"><img src="https://img.shields.io/badge/Based%20On-CF--Navs-0052CC?logo=bookmark&logoColor=white" alt="Based on CF-Navs"></a>
     <a href="https://workers.cloudflare.com/"><img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare Workers"></a>
     <a href="https://developers.cloudflare.com/d1/"><img src="https://img.shields.io/badge/Cloudflare-D1-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare D1"></a>
@@ -16,7 +15,7 @@
     <a href="https://developers.cloudflare.com/r2/"><img src="https://img.shields.io/badge/Cloudflare-R2-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare R2"></a>
     <a href="https://svelte.dev/"><img src="https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte&logoColor=white" alt="Svelte 5"></a>
     <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" alt="TypeScript 5"></a>
-    <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-2563EB" alt="MIT License"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0-2563EB" alt="Apache License 2.0"></a>
   </p>
 
   <p>
@@ -450,6 +449,83 @@ cf-navs-transfer/
 - 🌟 **核心致谢**：本项目基于 **[CF-Navs](https://github.com/lbjxr/CF-Navs)**（原作者：[@lbjxr](https://github.com/lbjxr)）进行二次开发与功能增强。衷心感谢原作者的优秀构想与杰出贡献！
 - 项目同时参考了 [Sun-Panel](https://github.com/hslr-s/sun-panel) 的设计理念，部分图标获取逻辑受到 [iori-nav](https://github.com/jy02739244/iori-nav) 的启发。
 - 本项目采用 [MIT License](LICENSE) 开源协议，保持自由与开放。
+
+<div align="center">
+  <details>
+    <summary><b>☕️ 喜欢 CF-Navs Transfer？请原作者与维护者喝杯咖啡 / Sponsor</b></summary>
+    <br>
+    <p>如果这个项目对你的日常工作有所帮助，欢迎赞助支持原作者团队！❤️</p>
+    <a href="https://afdian.com/a/benjian" target="_blank">
+      <img src="https://img.shields.io/badge/爱发电-前往赞助-946CE6?style=for-the-badge&logo=afdian&logoColor=white" alt="爱发电赞助">
+    </a>
+  </details>
+</div>
+
+---
+
+## 环境配置
+
+| 名称 | 类型 | 必需 | 说明 |
+|---|---|---|---|
+| `DB` | D1 binding | 是 | 数据库绑定 |
+| `SESSION` | KV binding | 是 | 登录/点击限流和会话撤销名单存储 |
+| `STORAGE` | R2 binding | 否 (增强) | 传输助手文件与图片存储桶绑定（未配置时传输助手仅支持文本便笺） |
+| `SETUP_TOKEN` | Secret | 首次安装 | 授权 `/install`，安装成功后建议删除或轮换 |
+| `SESSION_TTL` | Variable | 否 | 会话有效期，`wrangler.toml` 默认 `2592000` 秒（30 天）；未设置时 Worker 回退为 7 天 |
+| `INIT_ADMIN_USER` | Variable | 否 | 仅用于旧数据库升级或凭据恢复 |
+| `INIT_ADMIN_PASSWORD` | Secret | 否 | 仅用于旧数据库升级或凭据恢复 |
+| `RESET_ADMIN_CREDENTIALS` | Variable | 否 | 旧数据库强制重置凭据时使用的一次性标记 |
+
+不要把真实资源 ID、密码、Token 或其他 Secret 写入仓库。
+
+## 数据导入
+
+已有收藏不用重新录入，后台支持以下数据格式：
+
+- **CF-Navs JSON 备份**：支持全量或按分类导出，保留两层分类关系，并可选择是否携带站点设置；导入时支持按完整路径追加合并或覆盖恢复。
+- **Sun-Panel 数据**：分类按一级导入，并转换书签与兼容图标字段，迁移现有导航不必从零开始。
+- **浏览器书签 HTML**：导入浏览器导出的标准文件，有效文件夹映射为两层分类，更深路径压平到二级标题。
+
+**只搬需要的那一部分**：可以导出某个主分类及其子分类，也可以只选二级分类，系统会补齐必需的父分类记录，不夹带未选分类的书签。适合把一组工作资源迁到另一套 CF-Navs，或为重点分类单独留一份备份。
+
+导入前请先备份现有数据：**追加模式保留重复链接，覆盖模式会替换全部分类与书签**。部分导出是备份与迁移能力，不是自动去重或双向同步；备份可能包含私密链接和站点设置，请妥善保管。
+
+参阅 [Sun-Panel 数据导入](docs/guides/SUNPANEL_IMPORT.md) 和 [浏览器书签导入](docs/guides/BROWSER_BOOKMARK_IMPORT.md)。
+
+## 贡献
+
+欢迎通过 Issue 反馈使用体验、通过 Pull Request 贡献改进。开始前请阅读 [参与开发](CONTRIBUTING.md)，按改动范围完成验证；安全问题请使用 [私密报告渠道](SECURITY.md)，不要在公开 Issue 中粘贴凭据或私密书签。
+
+## 致谢
+
+项目参考了 [Sun-Panel](https://github.com/hslr-s/sun-panel) 的设计思路，部分图标获取逻辑受 [iori-nav](https://github.com/jy02739244/iori-nav) 启发。
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=lbjxr%2FCF-Navs&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=lbjxr/CF-Navs&type=date&theme=dark&legend=top-left&sealed_token=7kyATdN3x5tJ6WJAhA5MwxWL93j-C9ZnSxJli_vTqztkkZF54Sp95nJzSMW-Xggc19KoraDrqDNjCWN6VuQrSEmOX8CAbyYqMi0I_6K3DS2GEr0x1rgf8VDa2kBJIgOP74JqDldlCFRRbGGNjvrDVJ12e4SIShmH78leu6Vxg6WQzidKg4PULPCzlwi-" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=lbjxr/CF-Navs&type=date&legend=top-left&sealed_token=7kyATdN3x5tJ6WJAhA5MwxWL93j-C9ZnSxJli_vTqztkkZF54Sp95nJzSMW-Xggc19KoraDrqDNjCWN6VuQrSEmOX8CAbyYqMi0I_6K3DS2GEr0x1rgf8VDa2kBJIgOP74JqDldlCFRRbGGNjvrDVJ12e4SIShmH78leu6Vxg6WQzidKg4PULPCzlwi-" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=lbjxr/CF-Navs&type=date&legend=top-left&sealed_token=7kyATdN3x5tJ6WJAhA5MwxWL93j-C9ZnSxJli_vTqztkkZF54Sp95nJzSMW-Xggc19KoraDrqDNjCWN6VuQrSEmOX8CAbyYqMi0I_6K3DS2GEr0x1rgf8VDa2kBJIgOP74JqDldlCFRRbGGNjvrDVJ12e4SIShmH78leu6Vxg6WQzidKg4PULPCzlwi-" />
+ </picture>
+</a>
+
+## 许可证
+
+本项目采用 [Apache License 2.0](LICENSE)，项目归属信息见 [`NOTICE`](NOTICE)。
+
+### Fork 与归属说明
+
+如果你 Fork、重新分发或发布基于 CF-Navs 的修改版本，请：
+
+- 保留 `LICENSE`、`NOTICE` 以及源文件中已有的版权、许可和归属声明。
+- 按 Apache License 2.0 的要求，在修改过的文件中保留清晰的修改说明。
+- 在 README 或产品文档中明确说明项目基于 CF-Navs，并链接上游仓库；不要暗示修改版本由原项目作者官方发布或认可。
+
+以上说明用于帮助用户识别衍生版本；具体许可权利和义务以 [LICENSE](LICENSE) 为准。
+
+<!-- 爱发电赞助区 (折叠卡片) -->
+<hr>
 
 <div align="center">
   <details>

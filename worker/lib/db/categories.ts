@@ -22,6 +22,38 @@ export async function getCategory(db: D1Database, id: number): Promise<Category 
     .first<Category>()
 }
 
+/**
+ * 分类图标匿名可见性闸门。只沿目标分类的祖先链查询，循环、缺失分类和私密祖先
+ * 一律不可见；该结果必须在 shared edge cache 命中前得到。
+ */
+export async function isCategoryIconAnonymouslyVisible(db: D1Database, id: number): Promise<boolean> {
+  await ensureSchema(db)
+  const row = await db
+    .prepare(
+      `
+        WITH RECURSIVE category_chain(id, parent_id, is_private, path, cycle) AS (
+          SELECT id, parent_id, is_private, '/' || id || '/', 0
+          FROM categories
+          WHERE id = ?
+          UNION ALL
+          SELECT parent.id, parent.parent_id, parent.is_private,
+                 chain.path || parent.id || '/',
+                 CASE WHEN instr(chain.path, '/' || parent.id || '/') > 0 THEN 1 ELSE 0 END
+          FROM categories parent
+          JOIN category_chain chain ON parent.id = chain.parent_id
+          WHERE chain.cycle = 0
+        )
+        SELECT CASE WHEN EXISTS (SELECT 1 FROM category_chain)
+          AND EXISTS (SELECT 1 FROM category_chain WHERE parent_id IS NULL)
+          AND NOT EXISTS (SELECT 1 FROM category_chain WHERE is_private = 1 OR cycle = 1)
+          THEN 1 ELSE 0 END AS visible
+      `
+    )
+    .bind(id)
+    .first<{ visible: number }>()
+  return row?.visible === 1
+}
+
 async function validateCategoryParent(
   db: D1Database,
   parentId: number | null,

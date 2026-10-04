@@ -8,6 +8,7 @@ export { ensureSchema } from './db/schema'
 export {
   listCategories,
   getCategory,
+  isCategoryIconAnonymouslyVisible,
   createCategory,
   updateCategory,
   deleteCategory,
@@ -20,6 +21,7 @@ export {
 export {
   listBookmarks,
   getBookmarkIconData,
+  isBookmarkIconAnonymouslyVisibleById,
   createBookmark,
   updateBookmark,
   deleteBookmark,

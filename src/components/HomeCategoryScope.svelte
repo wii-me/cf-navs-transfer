@@ -26,6 +26,9 @@
   export let onAddBookmark: (() => AsyncVoid) | undefined = undefined
   export let onRequestSort: (() => AsyncVoid) | undefined = undefined
   export let highlightedId: number | null = null
+  /** 对匿名访客可见的分类 id 集合；不在其中的分类图标才需要授权 key。 */
+  export let publicCategoryIds: Set<number> = new Set()
+  export let iconAccessKey = ''
 
   let tabList: HTMLElement | null = null
 
@@ -152,7 +155,7 @@
 <svelte:window on:pointerdown={handleWindowPointerDown} on:keydown={handleWindowKeyDown} on:resize={handleWindowResize} />
 <section class="category-scope" class:has-children={children.length > 0} class:has-actions={reserveActions} class:selected={rootActive} class:highlighted={highlightedId === rootId} data-home-category-scope={rootId} aria-labelledby={`home-category-heading-${rootId}`}>
   <div class="scope-heading">
-    <CategoryIcon category={{ id: rootId, title, icon }} size="var(--category-root-icon-size, 40px)" className="scope-icon" />
+    <CategoryIcon category={{ id: rootId, title, icon }} size="var(--category-root-icon-size, 40px)" className="scope-icon" iconAccessKey={publicCategoryIds.has(Number(rootId)) ? '' : iconAccessKey} />
     <div class="scope-accent" aria-hidden="true"></div>
     <div class="scope-copy">
       <div class="scope-title-row">
@@ -238,7 +241,7 @@
                 on:click={() => select(child.id)}
               >
                 {#if child.icon}
-                  <CategoryIcon category={{ id: child.id, title: child.title, icon: child.icon }} size="var(--category-child-icon-size, 22px)" className="scope-tab-icon" />
+                  <CategoryIcon category={{ id: child.id, title: child.title, icon: child.icon }} size="var(--category-child-icon-size, 22px)" className="scope-tab-icon" iconAccessKey={publicCategoryIds.has(Number(child.id)) ? '' : iconAccessKey} />
                 {/if}
                 <span>{child.title}</span>
                 <small>{child.count}</small>

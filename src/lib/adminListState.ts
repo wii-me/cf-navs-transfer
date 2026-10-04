@@ -117,35 +117,71 @@ export function flattenAdminCategoryGroups(groups: AdminCategoryGroup[]): AdminC
   return groups.flatMap((group) => [group.root, ...group.children])
 }
 
+/** 判定所需的最小形状：后台面板传 `AdminCategorySummary`，首页/Spotlight 传 `PublicCategory`。 */
+type CategoryPrivacyLike = {
+  id: string | number
+  parent_id: string | number | null
+  is_private?: boolean | number
+}
+
 /**
- * 私密分类本身、以及任何私密分类的后代，都不会出现在匿名首页。
- * 该规则与服务端 `worker/lib/db/aggregates.ts` 的 `getPublicCategoryIds` 必须保持一致，
- * 由 `tests/unit/adminListState.test.ts` 的交叉断言防止两侧漂移。
+ * 分类对匿名访客的可见性，与服务端 worker/lib/db/aggregates.ts 的 getPublicCategoryIds 口径一致。
+ * 私密分类本身、任何私密分类的后代、缺失父级或循环分类都不可见。
  */
-export function getHiddenCategoryIds(categories: AdminCategorySummary[]): Set<number> {
+function collectCategoryVisibility(categories: CategoryPrivacyLike[]): { visible: Set<number>; hidden: Set<number> } {
   const byId = new Map(categories.map((category) => [Number(category.id), category]))
+  const visible = new Set<number>()
   const hidden = new Set<number>()
 
   for (const category of categories) {
     const visited = new Set<number>()
-    let current: AdminCategorySummary | undefined = category
+    let current: CategoryPrivacyLike | undefined = category
+    let isHidden = false
+    let reachedRoot = false
 
     while (current) {
       const currentId = Number(current.id)
       if (visited.has(currentId)) {
-        hidden.add(Number(category.id))
+        isHidden = true
         break
       }
       visited.add(currentId)
-      if (current.is_private === true) {
-        hidden.add(Number(category.id))
+      if (current.is_private === true || current.is_private === 1) {
+        isHidden = true
         break
       }
-      current = current.parent_id == null ? undefined : byId.get(Number(current.parent_id))
+      if (current.parent_id == null) {
+        reachedRoot = true
+        break
+      }
+      current = byId.get(Number(current.parent_id))
     }
+
+    if (!reachedRoot) isHidden = true
+    if (isHidden) hidden.add(Number(category.id))
+    else visible.add(Number(category.id))
   }
 
-  return hidden
+  return { visible, hidden }
+}
+
+/** 后台列表用：对匿名访客隐藏的分类 id。 */
+export function getHiddenCategoryIds(categories: CategoryPrivacyLike[]): Set<number> {
+  return collectCategoryVisibility(categories).hidden
+}
+
+/** 首页/Spotlight 用：对匿名访客可见的分类 id。 */
+export function getPublicCategoryIds(categories: CategoryPrivacyLike[]): Set<number> {
+  return collectCategoryVisibility(categories).visible
+}
+
+/** 书签自身私密，或所属分类对匿名访客不可见时，图标必须使用授权 key。 */
+export function isBookmarkIconAccessRequired(
+  bookmark: { is_private?: boolean | number },
+  categoryVisibleToAnonymous: boolean,
+): boolean {
+  if (bookmark.is_private === true || bookmark.is_private === 1) return true
+  return !categoryVisibleToAnonymous
 }
 
 /**

@@ -34,6 +34,45 @@ export async function getBookmarkIconData(db: D1Database, id: number): Promise<B
  ))
 }
 
+/**
+ * 匿名图标的权威可见性闸门。必须在 shared edge cache 命中之前执行：
+ * 书签改私密或移入私密祖先后，旧公开图标不能继续被匿名请求命中。
+ *
+ * 用递归 CTE 只读目标书签所属的分类祖先链，不为每个 cache hit 拉取全量分类；
+ * path/cycle 让坏数据中的循环也按不可见处理，与 worker 的公开数据口径一致。
+ */
+export async function isBookmarkIconAnonymouslyVisibleById(db: D1Database, id: number): Promise<boolean> {
+ return await withSchemaRetry(db, async () => {
+  const row = await db
+   .prepare(`
+    WITH RECURSIVE category_chain(id, parent_id, is_private, path, cycle) AS (
+      SELECT c.id, c.parent_id, c.is_private, '/' || c.id || '/', 0
+      FROM categories c
+      JOIN bookmarks b ON b.category_id = c.id
+      WHERE b.id = ?
+      UNION ALL
+      SELECT parent.id, parent.parent_id, parent.is_private,
+             chain.path || parent.id || '/',
+             CASE WHEN instr(chain.path, '/' || parent.id || '/') > 0 THEN 1 ELSE 0 END
+      FROM categories parent
+      JOIN category_chain chain ON parent.id = chain.parent_id
+      WHERE chain.cycle = 0
+    )
+    SELECT CASE WHEN b.id IS NOT NULL
+      AND COALESCE(b.is_private, 0) = 0
+      AND EXISTS (SELECT 1 FROM category_chain)
+      AND EXISTS (SELECT 1 FROM category_chain WHERE parent_id IS NULL)
+      AND NOT EXISTS (SELECT 1 FROM category_chain WHERE is_private = 1 OR cycle = 1)
+      THEN 1 ELSE 0 END AS visible
+    FROM bookmarks b
+    WHERE b.id = ?
+   `)
+   .bind(id, id)
+   .first<{ visible: number }>()
+  return row?.visible === 1
+ })
+}
+
 export async function createBookmark(db: D1Database, req: BookmarkUpsertReq): Promise<Bookmark | null> {
  const now = Date.now()
  const open_method: 1 | 2 | 3 = req.open_method === 2 ? 2 : req.open_method === 3 ? 3 : 1

@@ -60,6 +60,34 @@ export function configureDataService(next: DataServiceHooks): void {
 // 当前已知的后端数据版本；由聚合获取与版本确认路径维护，仅本模块内部读写。
 let currentDataVersion: string | null = null
 
+// authStore owns identity; this module owns all visible-data refreshes. A session change
+// invalidates pending work synchronously, including anonymous -> login -> logout (ABA).
+let activeSession = get(authStore).session
+let sessionEpoch = 0
+let refreshEpoch = 0
+authStore.subscribe(({ session }) => {
+  if (session === activeSession) return
+  activeSession = session
+  sessionEpoch += 1
+  refreshEpoch += 1
+  currentDataVersion = null
+  adminStore.reset()
+  publicStore.reset()
+})
+
+type IsCurrent = () => boolean
+
+function captureSession(): IsCurrent {
+  const epoch = sessionEpoch
+  return () => epoch === sessionEpoch
+}
+
+function beginRefresh(): IsCurrent {
+  const sessionIsCurrent = captureSession()
+  const epoch = ++refreshEpoch
+  return () => sessionIsCurrent() && epoch === refreshEpoch
+}
+
 export function getCurrentDataVersion(): string | null {
   return currentDataVersion
 }
@@ -100,7 +128,11 @@ export function applyPublicData(data: PublicData, version = getDataVersion(data)
   return merged
 }
 
-export async function refreshPublicData(progressive = false): Promise<PublicData | null> {
+export function refreshPublicData(progressive = false): Promise<PublicData | null> {
+  return loadPublicData(progressive, beginRefresh())
+}
+
+async function loadPublicData(progressive: boolean, isCurrent: IsCurrent): Promise<PublicData | null> {
   const config = get(configStore).data
   if (config?.public_mode === false && !isLoggedIn()) {
     publicStore.reset()
@@ -108,6 +140,7 @@ export async function refreshPublicData(progressive = false): Promise<PublicData
   }
 
   const cached = !isLoggedIn() ? await readCachedPublicDataEntry() : null
+  if (!isCurrent()) return null
   if (cached?.data) {
     applyPublicData(cached.data, cached.version)
     hooks.onLocalSnapshotRestored()
@@ -116,6 +149,7 @@ export async function refreshPublicData(progressive = false): Promise<PublicData
   try {
     if (cached?.version) {
       const remoteVersion = await api.data.version(false)
+      if (!isCurrent()) return null
       configStore.setData({
         site_title: remoteVersion.site_title,
         public_mode: remoteVersion.public_mode,
@@ -127,12 +161,15 @@ export async function refreshPublicData(progressive = false): Promise<PublicData
       }
     }
 
-    const data = applyPublicData(await api.public.getData(false), undefined, progressive)
+    const response = await api.public.getData(false)
+    if (!isCurrent()) return null
+    const data = applyPublicData(response, undefined, progressive)
     if (!isLoggedIn()) {
       await writeCachedPublicData(data, currentDataVersion)
     }
     return data
   } catch (error) {
+    if (!isCurrent()) return null
     if (isPublicModeForbidden(error)) {
       const forbiddenConfig = siteConfigFromForbiddenError(error) ?? {
         site_title: config?.site_title ?? 'CF-Navs',
@@ -141,19 +178,20 @@ export async function refreshPublicData(progressive = false): Promise<PublicData
 
       if (isLoggedIn()) {
         try {
-          const data = applyPublicData(await api.public.getData(true), undefined, progressive)
+          const response = await api.public.getData(true)
+          if (!isCurrent()) return null
+          const data = applyPublicData(response, undefined, progressive)
           configStore.setData({
             site_title: data.settings.site_title || forbiddenConfig.site_title,
             public_mode: false,
           })
           return data
         } catch (authError) {
+          if (!isCurrent()) return null
           if (isUnauthorizedError(authError)) {
             authStore.setSession(null)
-            adminStore.reset()
-            await clearCachedAdminData()
-            publicStore.reset()
             configStore.setData(forbiddenConfig)
+            await clearCachedAdminData()
             return null
           }
 
@@ -165,6 +203,7 @@ export async function refreshPublicData(progressive = false): Promise<PublicData
       }
 
       await clearCachedPublicData()
+      if (!isCurrent()) return null
       publicStore.reset()
       configStore.setData(forbiddenConfig)
       return null
@@ -177,6 +216,29 @@ export async function refreshPublicData(progressive = false): Promise<PublicData
 
     hooks.onRootError(getErrorMessage(error), error)
     return null
+  }
+}
+
+// Focus refresh shares the same ownership guard with its loader and error fallback.
+export async function refreshVisibleData(): Promise<void> {
+  const isCurrent = beginRefresh()
+  if (!isLoggedIn()) {
+    await loadPublicData(false, isCurrent)
+    return
+  }
+
+  try {
+    await loadLoggedInData(false, isCurrent)
+  } catch (error) {
+    if (!isCurrent()) return
+    if (isUnauthorizedError(error)) {
+      authStore.setSession(null)
+      const fallbackIsCurrent = beginRefresh()
+      await clearCachedAdminData()
+      if (fallbackIsCurrent()) await loadPublicData(false, fallbackIsCurrent)
+      return
+    }
+    hooks.onRootError(getErrorMessage(error), error)
   }
 }
 
@@ -370,17 +432,23 @@ export function applyLoggedInData(data: AdminData, version = getDataVersion(data
   applyPublicData(adminDataToPublicData(mergedAdminData, settings), version)
 }
 
-export async function persistCurrentAdminData(): Promise<void> {
+export async function persistCurrentAdminData(isCurrent: IsCurrent = captureSession()): Promise<void> {
   const data = get(adminStore).data
-  if (isLoggedIn() && data.settings) {
-    await writeCachedAdminData(data, currentDataVersion)
+  if (isCurrent() && isLoggedIn() && data.settings) {
+    await writeCachedAdminData(data, currentDataVersion, isCurrent)
   }
 }
 
-export async function refreshLoggedInData(forceRemote = false): Promise<void> {
+export function refreshLoggedInData(forceRemote = false): Promise<void> {
+  return loadLoggedInData(forceRemote, beginRefresh())
+}
+
+async function loadLoggedInData(forceRemote: boolean, isCurrent: IsCurrent): Promise<void> {
+  if (!isCurrent() || !isLoggedIn()) return
   // 后台预览私密对象图标需要短期授权 key。失败只降级成兜底图标，不影响数据刷新。
   void ensureIconAccessKey(() => api.auth.iconAccess())
-  const cached = !forceRemote ? await readCachedAdminDataEntry() : null
+  const cached = !forceRemote ? await readCachedAdminDataEntry(isCurrent) : null
+  if (!isCurrent()) return
 
   if (cached?.data.settings) {
     applyLoggedInData(cached.data, cached.version)
@@ -390,15 +458,20 @@ export async function refreshLoggedInData(forceRemote = false): Promise<void> {
   try {
     if (cached?.version) {
       const remoteVersion = await api.data.version(true)
+      if (!isCurrent()) return
       currentDataVersion = remoteVersion.version
       if (remoteVersion.version === cached.version) {
         return
       }
     }
 
-    applyLoggedInData(await api.admin.getData())
-    await persistCurrentAdminData()
+    // This layer checks refresh ownership before acting on a 401.
+    const data = await api.admin.getData({ keepSessionOnUnauthorized: true })
+    if (!isCurrent()) return
+    applyLoggedInData(data)
+    await persistCurrentAdminData(isCurrent)
   } catch (error) {
+    if (!isCurrent()) return
     if (cached?.data.settings && !isUnauthorizedError(error)) {
       hooks.onNetworkFallback('网络连接不稳定，当前显示的是本地缓存内容。你可以稍后刷新页面或检查网络连接。')
       return

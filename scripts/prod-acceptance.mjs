@@ -271,6 +271,15 @@ function pageProbeRevoked(origin, token) {
 function pageModalMetrics() {
   return (async () => {
     const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+    const waitFor = async (read) => {
+      const deadline = Date.now() + 10000
+      while (Date.now() < deadline) {
+        const value = read()
+        if (value) return value
+        await wait(50)
+      }
+      return null
+    }
     const rect = (element) => {
       if (!element) return null
       const box = element.getBoundingClientRect()
@@ -289,10 +298,10 @@ function pageModalMetrics() {
     const createCategory = document.querySelector('[data-testid="home-create-root-category"]')
     if (createCategory) {
       createCategory.click()
-      await wait(320)
-      results.categoryModal = rect(document.querySelector('.modal-card'))
-      document.querySelector('.modal-backdrop button[aria-label], .modal-card button')?.click()
-      await wait(220)
+      const categoryModal = await waitFor(() => document.querySelector('[aria-labelledby="category-modal-title"]'))
+      results.categoryModal = rect(categoryModal)
+      categoryModal?.querySelector('button')?.click()
+      await waitFor(() => !document.querySelector('[aria-labelledby="category-modal-title"]'))
     }
 
     // 书签弹窗：分类区「更多操作」→「新增书签」
@@ -300,14 +309,13 @@ function pageModalMetrics() {
     const moreTrigger = scope?.querySelector('.scope-more-trigger')
     if (moreTrigger) {
       moreTrigger.click()
-      await wait(220)
-      const addBookmark = [...document.querySelectorAll('.scope-more-item')].find((node) =>
+      const addBookmark = await waitFor(() => [...document.querySelectorAll('.scope-more-item')].find((node) =>
         (node.textContent ?? '').includes('新增书签'),
-      )
+      ))
       addBookmark?.click()
-      await wait(360)
+      await waitFor(() => document.querySelector('[data-testid="bookmark-modal"]'))
     }
-    const bookmarkCard = document.querySelector('.modal-card')
+    const bookmarkCard = document.querySelector('[data-testid="bookmark-modal"]')
     results.bookmarkModal = rect(bookmarkCard)
     if (bookmarkCard) {
       const actionBar = bookmarkCard.querySelector('.modal-actions, .bookmark-modal-actions, footer')
@@ -359,6 +367,22 @@ function pageHomeSummary() {
   }
 }
 
+// Cache.put and SW prewarming are asynchronous. Wait for the observable entries,
+// but preserve the failing result if the bounded readiness window expires.
+async function waitForPrecache(session, timeoutMs = 10000) {
+  const deadline = Date.now() + timeoutMs
+  let cache
+  do {
+    cache = await session.call(pageCacheReport)
+    const ready = cache.entries.some((entry) => /^cf-navs-v[0-9a-f]+$/i.test(entry.key) &&
+      entry.urls.some((url) => /\/assets\/index-[^/]+\.js$/.test(url)) &&
+      entry.urls.some((url) => /\/assets\/index-[^/]+\.css$/.test(url)))
+    if (ready || Date.now() >= deadline) return cache
+    await sleep(100)
+  } while (Date.now() < deadline)
+  return cache
+}
+
 // ── 场景 ──────────────────────────────────────────────────────────────────────
 
 async function runFirstVisitChecks(session) {
@@ -408,7 +432,7 @@ async function runFirstVisitChecks(session) {
     `fromServiceWorker=${swServed.length}`,
   )
 
-  const cache = await session.call(pageCacheReport)
+  const cache = await waitForPrecache(session)
   const precache = cache.entries.find((entry) => /^cf-navs-v[0-9a-f]+$/i.test(entry.key))
   const hasJs = Boolean(precache?.urls.some((url) => /\/assets\/index-[^/]+\.js$/.test(url)))
   const hasCss = Boolean(precache?.urls.some((url) => /\/assets\/index-[^/]+\.css$/.test(url)))

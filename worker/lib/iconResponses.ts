@@ -1,14 +1,13 @@
 import type { IconFetchFailure } from './iconData'
 
-export const ICON_BROWSER_CACHE_SECONDS = 7 * 24 * 60 * 60
 export const ICON_EDGE_CACHE_SECONDS = 6 * 24 * 60 * 60
 
-// Keep the shared-cache TTL shorter so an edge HIT still has browser freshness
-// remaining after the response Age is applied by the client.
+// 公开对象图标在 Worker 内部保留 edge TTL；路由返回前独立改写为 no-store。
+// Iconify 代理继续直接使用此公开策略，不受对象图标的客户端策略影响。
 export const ICON_SUCCESS_CACHE =
-  `public, max-age=${ICON_BROWSER_CACHE_SECONDS}, s-maxage=${ICON_EDGE_CACHE_SECONDS}, immutable`
+  `public, max-age=0, s-maxage=${ICON_EDGE_CACHE_SECONDS}, must-revalidate`
 export const ICON_FAILURE_CACHE = 'no-store'
-export const ICON_FALLBACK_CACHE = 'public, max-age=300, s-maxage=300'
+export const ICON_FALLBACK_CACHE = 'public, max-age=0, s-maxage=300, must-revalidate'
 // 私密对象的真实图标只允许在发起者的浏览器里短暂存活：不进共享 edge cache，也不进
 // Service Worker 的 Cache Storage。`no-store` 是这两者的统一开关。
 export const ICON_PRIVATE_CACHE = 'private, no-store'
@@ -84,7 +83,7 @@ const ICON_CACHE_VERSION = /^[A-Za-z0-9_.:-]{1,64}$/
 // 图标可能已经躺在里面；而命中查询发生在可见性判定之前，只加服务端过滤不会让这些旧
 // 条目失效（`s-maxage` 是 6 天）。给缓存键加命名空间版本，旧条目立刻变成不可达，
 // 之后写入的每个条目都一定过了可见性判定。收紧判定口径时必须同时递增这个值。
-const ICON_CACHE_NAMESPACE = '2'
+const ICON_CACHE_NAMESPACE = '3'
 
 export function iconCacheKey(request: Request): Request {
   const url = new URL(request.url)

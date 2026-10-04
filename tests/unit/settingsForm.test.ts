@@ -12,7 +12,6 @@ import {
   normalizeBackgroundPresetId,
   normalizeBackgroundValueForType,
   normalizeSettingsForm,
-  shouldAutoExpandAppearanceAdvanced,
 } from '../../src/lib/settingsForm'
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -254,7 +253,6 @@ describe('settings form model', () => {
 
     expect(form.background_preset_id).toBe('custom')
     expect(getActiveGradientPresetId(form)).toBe('custom')
-    expect(shouldAutoExpandAppearanceAdvanced(form)).toBe(true)
   })
 
   it('normalizes background values when switching type', () => {
@@ -292,7 +290,7 @@ describe('settings form model', () => {
     expect(normalizeBackgroundPresetId('unknown')).toBe('custom')
   })
 
-  it('applies built-in presets and keeps their advanced panel collapsed by default', () => {
+  it('applies built-in presets', () => {
     const source = createSettingsFormState(null)
     const preset = gradientPresets[3]
     const next = applyBackgroundPreset(source, preset)
@@ -302,10 +300,9 @@ describe('settings form model', () => {
     expect(next.backgrounds.dark).toEqual(preset.dark)
     expect(next.card_background_color).toBe(preset.cardBackgroundColor)
     expect(next.card_background_opacity).toBe(preset.cardBackgroundOpacity)
-    expect(shouldAutoExpandAppearanceAdvanced(next)).toBe(false)
   })
 
-  it('marks background edits as custom and expands custom appearance settings', () => {
+  it('marks background edits as custom', () => {
     const preset = gradientPresets[0]
     const source = applyBackgroundPreset(createSettingsFormState(null), preset)
     const editedBackground = { ...source.backgrounds.light, blur: 12, mask: 0.45 }
@@ -314,7 +311,6 @@ describe('settings form model', () => {
     expect(next.background_preset_id).toBe('custom')
     expect(next.backgrounds.light).toEqual(editedBackground)
     expect(next.backgrounds.dark).toEqual(source.backgrounds.dark)
-    expect(shouldAutoExpandAppearanceAdvanced(next)).toBe(true)
     expect(getActiveGradientPresetId(next)).toBe('custom')
     expect(createSettingsFormState(next).background_preset_id).toBe('custom')
     expect(markBackgroundPresetCustom(source).background_preset_id).toBe('custom')

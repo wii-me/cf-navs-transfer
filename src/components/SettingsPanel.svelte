@@ -6,7 +6,6 @@
     createSettingsFormState,
     emptySettingsForm,
     normalizeSettingsForm,
-    shouldAutoExpandAppearanceAdvanced,
     type SettingsFormModel,
   } from '../lib/settingsForm'
   import './settings/settingsSections.css'
@@ -45,7 +44,6 @@
   let initialForm: SettingsPanelValue = cloneSettingsForm(emptySettingsForm)
   let formKey = ''
   let activeSectionId = 'basic'
-  let appearanceAdvancedOpen = false
   let previewTheme: 'light' | 'dark' = 'light'
 
   $: nextKey = JSON.stringify({ value, loading })
@@ -53,7 +51,6 @@
     formKey = nextKey
     initialForm = createSettingsFormState(value)
     form = cloneSettingsForm(initialForm)
-    appearanceAdvancedOpen = shouldAutoExpandAppearanceAdvanced(initialForm)
   }
 
   $: normalizedForm = normalizeSettingsForm(form)
@@ -97,10 +94,6 @@
     }
 
     await onSubmit?.(normalizedForm)
-  }
-
-  function handleAppearanceAdvancedChange(open: boolean): void {
-    appearanceAdvancedOpen = open
   }
 
 </script>
@@ -150,15 +143,12 @@
             <BackgroundSettingsSection
               bind:form
               {saving}
-              onAdvancedChange={handleAppearanceAdvancedChange}
             />
             <CardSettingsSection bind:form {saving} />
           {:else if activeSectionId === 'visual'}
             <AdvancedSettingsSection
               bind:form
               {saving}
-              advancedOpen={appearanceAdvancedOpen}
-              onAdvancedChange={handleAppearanceAdvancedChange}
             />
           {:else if activeSectionId === 'layout'}
             <NavigationSettingsSection bind:form {saving} />

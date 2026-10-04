@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount, tick } from 'svelte'
+  import { afterUpdate, onDestroy, onMount, tick } from 'svelte'
   import {
     findCategoryTreeOption,
     getCategoryTreeExpandedRootIds,
@@ -16,6 +16,10 @@
   export let disabled = false
   export let compact = false
   export let testId = ''
+  // In a constrained parent menu, participate in its layout instead of escaping
+  // it as an absolute overlay. Other form controls retain the default overlay.
+  export let inlineMenu = false
+  export let onLayoutChange: (() => void) | undefined = undefined
 
   let root: HTMLElement | null = null
   let open = false
@@ -168,6 +172,8 @@
     if (open && root && !root.contains(event.target as Node)) closeMenu()
   }
 
+  afterUpdate(() => { if (inlineMenu) onLayoutChange?.() })
+
   onMount(() => {
     document.addEventListener('pointerdown', handleDocumentPointerDown)
   })
@@ -177,7 +183,7 @@
   })
 </script>
 
-<div class="category-tree-select" class:compact bind:this={root}>
+<div class="category-tree-select" class:compact class:inline-menu={inlineMenu} bind:this={root}>
   <button
     type="button"
     class="category-select-trigger"
@@ -292,6 +298,24 @@
     min-width: 0;
     color: #0f172a;
     font-size: 14px;
+  }
+
+  .category-tree-select.inline-menu {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .inline-menu .category-select-trigger {
+    flex-shrink: 0;
+  }
+
+  .inline-menu .category-tree-menu {
+    position: static;
+    flex: 0 1 auto;
+    min-height: 0;
+    margin-top: 6px;
   }
 
   .category-select-trigger {

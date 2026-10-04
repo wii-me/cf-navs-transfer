@@ -76,7 +76,7 @@ export let onViewBookmark: ((bookmark: PublicBookmark) => void) | undefined = un
 - **即时过滤**：输入变化直接算结果，**不防抖**（面板 ≤50 行轻量项，开销极小；首页 120ms 防抖与此无关）。
 - **空查询（D-c）**：展示常用书签 `getMostVisitedBookmarks(bookmarks, N)`（`homeData.ts:91`，纯内存零请求）；无点击数据回退空态文案。
 - 结果上限 **50**，超出显示「还有 N 条」；空结果零请求。
-- 结果行轻量渲染（图标 `aria-hidden` + 标题 + 子行），**不渲染 `BookmarkCard`**（保护 C-5 ≤260）。
+- 结果行保持轻量渲染（不渲染 `BookmarkCard`），图标复用 `deriveBookmarkCardIconBase/deriveBookmarkCardIconUrl` + `CachedBookmarkIcon` 同源的缓存/代理/失败回退口径：真实图片优先，失败回退 `iconText`。
 
 ### 3.4 键盘与 ARIA
 - 结构：`role="dialog" aria-modal="true" aria-label="搜索书签"` → 输入 `role="combobox" aria-expanded aria-controls="spotlight-listbox" aria-activedescendant` → 结果 `role="listbox" id="spotlight-listbox"` → 行 `role="option" aria-selected`。
@@ -174,7 +174,7 @@ function handleGlobalKeyDown(event: KeyboardEvent) {
 | `aria-activedescendant` 指向已消失项 | 结果更新重置高亮到 0，仅当高亮 < 结果数时设置 id |
 | 单槽滚动锁被嵌套破坏 | D-e 模态互斥门（`anyBlockingModalOpen`）；`open_method=3` 先关 Spotlight 再开 BookmarkLinkModal，锁交接串行 |
 | Esc 多方 keydown 竞争 | App 集中 Spotlight；各层只在自身 open 响应；L2 逐层验证 |
-| 50 条图标请求顶破 C-5 ≤260 | 轻量行 + `aria-hidden`，不渲染 BookmarkCard；L3 实测 |
+| 50 条真实图标可能顶破 C-5 ≤260 | 保持结果行轻量、不渲染 `BookmarkCard`，并在 L3 真实测量图标请求与 Cache Storage；jsdom 只覆盖 URL/回退与 ARIA，不能替代部署性能门 |
 | 访问计数漏计 | §3.6 三种打开都登记；单测断言 `incrementClick`/`registerClick` 被调 |
 | Svelte 5 响应式（模块级单例） | `pageScrollLock`/`searchBoxVisibility` 按既有单例先例（`toast.ts`/`iconAccessKey.ts`）并单测 |
 
@@ -227,7 +227,7 @@ function handleGlobalKeyDown(event: KeyboardEvent) {
 
 - 提交（均在 `develop`，不合 `main`）：阶段1 `7d408a5`（抽 `pageScrollLock` + 单测）、阶段2 `79a3e1f`（离屏可见性 + 搜索按钮）、阶段3 `57a2736`（`SearchSpotlight` + App 集成 + 单测）、复核收敛 `0bafc83`（F1 竞态二次校验 / F2 CSS 令牌过渡 / F4 IME `Process`）、`826dd12`（消除隐藏态按钮组空槽回归）。
 - L0：`type-check` 311 files 0/0；`npm test` 125 files / 923 tests 全通过；`npm run build` 成功。
-- L2（隔离临时 Chrome，按精确 profile 清理）：REQ-01 场景 25/25 —— 滚动进出搜索按钮、`Ctrl/Cmd+K` 唤起、居中命令面板、结果字母头像占位（`<img>` 0 请求）、`open_method` 1/2/3、Esc/Tab/焦点还原、模态互斥（登录开时 `Ctrl+K` 被拦）、移动端窄视口无溢出；控制台错误/页面异常/一方 4xx-5xx 均 0。
-- L3：`npm run perf:audit` 全部预算通过（首页防抖 jank-immune 门禁 `immediateAfterLastKey=0`、图标请求 232 ≤ 260、Cache Storage 1.2 MiB ≤ 5 MiB、admin data 37540 ≤ 60000）+ Spotlight 50 条探针；C-9 未新增 `scroll` 监听（离屏检测走 `IntersectionObserver`）。
+| L2（历史证据） | 原实现的字母头像占位版本完成 REQ-01 场景 25/25：滚动进出搜索按钮、`Ctrl/Cmd+K` 唤起、居中命令面板、`open_method` 1/2/3、Esc/Tab/焦点还原、模态互斥、移动端窄视口无溢出；控制台错误/页面异常/一方 4xx-5xx 均 0。真实图标接入后的 L2 需重新复测。 |
+| L3（历史证据） | 原实现的字母头像占位版本 `perf:audit` 全部预算通过（图标请求 232 ≤ 260、Cache Storage 1.2 MiB ≤ 5 MiB 等）；真实图标接入后的 Spotlight 50 条图标请求与 Cache Storage 预算需重新实测。 |
 - 独立复核（`workflow-reviewer`）：第一轮 `CHANGES_REQUIRED`（F1 懒加载竞态 / F2 字面时长 / F3 私密书签口径质疑 / F4 IME）→ fix-forward `0bafc83`；第二轮 `CHANGES_REQUIRED`（F1/F4 收敛、F3 非缺陷判定成立、F2 引入隐藏态按钮组空槽回归）→ fix-forward `826dd12`。F3 经核验非缺陷：Home 与 Spotlight 共用同一 `publicData.bookmarks`，匿名端 `getPublicDataSource(includePrivate=false)` 已排除私密书签与私密分类树，展示范围与首页一致、无新增暴露面。
-- 未验证：fix-forward `0bafc83`/`826dd12` 尚未在部署环境做 L2 观感复测（CSS 过渡与空槽消除的真实浏览器确认待 `develop` 部署后补跑；L0 与既有 L2/L3 已覆盖功能与预算）。
+- 当前真实图标接入尚未在部署环境完成 L2/L3 复测；待 `develop` 部署后补跑真实图标、失败回退、控制台/网络错误与 C-5 图标请求预算。

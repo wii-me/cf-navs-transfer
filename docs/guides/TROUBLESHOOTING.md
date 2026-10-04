@@ -210,7 +210,7 @@ npm run deploy
 - 自定义图片 URL
 - 表情或短文字
 
-如果预览正常但保存后仍显示标题首字，请先强制刷新页面让新版 Service Worker 接管，再检查书签保存的 `icon` 是否仍是可访问的 HTTP(S) 图片地址。首页首次遇到 `icon_cached=true` 且本地图标缓存不存在的书签时，可能为每个图标请求一次 `/api/icon/:id` 并写入 `cf-navs-bookmark-icons-v1`；成功后刷新、滚动和重新打开浏览器都不应重复请求。若每次重开仍重新请求，先在 Application 中确认该 Cache Storage 条目是否存在，再检查当前页面是否由旧静态资源控制。
+如果预览正常但保存后仍显示标题首字，请先强制刷新页面让新版 Service Worker 接管，再检查书签保存的 `icon` 是否仍是可访问的 HTTP(S) 图片地址。首页首次遇到 `icon_cached=true` 且本地副本不存在的书签时，会请求一次 `/api/icon/:id`；该对象代理响应统一 `no-store`，只用于当前渲染，不写入浏览器 Cache Storage。公开正文的复用发生在 Worker edge cache，重新打开浏览器时可能再次看到 `/api/icon/*` 网络请求；这不是故障。若旧版 `cf-navs-bookmark-icons-v1` 仍存在，新版本地缓存初始化会清理它。
 
 ### Iconify 图标不显示
 
@@ -222,7 +222,7 @@ simple-icons:github
 https://icon-sets.iconify.design/mdi/home/
 ```
 
-新增/编辑弹窗和后台预览请求应走 `/api/iconify/*`；首页展示已保存的 Iconify 图标时可以直接请求 `api.iconify.design`，并由浏览器 HTTP 缓存复用，避免增加 Worker 请求数。Service Worker 不应把跨域 `opaque` Iconify 响应写入 Cache Storage。
+新增/编辑弹窗、后台预览和首页已保存的 Iconify 图标都应走同源 `/api/iconify/*` 代理，公开正文可由 Worker edge cache 复用。Service Worker 只缓存可读且不超过 512KB 的跨域 Iconify 资源，不持久化 `opaque` 响应。
 
 ### 部署新版后图标行为仍旧
 

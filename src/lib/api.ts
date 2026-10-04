@@ -252,6 +252,7 @@ export interface RequestOptions extends RequestInit {
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { auth = false, keepSessionOnUnauthorized = false, headers: initHeaders, ...init } = options
   const headers = createHeaders(initHeaders)
+  const sessionToken = getAuthToken()
 
   if (auth) {
     maybeAttachAuth(headers)
@@ -282,7 +283,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   const envelope = isApiResponse<T>(payload) ? payload : null
 
   if (!response.ok) {
-    if (response.status === 401 && !keepSessionOnUnauthorized) {
+    if (response.status === 401 && !keepSessionOnUnauthorized && sessionToken === getAuthToken()) {
       clearStoredAuthSession()
     }
 
@@ -302,7 +303,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
 
   if (envelope.code !== ErrCode.OK) {
-    if (auth && envelope.code === ErrCode.UNAUTHORIZED && !keepSessionOnUnauthorized) {
+    if (auth && envelope.code === ErrCode.UNAUTHORIZED && !keepSessionOnUnauthorized && sessionToken === getAuthToken()) {
       clearStoredAuthSession()
     }
 
@@ -344,20 +345,21 @@ export const installApi = {
 
 export const publicApi = {
   getData: (auth = false) =>
-    request<PublicData>('/public/data', { auth, cache: 'no-store', headers: NO_CACHE_HEADERS }),
+    request<PublicData>('/public/data', { auth, cache: 'no-store', headers: NO_CACHE_HEADERS, keepSessionOnUnauthorized: true }),
   registerClick: (id: number) =>
     request<null>(`/public/bookmarks/${id}/click`, { method: 'POST', keepalive: true }),
 }
 
 export const adminApi = {
-  getData: () => request<AdminData>('/admin/data', { auth: true, cache: 'no-store', headers: NO_CACHE_HEADERS }),
+  getData: (options: Pick<RequestOptions, 'keepSessionOnUnauthorized'> = {}) =>
+    request<AdminData>('/admin/data', { auth: true, cache: 'no-store', headers: NO_CACHE_HEADERS, ...options }),
 }
 
 export const authApi = {
   login: (payload: LoginReq) => jsonRequest<LoginResp>('/login', 'POST', payload),
   changePassword: (payload: ChangePasswordReq) => jsonRequest<null>('/password', 'POST', payload, true),
   logout: () => jsonRequest<LogoutResp>('/logout', 'POST', undefined, true),
-  iconAccess: () => request<IconAccessResp>('/icon-access', { auth: true, cache: 'no-store' }),
+  iconAccess: () => request<IconAccessResp>('/icon-access', { auth: true, cache: 'no-store', keepSessionOnUnauthorized: true }),
   recover: (payload: RecoverReq, setupToken: string) =>
     jsonRequest<LoginResp>('/recover', 'POST', payload, false, { 'X-Setup-Token': setupToken }),
 }
@@ -410,7 +412,7 @@ export const settingsApi = {
 
 export const dataApi = {
   version: (auth = false) =>
-    request<DataVersionResp>('/data/version', { auth, cache: 'no-store', headers: NO_CACHE_HEADERS }),
+    request<DataVersionResp>('/data/version', { auth, cache: 'no-store', headers: NO_CACHE_HEADERS, keepSessionOnUnauthorized: true }),
   importAll: (payload: ImportReq) => jsonRequest<ImportResp>('/import', 'POST', payload, true),
 }
 

@@ -184,9 +184,8 @@ describe('admin settings layout', () => {
     expect(analytics).toContain('grid-template-rows: auto minmax(0, 1fr) auto')
   })
 
-  it('keeps common appearance controls visible and gates advanced controls', () => {
+  it('keeps advanced visual controls in their own always-visible section', () => {
     const panel = readFileSync('src/components/SettingsPanel.svelte', 'utf8')
-    const appearance = readFileSync('src/components/settings/BackgroundSettingsSection.svelte', 'utf8')
     const card = readFileSync('src/components/settings/CardSettingsSection.svelte', 'utf8')
     const advanced = readFileSync('src/components/settings/AdvancedSettingsSection.svelte', 'utf8')
     const backgroundCard = readFileSync('src/components/settings/ThemeBackgroundCard.svelte', 'utf8')
@@ -199,8 +198,9 @@ describe('admin settings layout', () => {
     expect(advanced).toContain('<h3>卡片表面</h3>')
     expect(advanced).toContain("import CategoryDisplaySettingsSection from './CategoryDisplaySettingsSection.svelte'")
     expect(advanced).toContain('<CategoryDisplaySettingsSection bind:form {saving} />')
-    expect(appearance).not.toContain('{#if advancedOpen}')
-    expect(card).not.toContain('{#if advancedOpen}')
+    expect(advanced).toContain('data-testid="appearance-advanced"')
+    expect(advanced).not.toContain('advancedOpen')
+    expect(advanced).not.toContain('appearance-advanced-toggle')
     expect(card).not.toContain('<h3>尺寸与密度</h3>')
     expect(card).not.toContain('<h3>卡片表面</h3>')
     const appearanceBranch = panel.slice(

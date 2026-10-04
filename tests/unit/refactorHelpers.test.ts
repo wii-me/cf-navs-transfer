@@ -11,7 +11,7 @@ import {
   upsertPublicBookmark,
 } from '../../src/lib/appLocalData'
 import { buildBookmarkSubmitPayload, createBookmarkFormValue, getIconifySearchQuery } from '../../src/lib/bookmarkFormIcons'
-import { createIconVersion, getBookmarkFallbackIcon, getBookmarkIconUrl } from '../../src/lib/bookmarkIconDisplay'
+import { getBookmarkFallbackIcon, getBookmarkIconUrl } from '../../src/lib/bookmarkIconDisplay'
 import {
   bookmarkMatchesSearch,
   createHomeDataMemo,
@@ -163,8 +163,11 @@ describe('refactored helper modules', () => {
     })
   })
 
-  it('centralizes bookmark icon URL and public-mode error helpers', () => {
-    expect(createIconVersion('same-input')).toBe(createIconVersion('same-input'))
+  it('versions first-party icon URLs so old browser HTTP cache entries are bypassed', () => {
+    const cachedRemote = { ...bookmarkA, icon: 'https://example.com/icon.png', icon_cached: 1 }
+
+    expect(getBookmarkIconUrl(cachedRemote)).toContain('/api/icon/10?v=')
+    expect(getBookmarkIconUrl(cachedRemote)).toContain('&cv=4')
     expect(getBookmarkIconUrl(bookmarkB)).toContain('/api/iconify/mdi/book.svg')
     expect(getBookmarkFallbackIcon({ ...bookmarkA, icon: 'https://example.com/icon.png' }, 'bookmark')).toBe('bookmark')
 

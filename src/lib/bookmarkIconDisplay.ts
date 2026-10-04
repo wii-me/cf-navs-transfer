@@ -15,6 +15,10 @@ export type IconStyleOptions = {
   customBackground?: string
 }
 
+
+// 公开图标的浏览器 HTTP cache 无法被服务端远程撤回。发布缓存策略变更时递增该值，
+// 让新构建使用新 URL，不复用旧的 max-age 长缓存；edge key 仍由 Worker 的 ns 归一化管理。
+export const ICON_CACHE_URL_VERSION = '4'
 export function createIconVersion(input: string): string {
   let hash = 0
   for (let i = 0; i < input.length; i += 1) {
@@ -64,11 +68,11 @@ export function getBookmarkIconUrl(bookmark: BookmarkIconLike): string {
   if (/^data:image\//i.test(icon)) return icon
   if (/^https?:\/\//i.test(icon)) {
     return bookmark.icon_cached
-      ? `/api/icon/${bookmark.id}?v=${createIconVersion(`${bookmark.id}:${icon}:${bookmark.title}:${bookmark.url}`)}`
+      ? `/api/icon/${bookmark.id}?v=${createIconVersion(`${bookmark.id}:${icon}:${bookmark.title}:${bookmark.url}`)}&cv=${ICON_CACHE_URL_VERSION}`
       : icon
   }
   if (bookmark.icon_cached) {
-    return `/api/icon/${bookmark.id}?v=${createIconVersion(`${bookmark.id}:${bookmark.title}:${bookmark.url}:cached`)}`
+    return `/api/icon/${bookmark.id}?v=${createIconVersion(`${bookmark.id}:${bookmark.title}:${bookmark.url}:cached`)}&cv=${ICON_CACHE_URL_VERSION}`
   }
   return icon
 }

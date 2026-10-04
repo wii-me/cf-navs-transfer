@@ -81,4 +81,30 @@ describe('worker Iconify search helpers', () => {
       palette: true,
     })
   })
+
+  it('prewarms the same namespaced key used by the Iconify route', async () => {
+    const writes: Request[] = []
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/search?')) {
+        return new Response(JSON.stringify({
+          icons: ['mdi:home'],
+          collections: { mdi: { name: 'Material Design Icons' } },
+        }), { status: 200, headers: { 'content-type': 'application/json' } })
+      }
+      return new Response('<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0" /></svg>', {
+        status: 200,
+        headers: { 'content-type': 'image/svg+xml' },
+      })
+    }))
+
+    await searchIconifyIcons('prewarm-key', 'https://navs.test/api', (request) => {
+      writes.push(request)
+    })
+
+    expect(writes).toHaveLength(1)
+    const url = new URL(writes[0].url)
+    expect(url.pathname).toBe('/api/iconify/mdi/home.svg')
+    expect(url.searchParams.get('ns')).toBe('3')
+  })
 })

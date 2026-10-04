@@ -376,12 +376,6 @@ export function cloneBackgroundSetting(source: BackgroundSetting): BackgroundSet
   return { ...source }
 }
 
-export function shouldAutoExpandAppearanceAdvanced(
-  source: Pick<SettingsFormModel, 'background_preset_id'> | null | undefined,
-): boolean {
-  return normalizeBackgroundPresetId(source?.background_preset_id) === 'custom'
-}
-
 export function applyBackgroundPreset(
   source: SettingsFormModel,
   preset: ThemeGradientPreset,

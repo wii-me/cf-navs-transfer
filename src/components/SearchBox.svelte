@@ -10,13 +10,23 @@
 
   let selectedName = ''
   let engineMenuOpen = false
+  // 手动点选的引擎只在默认引擎不变时保持；默认引擎变更后让位于新默认值（Issue #25）。
+  let userSelected = false
+  let lastDefaultEngine = ''
 
   $: engines = searchEngine?.engines ?? []
+  $: defaultEngineName = searchEngine?.current ?? ''
+
+  // 默认引擎变化时清除手动选择标记，让新默认值立即生效。
+  $: if (defaultEngineName !== lastDefaultEngine) {
+    lastDefaultEngine = defaultEngineName
+    userSelected = false
+  }
 
   $: if (engines.length === 0) {
     selectedName = ''
-  } else if (!engines.some((engine) => engine.name === selectedName)) {
-    selectedName = engines.find((engine) => engine.name === searchEngine?.current)?.name ?? engines[0].name
+  } else if (!userSelected || !engines.some((engine) => engine.name === selectedName)) {
+    selectedName = engines.find((engine) => engine.name === defaultEngineName)?.name ?? engines[0].name
   }
 
   $: currentEngine = engines.find((engine) => engine.name === selectedName) ?? null
@@ -40,6 +50,7 @@
 
   function selectEngine(name: string) {
     selectedName = name
+    userSelected = true
     engineMenuOpen = false
   }
 

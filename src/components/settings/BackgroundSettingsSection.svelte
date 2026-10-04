@@ -12,22 +12,15 @@
 
   export let form: SettingsFormModel
   export let saving = false
-  export let onAdvancedChange: ((open: boolean) => void) | undefined = undefined
 
   $: activeGradientPresetId = getActiveGradientPresetId(form)
 
-  function setAdvancedOpen(open: boolean): void {
-    onAdvancedChange?.(open)
-  }
-
   function selectCustomPreset(): void {
     form = markBackgroundPresetCustom(form)
-    setAdvancedOpen(true)
   }
 
   function selectPreset(preset: ThemeGradientPreset): void {
     form = applyBackgroundPreset(form, preset)
-    setAdvancedOpen(false)
   }
 </script>
 

@@ -7,6 +7,127 @@
 
 ## [Unreleased]
 
+## v0.7.3 — 2026-10-03
+
+### #28 / PROB-39 部署后复验与验收就绪检查
+
+- 代码基线 `2a22a2dc0d94758e1a7a9a55ec5ef1116c6163fc`：`8709ace` 补齐未缓存 HTTP 图标恢复，`2a22a2d` 修复固定排序工具条遮挡；两项代码提交的 CI 均通过。测试站点上已观察到相应恢复行为和工具条留白，不以本地构建哈希推断部署状态。
+- 测试站点只读回归：标准验收 30/30，图标故障注入与三档视口末排卡片/菜单/键盘专项 22/22，性能审计 10/10。355 张卡片、0 破图、图标请求 259 次（预算 260）、后台传输 37,381 B、Cache Storage 630,185 B。只有专项主动注入的一次连接重置，无非预期失败请求或页面/控制台异常。
+- 修正验收脚本：弹窗不再依赖固定 320/360ms 等待，也不把任意 `.modal-card` 当成书签弹窗；预缓存检查等待真实入口 JS/CSS 条目，最多 10 秒，超时仍失败。补充慢加载、错误弹窗、延迟缓存和超时的四项测试；全量 140 文件/1095 项单测、类型检查、构建及脚本语法检查通过。
+- 预缓存异常另经独立 Cache API 对照定位为本机 Chrome 长临时配置路径问题：较长路径出现存储内部错误，恢复系统临时目录作为 profile 根目录后同站点验收通过；排查办法记入部署后验收指南，不放宽缓存断言或存储预算。
+- 测试未保存站点书签/排序/设置或轮换密码，仅撤销本次创建的会话；测试浏览器和临时资源已清理。Chrome 134、报告者原实例及 iOS 虚拟键盘/安全区真机仍未验证，Issue 状态未修改。
+
+### 修复固定排序工具条遮挡末排卡片（PROB-39）
+
+- 测试站点复现窄屏末排卡片中心命中固定排序工具条：工具条脱离文档流，页面滚动范围与右键菜单都未扣除其覆盖区域。
+- Home 持有工具条遮挡高度，通过独立尺寸观察 action 在挂载、换行及视口变化时更新；底部留白叠加用户已有边距，卡片滚动停靠与菜单定位使用同一 CSS 变量避让。退出排序/关闭错误栏时清零，卸载时移除监听；不改变排序草稿和保存接口。
+- 回归：四条新增组件用例修复前失败；补齐几何边界后全量 139 文件/1091 项单测、类型检查与构建通过。隔离 Chrome 在 1366×768、390×844、1000×300 对末排卡片、移动按钮、分类下拉和键盘操作验证 19/19，无非预期网络/页面/控制台错误；取消排序未产生数据写入，资源清理完成。
+- 测试站点复验结果见本轮部署后复验条目；iOS 虚拟键盘与安全区真机验证仍需人工。
+
+### 补齐未缓存 HTTP 图标的失败恢复（Issue #28）
+
+- 复核 Issue 回复后确认，既有修复只覆盖已走对象代理的图标。未有数据库图标缓存的 HTTP 图标直接作为图片加载，失败后不会进入代理重试；后续聚合数据的 `icon_cached` 变化也不在原状态键中，可能继续保留失败状态。
+- 保持直连成功时零额外请求，仅在有效书签的直连图片失败后复用现有有界代理恢复；公开与私密授权边界、在途请求合并、独立 Blob 生命周期和 no-store 保持不变。将缓存可用性纳入状态键；不为无效预览 ID、文字图标或 Iconify 图标引入对象代理恢复。
+- 真实隔离 Chrome/Worker 对照：外链首次失败后，修复前公开/私密卡片均持续兜底且无代理请求，只有打开编辑并取消才恢复；修复后无需编辑，三处卡片经两次请求恢复真实 PNG（公开重复卡片共享一次），公开 no-store、私密 private/no-store，均无兜底标记。
+- 验证：新增六条针对遗漏路径的用例在修复前全部失败，补齐边界后全量 138 文件/1082 项单测、类型检查、构建、API 冒烟 97/97 与 diff 检查通过。仅有两次故障注入产生的预期连接重置，测试资源已清理。
+- 现有测试站点连续三轮清站点数据/硬刷新未自然复现持续兜底；受控复现证明的是上述遗漏路径，不能据此断言报告者所有失败都来自同一原因。Chrome 134 与报告者实例未验证；测试站点复验结果见本轮部署后复验条目，Issue 状态不由代码提交改变。
+
+### 2026-10-02 测试站点回归
+
+- 代码基线为 `fc35fb25c43a77bedbdcfdbbcb8444376bfd1c03`：四项修复已分别提交到 `develop`，对应 CI 通过。提交前再次完成类型检查、138 文件/1065 项单测、构建与隔离 API 冒烟 97/97。
+- 使用本地验证配置指定的测试站点执行只读回归：标准验收 30/30、性能审计 10/10；确认站点已提供导航响应修复，图标恢复、跨登录切换的延迟响应/旧 401、普通重载均按预期运行。
+- 1366×768、390×844、1000×300 的普通底部编辑菜单均可命中；在未被固定工具条遮挡的卡片上，嵌套分类列表、键盘导航和内层 Escape 通过。
+- 另发现固定排序工具条遮挡末排卡片/菜单的边界（PROB-39）：390px 窄屏末排卡片中心命中工具条，300px 低高度中末排菜单操作也可能被工具条覆盖。该失败保留在结果中，不能以标准验收脚本通过代替全部交互闭环；修复计划在 `docs/BACKLOG.md`，本轮未追加代码修复。
+- 测试未保存排序、修改书签/设置或轮换密码，只撤销本次创建的登录会话。原始报告、截图和临时配置均留在仓库外；测试仅使用独立浏览器配置，不触及日常浏览器。真实 Mac/Safari、虚拟键盘与连续两次部署的新版本提示未验证，Issue 状态未修改。
+
+### 修复跨会话刷新与管理员快照竞态（Issue #29 复核 / PROB-37）
+
+- 数据编排层在会话变化时立即清除旧身份视图，以会话/刷新代次拦截延迟快照、版本、聚合响应和旧 401；渐进渲染批次在数据替换或清空后失效。
+- 管理员快照读写清理串行执行，并校验会话归属，防止在途写入越过退出清理后重新落盘；API 层不再允许旧请求的 401 清除新令牌，自动数据刷新由编排层决定何时退出。
+- 回归：新增延迟响应、旧错误、版本/快照恢复、渐进渲染及 Cache Storage 在途读写测试。类型检查、135 文件/1040 项单测和构建通过；隔离 Chrome 验证退出后旧管理员响应、登录后旧游客响应、重新登录后旧 401 均不覆盖当前状态，控制台/页面/网络错误为零。测试站点复验与剩余边界见本轮统一记录。
+
+### 修复书签临时兜底图标无法自行恢复（Issue #28 复核）
+
+- 图标获取结果保留可重试失败/兜底状态，首页卡片与 Spotlight 不再把可解码的兜底 SVG 当成真实图标成功。保留按完整 URL 合并在途请求和各组件独立 Blob 生命周期，不持久化对象图标或失败响应。
+- 每个图标身份最多自动退避重试三次；隐藏/离线时暂停，耗尽后仅在重新可见或联网事件做 30 秒限频探测。成功解码、身份变化和卸载都会清理旧计时器/监听器；解码失败也受重试预算约束。
+- 回归覆盖公开/私密授权、首页/Spotlight、网络和解码失败、换 key、卸载及缓存隔离。隔离 Chrome 注入一次兜底后，两处重复卡片仅追加一次共享请求即恢复真实图片，无需打开编辑弹窗。测试站点复验与剩余边界见本轮统一记录。
+
+### 修复右键菜单内分类下拉的视口裁切（Issue #30 复核）
+
+- 右键菜单使用分类选择器的内嵌布局模式，子树展开/折叠主动通知外层重新测量；其他表单中的选择器保留原有浮层行为。自然高度测量不受上一次限高影响，也不通过 Svelte 绑定变量写临时样式，避免反复触发更新。
+- 进入分类选择时暂时收起编辑/移动操作行，为低高度视口保留列表空间；取消后恢复操作行和键盘焦点。保留内层优先 Escape、外部点击和排序草稿取消行为。
+- 验证：137 文件/1060 项单测、类型检查和构建通过；隔离 Chrome 在 1366×768、390×844、1000×300 中均验证首次展开不越界并实际选中目标分类，低高度列表为 81px 而非 14px。测试站点复验与剩余边界见本轮统一记录。
+
+### 修复缓存 HTML 重定向响应导致的页面重载失败
+
+- 真实 Chrome 复核发现安装预缓存会跟随 `/index.html` 到 `/` 的重定向。直接把带 `redirected` 标记的缓存 Response 用于导航，会被 Chromium 的 `redirect: manual` 检查拒绝，并产生 Document `ERR_FAILED`。
+- 导航输出对这类响应创建保留正文、状态和响应头的新 Response；克隆正文供后台 shell 比较继续读取，静态资源与 API 缓存策略不变。覆盖根路径、管理路径、显式 index.html、首次导航和离线回退。
+- 验证：新增五条测试修复前全失败、修复后通过；最终 138 文件/1065 项单测、类型检查、构建与独立 API 冒烟 97/97 通过。隔离 Chrome 完整回归前三项修复、普通重载、断网重载和联网恢复；旧重定向错误消失，断网注入之外无失败请求。测试站点复验与剩余边界见本轮统一记录。
+
+### 修复匿名图标代理的隐私状态缓存泄露（PROB-38）
+
+- 根因：`/api/icon/:id` 与 `/api/category-icon/:id` 先命中不含身份的共享 edge cache，再读取 D1 判断当前对象是否对匿名访客可见；公开图标缓存后改为私密时，同一个 `v` 仍可能返回旧真实图标。分类图标还曾由 Service Worker cache-first 保存。
+- 修复：匿名请求先通过目标书签/分类及祖先链的递归 D1 可见性闸门，再允许命中/写入 edge cache；私密、未知、孤儿分类和循环分类返回 `no-store` 身份无关兜底，不读写共享缓存。合法授权 key 继续 `private, no-store`、不读写 edge cache。
+- 缓存迁移：公开图标改为浏览器 `max-age=0, must-revalidate`、edge `s-maxage` 保留；icon cache namespace 升到 3；Service Worker cache 版本升到 v17，并移除 `/api/category-icon/*` Cache Storage cache-first。旧 runtime cache 在新 SW 激活时删除。
+- 回归：补充公开→私密书签、公开→私密分类、分类祖先/循环/未知对象、旧 edge hit、旧 SW cache 清理、授权/匿名异常缓存策略和 Service Worker network-only 测试；本地独立 Worker/Chrome 验证匿名不再命中旧真实图标、公开 edge hit 仍有效、私密响应为 `private, no-store`。
+- 验证：`npm run type-check` 318 files 0/0、`npm test` 134 files/1002 tests、`npm run build`、`npm run smoke` 94/94、`node --check public/sw.js` 和 `git diff --check` 全部通过；真实隔离 Worker/D1/Chrome 覆盖公开→私密、祖先变化、父级缺失、授权 `private,no-store`、SW v17 激活/旧 v16 清理与无 API Cache Storage。推送 develop 后的正式 `perf:audit`/L3 仍列为发布后门禁。
+
+### 分离对象图标的 Edge 与浏览器缓存（PROB-38）
+
+- 生产验收发现共享域名的 Cloudflare Browser Cache TTL 会把公开图标响应的 `max-age=0` 改成 4 小时；公开图标改为私密后，普通浏览器仍可能从磁盘缓存返回旧真实图标。
+- 代码级修复仅作用于 `/api/icon/:id` 与 `/api/category-icon/:id`：公开真实图标和永久缺图兜底继续写入 Worker 的 Edge cache，但所有客户端响应（包括 edge hit）统一 `no-store`；授权、拒绝、未知、孤儿和循环对象保持 `private/no-store` 或 `no-store`。
+- 图标客户端 URL 版本由 `cv=3` 迁移到 `cv=4`，绕过已存在的旧浏览器条目；不修改共享域名的 Cloudflare Zone 配置，不增加初始部署步骤，也不改变 Iconify 和站点元信息缓存。
+- 验证：L0 类型检查 318 files 0/0、单测 134 files/1010 tests、build、diff-check、L1 smoke 97/97；隔离 Worker + 普通 Chrome 验证公开命中、公开→私密、祖先隐私切换、授权、永久缺图和 cv=4 URL，0 破图、0 对象图标 Cache Storage 条目。
+
+### 修复「经常访问」公开图标重复请求（PROB-38）
+
+- 根因：首页「经常访问」与普通分类会把同一本公开书签各渲染一个 `BookmarkCard`，两处本应命中同一条匿名对象代理 URL。但两层问题叠加导致同一图标被请求两次：① `src/views/Home.svelte` 渲染「经常访问」的 `CategorySection` 漏传 `publicCategoryIds`（默认空集合），登录态下 `isBookmarkIconAccessRequired` 把该区公开书签判成需要授权，于是发带 `key` 的 URL、普通分类发匿名 URL——两条不同 URL 各请求一次，带 `key` 的那条还绕过公开 edge cache；② 即便 URL 相同，两个 `BookmarkCard` 实例仍在同一 tick 各自 fetch。
+- 修复：两处协同，都是最小改动。① `src/views/Home.svelte` 把 `publicCategoryIds` 传给「经常访问」的 `CategorySection`，公开书签在两处生成同一匿名 URL；私密书签与落在私密树下的公开书签仍带 `key`。② `src/lib/localBookmarkIconCache.ts` 对同源对象代理 URL 合并**在途**请求：按完整 URL（含 `v`/`cv`/`key`）索引，同一 tick 的重复加载共用一次网络请求，各自生成独立可回收 object URL，成功或失败都立即移除索引；不缓存完成结果，跨视图重挂仍重新经过可见性闸门。
+- 影响：生产 `perf:audit` 的首页与搜索恢复阶段各减少 4 次重复图标请求（共 8 次），图标请求总数由 264 降至预算内；滚动阶段逐图标请求、对象图标 `no-store`、授权 `private, no-store` 和隐私撤回边界均不变。
+- 验证：`npm run type-check` 318 files 0/0、`npm test` 134 files、`npm run build`、`git diff --check` 通过。单测覆盖同 URL 在途合并与独立 object URL、不跨授权/版本合并、各类失败后可重试；新增首页集成回归断言「经常访问」公开图标与普通分类区使用同一匿名 URL、私密与继承私密图标仍带 `key`。本地 build overlay 真实 Chrome 实测首页与搜索阶段图标请求由 17 降到 13；推送部署后以生产 `perf:audit` 复核 ≤260 门槛。
+
+## v0.7.2 — 2026-09-30
+
+### 修复登录态首页私密书签图标停在文字兜底（Issue #28）
+
+- 根因：`/api/icon/:id` 对匿名请求按设计返回 `X-Icon-Fallback: 1` 的文字兜底图。私密书签、以及挂在私密分类（或其后代）下的公开书签都需要短期授权 `key` 才返回真实图标，而首页卡片此前没有接 `withIconAccessKey()`——该方法原先只在 `src/components/admin/*` 使用。于是登录态首页的私密书签永远停在兜底图；打开编辑弹窗会触发 `POST /api/bookmarks/:id/icon-cache/refresh` 写入 `icon_blob`，图标才"恢复"。
+- 修复：把授权 key 接进书签图标状态推导链路。`src/lib/bookmarkCardIconState.ts` 的 `deriveBookmarkCardIconBase()`/`deriveBookmarkCardIconState()` 新增 `iconAccessKey`，经 `withIconAccessKey()` 作用于 `proxiedHttpIconUrl`，并让 key 参与 `createBookmarkCardIconStateKey()`——key 到位、续签或清除时重置失败态并重新预取，不被首次匿名兜底锁住。
+- 判定规则收敛为一处：`src/lib/adminListState.ts` 新增 `getPublicCategoryIds()` 与 `isBookmarkIconAccessRequired()`，与 worker 的 `getPublicCategoryIds`/`isBookmarkIconAnonymouslyVisible` 严格互补（含私密祖先链、循环分类、`0/1` 与布尔混用）。判定用「可见集合」而非「隐藏集合」，使「书签指向已被删除的分类」这类陈旧数据也落到需要授权的一侧，避免永久兜底。
+- 接线范围：`BookmarkCard`、`CategorySection`（逐条判定，覆盖「经常访问」这类混合区块）、`HomeCategoryScope`、`Sidebar`、`SpotlightBookmarkIcon`/`SearchSpotlight`、`Home`。key 由调用方按隐私判定下发，公开对象保持匿名 URL 以保留 edge / Service Worker 缓存；未登录时不下发。
+- 顺带修正两处既有缺陷：`worker/routes/icon.ts` 的 `/icon/:id` 与 `/category-icon/:id` 异常分支此前无条件返回公开缓存策略（`public, max-age=300`），合法 key 的私密请求异常时会留下可被浏览器 HTTP 缓存复用的兜底图，现改为 `private, no-store`；`src/lib/iconAccessKey.ts` 的 `clearIconAccessKey()` 无法取消在途请求，旧 promise 可能在登出/改密后重新发布过期 key，现用授权代次作废其回调。
+- 验证：`npm run type-check` 318 files 0/0、`npm test` 133 files/984 tests、build 成功；浏览器 L2（隔离实例 1280×800）公开书签匿名 `public, max-age=604800`、私密与私密分类树下书签带 key 且 `private, no-store`，三条卡片均渲染真实图标，Cache Storage 无私密图标条目。反向对照：把逐条判定改回无条件带 key、去掉授权代次判断、去掉异常分支的授权缓存策略，对应用例分别精确失败。独立 `workflow-reviewer` 复核发现的另一项既有问题（图标代理的匿名可见性判定发生在 edge cache 命中之后，可导致私密图标经缓存泄露）不在本 Issue 范围，已登记为 `docs/BACKLOG.md` 的 PROB-38。
+
+### 修复页面底部书签右键菜单被视口裁掉（Issue #30）
+
+- 根因：`BookmarkContextMenu.svelte` 固定从卡片下沿向下展开（`top: calc(100% - 6px)`），页面末尾最后一排卡片下方没有空间，菜单与「编辑」按钮被视口底边裁掉，真实鼠标无法命中。
+- 修复：菜单挂载、更新、滚动或视口 resize 后读取父级卡片与菜单自然高度；有足够下方空间时保持向下，有足够上方空间时改为向上，否则按较大一侧夹紧 `max-height` 并允许内部滚动。保留 `position:absolute`、左右 8px、z-index、sortable filter、右键/长按、外部点击与 Escape 语义；嵌套分类选择器先消费 Escape，外层菜单控件的 Escape 仍可关闭菜单。
+- 验证：type-check 318 files 0/0、npm test 134 files/991 tests、build 成功；新增 7 条几何/移动选择器/Escape 组件测试，去掉 placement 决策后 4 条精确失败。隔离 Chrome 1280×800、96 条书签滚到文档末尾真实右键：菜单 `top=701.13/bottom=745.79`，编辑按钮完全在视口内，真实点击打开编辑弹窗。
+
+### 修复登录态切回标签页后首页私密书签消失（Issue #29）
+
+- 根因：`src/App.svelte` 把焦点/可见性刷新无条件接到 `refreshPublicData()`；该函数在登录态仍以 `auth=false` 调 `api.public.getData(false)`（`src/lib/api.ts` 的 `publicApi.getData` 默认不带 Authorization），拿到匿名公开数据后经 `applyPublicData()` 覆盖首页绑定的 `publicStore`，而 `adminStore` 保留私密数据——于是首页只剩公开书签、后台却仍显示全部内容。
+- 修复：新增 `src/lib/dataService.ts` 的 `refreshVisibleData()`，在事件触发时（不是在安装监听器时）读取 `isLoggedIn()` 分流：已登录走 `refreshLoggedInData()`（默认 `forceRemote=false`，保留 Issue #25 的数据版本门控），未登录走 `refreshPublicData()`。
+- 401 降级：会话在后台失效时清 `authStore`/`adminStore`/**`publicStore`**/管理员快照后再回退公开刷新；`publicStore` 必须一起清，否则公开回退若也无快照且非 forbidden 失败，首页会在已登出状态下继续显示私密投影。
+- 非鉴权错误按 `refreshPublicData()` 既有契约经 `hooks.onRootError` 上报，不再静默吞掉。
+- 验证：`npm run type-check` 318 files 0/0、`npm test` 131 files/967 tests、build 成功；浏览器 L2（隔离实例 1280×800）四种组合——登录+public_mode 开（私密书签保留、无匿名 `/api/public/data`）、登出+公开模式、登录+public_mode 关、双标签页设置同步（`/api/data/version` 带 Authorization）；401 + 公开回退 500 场景首页正确降级为仅公开书签并清除会话。独立 `workflow-reviewer` 复核 PASS。
+
+### Spotlight 结果显示真实书签图标
+
+- Spotlight 结果行接入首页书签图标解析、Iconify 代理、本地缓存、缓存图标代理和失败回退链路；有真实图标时显示图片，图标加载失败或无图片时回退到书签自定义文字/标题首字符。
+- 保持轻量结果行，不渲染完整 `BookmarkCard`；图标请求与 Cache Storage 预算需在部署后的 50 条 Spotlight 场景重新实测。
+
+### 后台高级与视觉设置
+
+- 取消“高级与视觉”二级菜单内的折叠，进入菜单后背景、尺寸、卡片表面和分类视觉设置直接可见。
+
+### 修复默认搜索引擎切换不生效（Issue #25）
+
+- 根因：`SearchBox.svelte` 只在“当前选中名不在引擎列表里”时才跟随 `search_engine.current`。Google→Bing 切换后 Google 仍是合法引擎，常驻的搜索框实例（设置面板实时预览、同会话首页）的选中引擎永远停在 Google，导致站点设置里切换默认引擎界面无效。
+- 修复：跟踪默认引擎变化，默认引擎变更时清除用户手动选择标记并立即跟随新默认值；手动点选只在默认引擎不变时保持；选中项被移出列表后回落到当前默认引擎。
+- 验证：新增 `tests/unit/searchBoxEngineSync.test.ts` 4 条回归（默认跟随、手动保持、默认覆盖、列表移除回落），反向对照旧逻辑精确失败。
+- 修复后台默认搜索引擎下拉的真实交互：原生 select 先派发 `input` 再派发 `change`，而 Svelte `bind:value` 只在 `change` 提交；fieldset 的 `on:input` 会先克隆表单，把用户刚选中的选项在 `change` 到达前重置回旧值——表现为「选了没选中、保存按钮仍禁用」。修复：select 在自身 `on:input`（目标阶段，早于 fieldset 冒泡）立即提交 `current`，选项改用稳定 `index` key。新增 `tests/unit/searchEngineSettingsSelect.test.ts`（input 阶段即提交 + 完整序列保持），修复前精确失败。
+- 补充（跨标签页同步）：后台保存设置后，其他已打开标签页里的首页此前要手动刷新才能更新（全站通病，无跨标签页同步机制）。新增 `installPublicDataFocusRefresh`：窗口重新获得焦点或页面恢复可见时，按数据版本门控刷新公开数据（数据未变化不发全量请求），防抖合并；切回已打开的标签页即可看到新默认引擎。新增 `tests/unit/publicDataFocusRefresh.test.ts` 4 条防抖/可见性/卸载回归。
+
 ## v0.7.1 — 2026-09-21
 
 ### 修复 v0.7.0 冒烟脚本 recover 场景（refs #24）

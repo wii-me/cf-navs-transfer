@@ -2,6 +2,7 @@
   import type { CardStyle, DescriptionDisplayMode, PublicBookmark, PublicCategory } from '../../shared/types'
   import type { CategoryTreeOption } from '../lib/categorySelect'
   import { resolveBookmarkDescriptionMode } from '../lib/descriptionMode'
+  import { isBookmarkIconAccessRequired } from '../lib/adminListState'
   import BookmarkCard from './BookmarkCard.svelte'
   import CategoryIcon from './CategoryIcon.svelte'
   import { getInfoCardMobileTrackWidth, getInfoCardTrackWidth, getIconCardTrackWidth } from '../lib/bookmarkCardLayout'
@@ -41,6 +42,14 @@
   export let onSaveSortSession: (() => AsyncVoid) | undefined = undefined
   export let onSortDraft: ((categoryId: number, orderedIds: number[]) => AsyncVoid) | undefined = undefined
   export let onSortTransfer: ((transfer: SortTransfer) => AsyncVoid) | undefined = undefined
+  /**
+   * 对匿名访客可见的分类 id 集合。判定书签图标是否需要授权 key 时用「可见集合」而不是
+   * 「隐藏集合」：分类已被删除的陈旧数据也必须落到需要授权的一侧，否则会永久显示兜底图标。
+   * 「经常访问」这类区块会混合不同分类的书签，所以按单个书签判定，而不是看区块自身。
+   */
+  export let publicCategoryIds: Set<number> = new Set()
+  /** 私密对象的短期图标授权 key；只有需要授权的对象才会被附加。 */
+  export let iconAccessKey = ''
 
   // 排序会话由页面统一控制：进入后拖拽只改页面草稿，保存/取消都由页面处理。
   let savingSort = false
@@ -86,7 +95,7 @@
       {#if showHeading}
         <div class="section-title-wrap">
           {#if showCategoryIcon && category.icon}
-            <CategoryIcon category={category} size={level === 2 ? 'var(--category-child-icon-size, 30px)' : 'var(--category-root-icon-size, 38px)'} className="section-icon" />
+            <CategoryIcon category={category} size={level === 2 ? 'var(--category-child-icon-size, 30px)' : 'var(--category-root-icon-size, 38px)'} className="section-icon" iconAccessKey={publicCategoryIds.has(Number(category.id)) ? '' : iconAccessKey} />
           {/if}
           <div class="section-copy">
             <div class="section-heading-row">
@@ -210,6 +219,7 @@
             moveCategories={moveCategories}
             onEdit={onEditBookmark}
             onMoveBookmark={onMoveBookmark}
+            iconAccessKey={isBookmarkIconAccessRequired(bookmark, publicCategoryIds.has(Number(bookmark.category_id))) ? iconAccessKey : ''}
           />
         </div>
       {/each}

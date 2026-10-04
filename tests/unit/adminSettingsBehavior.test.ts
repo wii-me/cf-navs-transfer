@@ -9,7 +9,7 @@ import { DEFAULT_SETTINGS } from '../../worker/lib/settingsData'
 // 原文件 155 条断言中，绝大多数是 `toContain('bind:value={form.image_host_url}')`
 // 这种「某个控件绑到了某个字段」和「某个分区里出现了某个标题」。它们能证明模板写了这些字符，
 // 证明不了：分区切换后真的只渲染该分区、控件真的能改到 payload、置灰联动真的生效、
-// 高级设置真的默认收起。这些才是设置页的实际契约。
+// 高级设置已独立为二级菜单，进入后内容直接可见。这些才是设置页的实际契约。
 //
 // 留在原文件的是 CSS 布局与源码顺序断言（grid 模板、clamp 高度、@media 断点、
 // 组件在文件里的出现顺序），jsdom 拿不到 computed style，属 PROB-18c。
@@ -130,7 +130,6 @@ describe('设置控件到 payload 的实际写入', () => {
   it('允许保存输入控件已支持的 40 px 卡片宽度', async () => {
     const { onSubmit } = renderPanel()
     await openSection('高级与视觉')
-    await fireEvent.click(screen.getByTestId('appearance-advanced-toggle'))
 
     await fireEvent.input(screen.getByRole('spinbutton', { name: '详情卡片列宽下限' }), { target: { value: '40' } })
     const saveButton = screen.getByRole('button', { name: '保存设置' }) as HTMLButtonElement
@@ -142,29 +141,16 @@ describe('设置控件到 payload 的实际写入', () => {
   })
 })
 
-describe('外观分区的高级设置与置灰联动', () => {
-  it('用具名背景预设时高级设置默认收起，点开才出现尺寸控件', async () => {
+describe('高级与视觉分区的默认呈现与置灰联动', () => {
+  it('进入高级与视觉后背景、尺寸、卡片与分类视觉控件直接可见，且不提供折叠按钮', async () => {
     renderPanel()
     await openSection('高级与视觉')
 
-    const toggle = screen.getByTestId('appearance-advanced-toggle')
-    expect(toggle.getAttribute('aria-expanded')).toBe('false')
-    expect(document.getElementById('settings-card-width')).toBeNull()
-
-    await fireEvent.click(toggle)
-
-    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.queryByTestId('appearance-advanced-toggle')).toBeNull()
+    expect(screen.getByTestId('appearance-advanced')).toBeTruthy()
+    expect(screen.getByText('背景设置')).toBeTruthy()
     expect(document.getElementById('settings-card-width')).toBeTruthy()
-    // aria-controls 必须指向真实存在的容器，否则读屏跳不过去
-    expect(document.getElementById(toggle.getAttribute('aria-controls') as string)).toBeTruthy()
-  })
-
-  it('背景改成自定义后高级设置自动展开——否则用户找不到自己刚改过的值', async () => {
-    renderPanel({ value: { ...baseValue, background_preset_id: 'custom' } })
-    await openSection('高级与视觉')
-
-    expect(screen.getByTestId('appearance-advanced-toggle').getAttribute('aria-expanded')).toBe('true')
-    expect(document.getElementById('settings-card-width')).toBeTruthy()
+    expect(screen.getByText('分类标题字体与图标')).toBeTruthy()
   })
 
   it('极简卡片风格下卡片宽度控件置灰，图标尺寸控件可用；详情风格相反', async () => {
@@ -172,7 +158,6 @@ describe('外观分区的高级设置与置灰联动', () => {
     // 两个控件按当前风格互斥可用，而不是模板里写了那个表达式。
     renderPanel({ value: { ...baseValue, card_style: 'icon' } })
     await openSection('高级与视觉')
-    await fireEvent.click(screen.getByTestId('appearance-advanced-toggle'))
 
     expect((document.getElementById('settings-card-width') as HTMLInputElement).disabled).toBe(true)
     expect((document.getElementById('settings-card-icon') as HTMLInputElement).disabled).toBe(false)
@@ -180,7 +165,6 @@ describe('外观分区的高级设置与置灰联动', () => {
     cleanup()
     renderPanel({ value: { ...baseValue, card_style: 'info' } })
     await openSection('高级与视觉')
-    await fireEvent.click(screen.getByTestId('appearance-advanced-toggle'))
 
     expect((document.getElementById('settings-card-width') as HTMLInputElement).disabled).toBe(false)
     expect((document.getElementById('settings-card-icon') as HTMLInputElement).disabled).toBe(true)
@@ -189,10 +173,10 @@ describe('外观分区的高级设置与置灰联动', () => {
   it('卡片宽度控件的 min 是 40（PROB-28 裁定值）', async () => {
     renderPanel()
     await openSection('高级与视觉')
-    await fireEvent.click(screen.getByTestId('appearance-advanced-toggle'))
 
     expect((document.getElementById('settings-card-width') as HTMLInputElement).min).toBe('40')
   })
+
   it('自定义背景显示浅/深强调色控件并把值写入保存 payload', async () => {
     const { onSubmit } = renderPanel({
       value: {
@@ -218,7 +202,6 @@ describe('外观分区的高级设置与置灰联动', () => {
     expect(onSubmit.mock.calls[0][0].custom_dark_accent_color).toBe('#bcdef0')
   })
 })
-
 describe('布局与导航分区的置灰联动', () => {
   it('导航在顶部时「常驻展开」不可用——那是左侧导航独有的选项', async () => {
     renderPanel({ value: { ...baseValue, navigation: { position: 'top', always_expanded: false, top_layout: 'scroll' } } })

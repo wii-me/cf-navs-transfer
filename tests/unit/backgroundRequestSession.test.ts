@@ -75,4 +75,26 @@ describe('background request session handling', () => {
     expect(init).not.toHaveProperty('keepSessionOnUnauthorized')
     expect(init).not.toHaveProperty('auth')
   })
+  it.each(['http', 'envelope'] as const)('keeps a newer session when an old request returns a %s 401', async (mode) => {
+    let respond!: (response: Response) => void
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((resolve) => { respond = resolve })))
+    const request = api.admin.getData()
+    const rejected = expect(request).rejects.toThrow()
+    setStoredAuthSession({ token: 'replacement-token', expires_at: Date.now() + 600_000, username: 'admin' })
+    respond(unauthorizedResponse(mode))
+    await rejected
+    expect(getAuthToken()).toBe('replacement-token')
+  })
+
+  it.each([
+    ['admin refresh', () => api.admin.getData({ keepSessionOnUnauthorized: true })],
+    ['public fallback', () => api.public.getData(true)],
+    ['version refresh', () => api.data.version(true)],
+    ['optional icon grant', () => api.auth.iconAccess()],
+  ] as const)('leaves %s unauthorized handling to its owner', async (_name, run) => {
+    vi.stubGlobal('fetch', vi.fn(async () => unauthorizedResponse('http')))
+    await expect(run()).rejects.toThrow()
+    expect(getAuthToken()).toBe('session-token')
+  })
+
 })
