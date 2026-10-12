@@ -4,6 +4,7 @@ import { buildCategoryForest } from '../../shared/categoryHierarchy'
 import type { HomeSection } from '../../src/lib/homeData'
 import {
   getCategoryTreeBookmarkCount,
+  getCategoryHotBookmarks,
   getHomeScrollTarget,
   getHomeCategoryGroups,
   getHomeSections,
@@ -104,18 +105,61 @@ describe('home navigation helpers', () => {
       { root: 2, selected: 2 },
     ])
   })
-  it('仅在没有显式选择时回退到首个子分类', () => {
+  it('空一级默认选「本分类」(root)，由聚合区填充而非首个子分类', () => {
     const emptyRoot = buildCategoryForest([
       { id: 4, parent_id: null, title: 'Empty root', icon: null, sort: 0 },
       { id: 5, parent_id: 4, title: 'First child', icon: null, sort: 0 },
     ])[0]
     const bookmarks = new Map([[5, [bookmark(5, 5)]]])
 
-    expect(resolveHomeCategoryForRoot(emptyRoot, undefined, bookmarks).id).toBe(5)
+    expect(resolveHomeCategoryForRoot(emptyRoot, undefined, bookmarks).id).toBe(4)
     expect(resolveHomeCategoryForRoot(emptyRoot, 4, bookmarks).id).toBe(4)
-    expect(resolveHomeCategoryForRoot(emptyRoot, 'category-4', bookmarks).id).toBe(4)
+    expect(resolveHomeCategoryForRoot(emptyRoot, 'category-5', bookmarks).id).toBe(5)
     expect(getHomeCategoryGroups([emptyRoot], new Map([[4, 4]]), bookmarks)[0].selected.id).toBe(4)
-    expect(getHomeCategoryGroups([emptyRoot], new Map(), bookmarks)[0].selected.id).toBe(5)
+    expect(getHomeCategoryGroups([emptyRoot], new Map(), bookmarks)[0].selected.id).toBe(4)
+  })
+
+  it('getCategoryHotBookmarks: 频次优先 + sort 回填 + 封顶', () => {
+    const tree = buildCategoryForest([
+      { id: 10, parent_id: null, title: 'Root', icon: null, sort: 0 },
+      { id: 11, parent_id: 10, title: 'A', icon: null, sort: 0 },
+      { id: 12, parent_id: 10, title: 'B', icon: null, sort: 1 },
+    ])[0]
+    const hot = (id: number, cat: number, click: number): PublicBookmark => ({ ...bookmark(id, cat), click_count: click })
+    const bm = new Map<number, PublicBookmark[]>([
+      [11, [hot(101, 11, 5), hot(102, 11, 0)]],
+      [12, [hot(103, 12, 9), hot(104, 12, 3)]],
+    ])
+    expect(getCategoryHotBookmarks(tree, bm, 3).map((b) => b.id)).toEqual([103, 101, 104])
+    expect(getCategoryHotBookmarks(tree, bm, 2).map((b) => b.id)).toEqual([103, 101])
+    expect(getCategoryHotBookmarks(tree, bm, 10).map((b) => b.id)).toEqual([103, 101, 104, 102])
+    expect(getCategoryHotBookmarks(tree, bm, 0)).toEqual([])
+  })
+
+  it('getCategoryHotBookmarks: 全零点击按 sort 回填非空；剔除私密书签但保留子树全部公开书签', () => {
+    const tree = buildCategoryForest([
+      { id: 20, parent_id: null, title: 'Root', icon: null, sort: 0 },
+      { id: 21, parent_id: 20, title: 'A', icon: null, sort: 0 },
+      { id: 22, parent_id: 20, title: 'B', icon: null, sort: 1 },
+    ])[0]
+    const mk = (id: number, cat: number, extra: Partial<PublicBookmark> = {}): PublicBookmark => ({ ...bookmark(id, cat), click_count: 0, ...extra })
+    const bm = new Map<number, PublicBookmark[]>([
+      [21, [mk(201, 21), mk(202, 21, { is_private: true })]],
+      [22, [mk(203, 22)]],
+    ])
+    // 私密书签 202 被剔除；两个子分类的公开书签 201/203 都保留（不再按匿名可见集丢弃祖先私密的公开子分类）
+    expect(getCategoryHotBookmarks(tree, bm, 5).map((b) => b.id)).toEqual([201, 203])
+  })
+
+  it('getCategoryHotBookmarks: 不改入参桶', () => {
+    const tree = buildCategoryForest([
+      { id: 30, parent_id: null, title: 'Root', icon: null, sort: 0 },
+      { id: 31, parent_id: 30, title: 'A', icon: null, sort: 0 },
+    ])[0]
+    const bucket: PublicBookmark[] = [{ ...bookmark(301, 31), click_count: 1 }, { ...bookmark(302, 31), click_count: 9 }]
+    const bm = new Map([[31, bucket]])
+    getCategoryHotBookmarks(tree, bm, 5)
+    expect(bucket.map((b) => b.id)).toEqual([301, 302])
   })
 
   it('tracks the last root above the navigation threshold or the first root below it', () => {

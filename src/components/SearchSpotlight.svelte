@@ -8,8 +8,8 @@
     normalizeSearchQuery,
   } from '../lib/homeData'
   import { setPageScrollLocked } from '../lib/pageScrollLock'
-  import { isAuthenticated, publicStore } from '../lib/stores'
-  import { api } from '../lib/api'
+  import { isAuthenticated } from '../lib/stores'
+  import { recordBookmarkClick } from '../lib/dataService'
   import SpotlightBookmarkIcon from './SpotlightBookmarkIcon.svelte'
   import { isBookmarkIconAccessRequired, getPublicCategoryIds } from '../lib/adminListState'
   import { iconAccessKey } from '../lib/iconAccessKey'
@@ -77,8 +77,7 @@
 
   function openBookmarkFromSearch(bookmark: PublicBookmark): void {
     // 与首页卡片一致地登记访问计数，否则 Spotlight 打开会漏计。
-    publicStore.incrementClick(bookmark.id)
-    void api.public.registerClick(bookmark.id)
+    recordBookmarkClick(bookmark.id)
 
     // open_method: 1=新窗口 2=当前页 3=当前页弹层（复用 App 持有的 BookmarkLinkModal）
     if (bookmark.open_method === 3) {
@@ -218,6 +217,7 @@
           >
             <SpotlightBookmarkIcon
               {bookmark}
+              reuseCompletedObject={true}
               iconAccessKey={isBookmarkIconAccessRequired(bookmark, publicCategoryIds.has(Number(bookmark.category_id))) ? visibleIconAccessKey : ''}
             />
             <span class="spotlight-option-main">

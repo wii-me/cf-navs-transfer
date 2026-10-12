@@ -1,3 +1,5 @@
+import { decodeIconDataUri } from '../../shared/iconDataUri'
+import { readBoundedBody } from './boundedBody'
 import type { IconSource } from '../../shared/types'
 
 export interface FetchedIcon {
@@ -32,7 +34,7 @@ function looksLikeSvg(bytes: Uint8Array): boolean {
 // declared Content-Type. Returns null when the payload is not a genuine image
 // (e.g. an HTML login/redirect page from an auth-gated host), so the caller can
 // refuse to cache garbage as a fake image.
-function sniffImageContentType(bytes: Uint8Array, declaredType: string | null): string | null {
+export function sniffImageContentType(bytes: Uint8Array, declaredType: string | null): string | null {
   const b = bytes
   const len = b.length
 
@@ -133,7 +135,7 @@ export function classifyIconFailure(status: number | null): IconFetchFailure {
  * 尝试同样失败，真正恢复要等到窗口过去；调用方按 `failure` 决定能不能缓存兜底图，
  * 下一个请求（下一次页面加载、下一次渲染）拿到的就是真图标。
  */
-export async function fetchIcon(iconUrl: string, timeoutMs = CACHE_TIMEOUT_MS): Promise<IconFetchOutcome> {
+export async function fetchIcon(iconUrl: string, timeoutMs = CACHE_TIMEOUT_MS, maxBytes = MAX_ICON_SIZE): Promise<IconFetchOutcome> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
@@ -149,12 +151,12 @@ export async function fetchIcon(iconUrl: string, timeoutMs = CACHE_TIMEOUT_MS): 
 
     if (!response.ok) return { ok: false, failure: classifyIconFailure(response.status) }
 
-    const buffer = await response.arrayBuffer()
+    if (response.headers.get('X-Icon-Fallback') === '1') return { ok: false, failure: 'transient' }
+    const bytes = await readBoundedBody(response.body, maxBytes)
     // 空 body 更像被截断，值得让下一次请求重试；超过上限说明这个资源本身不可用。
-    if (buffer.byteLength === 0) return { ok: false, failure: 'transient' }
-    if (buffer.byteLength > MAX_ICON_SIZE) return { ok: false, failure: 'missing' }
+    if (bytes?.byteLength === 0) return { ok: false, failure: 'transient' }
+    if (!bytes) return { ok: false, failure: 'missing' }
 
-    const bytes = new Uint8Array(buffer)
     const contentType = sniffImageContentType(bytes, response.headers.get('content-type'))
     // Reject payloads that are not real images (e.g. an auth-gated host that
     // returns an HTML login page instead of the icon). Caching those would
@@ -191,23 +193,8 @@ export function iconBytesToDataUri(icon: FetchedIcon): string {
 }
 
 export function dataUriToResponse(dataUri: string, cacheControl: string): Response | null {
-  const match = dataUri.match(/^data:([^;,]+);base64,(.+)$/)
-  if (!match) return null
-
-  try {
-    const mime = match[1] || 'image/png'
-    const bytes = Uint8Array.from(atob(match[2]), (char) => char.charCodeAt(0))
-    return new Response(bytes, {
-      status: 200,
-      headers: {
-        'Content-Type': mime,
-        'Content-Length': String(bytes.byteLength),
-        'Cache-Control': cacheControl,
-      },
-    })
-  } catch {
-    return null
-  }
+  const decoded = decodeIconDataUri(dataUri)
+  return decoded ? iconBytesToResponse({ bytes: decoded.bytes, contentType: decoded.mime }, cacheControl) : null
 }
 
 function normalizeIconifyPair(prefix: string, name: string): boolean {

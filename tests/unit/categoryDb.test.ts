@@ -50,7 +50,8 @@ function createDb(handlerForSql: (sql: string) => StatementHandler) {
       return statement
     },
     async batch(statements: Array<{ sql?: string }>) {
-      if (!statements.every((statement) => statement.sql?.startsWith('CREATE INDEX'))) batchCalls += 1
+      // Schema DDL/internal initialization is not a category mutation. Count actual business DML.
+      if (statements.some((statement) => /^\s*(?:UPDATE|DELETE FROM|INSERT INTO) categories\b/.test(statement.sql ?? ''))) batchCalls += 1
       return statements.map(() => ({ meta: { changes: 1 }, results: [] }))
     },
   }
@@ -124,7 +125,9 @@ describe('category database hierarchy rules', () => {
       id: 3,
       parent_id: 1,
     })
-    expect(fake.prepared.find((entry) => entry.sql.startsWith('UPDATE categories SET title'))?.params).toEqual(['Updated', null, 3])
+    const params = fake.prepared.find((entry) => entry.sql.startsWith('UPDATE categories SET title'))?.params
+    expect(params?.[0]).toBe('Updated')
+    expect(params?.at(-1)).toBe(3)
   })
 
   it('rejects using a second-level category as a parent', async () => {

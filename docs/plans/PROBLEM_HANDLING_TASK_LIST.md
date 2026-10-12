@@ -204,7 +204,9 @@ PROB-29、PROB-30 是 2026-09-03 轮实现 PROB-01 与 REQ-08 时新发现并登
 
 这些条目**有源码实现证据**，缺的是可复核的运行验证。不要当作未实现重做。
 
-### PROB-13（P1）平台优化剩余真机验收 7 组未闭环
+### PROB-13（P1）平台优化浏览器与真机验收的历史范围
+
+> 以下七组是 2026-09-03 核对时的范围，不是当前未完成数量。当前剩余项只看 [BACKLOG](../BACKLOG.md)；S3 后续执行与导入提示证据见 [变更记录](../../CHANGELOG.md#prob-13-自定义-js-与-csp-验收)，复验按 [部署后验收指南](../guides/PRODUCTION_ACCEPTANCE.md#51-自定义-js-与-csp-专项的复验步骤) 执行。保留当时证据，不将后续通过追记为当时已通过。
 
 - 来源映射：`L1`/`L3`/`L4`/`S3`/`S3 导入提示`/`S4`/`U1–U4`；`docs/plans/PLATFORM_OPTIMIZATION_PLAN.md:861-872`
 - 文档明确「单元测试只能锁住纯函数、源码契约和路由行为」，以下必须部署后真实浏览器确认：
@@ -534,13 +536,13 @@ PROB-29、PROB-30 是 2026-09-03 轮实现 PROB-01 与 REQ-08 时新发现并登
 
 ## 7. 处理这些问题时必须继续遵守的硬约束
 
-来自既有计划与需求文档，改动时不得推翻。
+以下保留仍有效的设计边界；工程环境与验证方式以 [CONTRIBUTING.md](../../CONTRIBUTING.md) 和当前配置为准。旧核对记录中的框架版本、测试数量及缺少组件环境的描述不再构成实施约束。
 
 ### 7.1 技术栈与设计令牌
 
 | 编号 | 约束 | 依据 |
 | --- | --- | --- |
-| `C-1` | Svelte **4.2.19**，无 runes；只能用 `export let` / `$:` / `class:` / `use:` / `bind:` | `package.json:40` |
+| `C-1` | 按当前 `package.json` 使用 Svelte；PROB-34 已迁移到 Svelte 5，保留受支持的 legacy 语法，不为本任务做无关 runes 重写 | 本文 PROB-34；`package.json` |
 | `C-2` | 无 Tailwind / PostCSS 工具类管道，一律 scoped `<style>` + CSS 自定义属性 | `package.json` 无相关依赖 |
 | `C-3` | 引入 token 本身不得产生视觉变化；新 token 取现有最高频取值 | `src/app.css:5-9` |
 | `C-4` | 不得绕过设置契约；卡片几何、分类字号图标、搜索框显隐是用户可配项，只能改默认值与归一化 | `shared/types.ts:103-113,147-149,279-280` |
@@ -567,7 +569,7 @@ PROB-29、PROB-30 是 2026-09-03 轮实现 PROB-01 与 REQ-08 时新发现并登
 ### 7.4 验证与工程纪律
 
 - 常规本地检查：`npm run type-check`、`npm test`、`npm run build`、`git diff --check`。
-- API 端到端：`npm run smoke`（75 项，脚本自管隔离实例与临时 D1；CI 已覆盖）。真实浏览器回归：`node scripts/chrome-regression.mjs`（25 项）。性能：`npm run perf:audit`。
+- API 端到端：`npm run smoke`（脚本自管隔离实例与临时 D1；CI 已覆盖）。真实浏览器回归：`npm run regression:chrome`。性能：`npm run perf:audit`。具体用例数与通过范围以本轮报告为准，不沿用历史数量。
 - 浏览器验证默认用专用临时 Chrome profile；只开专用 target，结束只关该 target 并清理该 profile；**禁止**按进程名清理，也不得关闭用户自有 Chrome。
 - 云端 Issue 状态只能由 GitHub 实时查询确认，不得由本地源码或提交推断（`docs/README.md:31`）。
 - 本清单的任何 GitHub 写操作（回帖、关闭、Project 卡片）与部署操作都需单独授权。

@@ -1,20 +1,23 @@
+import { ICON_SNAPSHOT_VERSION, needsIconSnapshotRefresh, projectBookmarkIconSnapshot } from './iconSnapshot'
 import type { AdminData } from '../../shared/types'
 import { normalizeCategories } from '../../shared/categoryHierarchy'
 import { getStoredAuthSession } from './api'
 import { isRecord } from './guards'
-import { clearSnapshots, currentSnapshotOrigin, hashSnapshotScope, pruneOtherSnapshots, readSnapshot, type SnapshotStorageConfig, writeSnapshot } from './snapshotStorage'
+import { clearSnapshots, currentSnapshotOrigin, hashSnapshotScope, pruneOtherSnapshots, readSnapshot, removeSnapshot, type SnapshotStorageConfig, writeSnapshot } from './snapshotStorage'
 
-type CachedAdminDataPayload = { saved_at: number; version?: string | null; data: AdminData }
-export interface CachedAdminDataEntry { version: string | null; data: AdminData }
+type CachedAdminDataPayload = { saved_at: number; icon_snapshot_version: number; version?: string | null; data: AdminData }
+export interface CachedAdminDataEntry { version: string | null; data: AdminData; needsIconProjection?: boolean }
 
 function parsePayload(value: unknown): CachedAdminDataEntry | null {
   if (!isRecord(value) || !isRecord(value.data)) return null
   const data = value.data
   if (!Array.isArray(data.categories) || !Array.isArray(data.bookmarks) || !isRecord(data.settings) || typeof data.settings.background_preset_id !== 'string') return null
   const adminData = data as unknown as AdminData
+  const projected = projectBookmarkIconSnapshot(adminData)
   return {
-    version: typeof value.version === 'string' ? value.version : null,
-    data: { ...adminData, categories: normalizeCategories(adminData.categories) },
+    ...(projected !== adminData ? { needsIconProjection: true } : {}),
+    version: !needsIconSnapshotRefresh(value.icon_snapshot_version, projected) && typeof value.version === 'string' ? value.version : null,
+    data: { ...projected, categories: normalizeCategories(projected.categories) },
   }
 }
 
@@ -46,9 +49,13 @@ export function readCachedAdminDataEntry(isCurrent: () => boolean = () => true):
   const valid = () => key !== null && isCurrent() && sessionCacheKey() === key
   return withStorage(async () => {
     if (!valid() || !key) return null
-    await pruneOtherSnapshots(storage, key)
+    await pruneOtherSnapshots(storage, key, valid)
     if (!valid()) return null
     const entry = await readSnapshot(storage, key)
+    if (entry?.needsIconProjection && valid()) {
+      await writeSnapshot(storage, key, { saved_at: Date.now(), icon_snapshot_version: ICON_SNAPSHOT_VERSION, version: entry.version, data: entry.data })
+      if (!valid()) await removeSnapshot(storage, key)
+    }
     return valid() ? entry : null
   })
 }
@@ -62,16 +69,23 @@ export function writeCachedAdminData(
   const valid = () => key !== null && isCurrent() && sessionCacheKey() === key
   return withStorage(async () => {
     if (!valid() || !key || !data.settings) return
-    await pruneOtherSnapshots(storage, key)
+    await pruneOtherSnapshots(storage, key, valid)
     if (!valid()) return
-    const payload: CachedAdminDataPayload = { saved_at: Date.now(), version, data }
+    const payload: CachedAdminDataPayload = { saved_at: Date.now(), icon_snapshot_version: ICON_SNAPSHOT_VERSION, version, data: projectBookmarkIconSnapshot(data) }
     await writeSnapshot(storage, key, payload)
     // A native Cache.put already in flight cannot be aborted. Remove its result
     // before letting the next queued operation (including a new login) proceed.
-    if (!valid()) await clearSnapshots(storage)
+    if (!valid()) await removeSnapshot(storage, key)
   })
 }
 
 export function clearCachedAdminData(): Promise<void> {
-  return withStorage(() => clearSnapshots(storage))
+  const requestedKey = sessionCacheKey()
+  return withStorage(() => {
+    const currentKey = sessionCacheKey()
+    // Another tab can finish login while this tab is waiting for its old write.
+    // Keep that new scope, including while asynchronous pruning is suspended.
+    if (currentKey && currentKey !== requestedKey) return pruneOtherSnapshots(storage, currentKey, () => sessionCacheKey() === currentKey)
+    return clearSnapshots(storage, () => sessionCacheKey() === currentKey)
+  })
 }

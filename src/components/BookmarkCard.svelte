@@ -1,10 +1,12 @@
 <script lang="ts">
+  import { createTrustedIconView, emptyTrustedIcon } from '../lib/trustedIconView'
+  let trustedImage = emptyTrustedIcon
+  const trustedView = createTrustedIconView(value => { trustedImage = value })
   import { onDestroy, onMount } from 'svelte'
   import type { CardStyle, DescriptionDisplayMode, PublicBookmark } from '../../shared/types'
   import type { CategoryTreeOption } from '../lib/categorySelect'
   import BookmarkCardCompact from './BookmarkCardCompact.svelte'
-  import { publicStore } from '../lib/stores'
-  import { api } from '../lib/api'
+  import { recordBookmarkClick } from '../lib/dataService'
   import BookmarkCardInfo from './BookmarkCardInfo.svelte'
   import BookmarkContextMenu from './BookmarkContextMenu.svelte'
   import BookmarkLinkModal from './BookmarkLinkModal.svelte'
@@ -53,6 +55,9 @@
    * 带 key 会让 `/api/icon/:id` 返回 `private, no-store`，白丢共享缓存。
    */
   export let iconAccessKey = ''
+  export let reuseCompletedObject = false
+  /** REQ-17 聚合区：卡片来源二级分类名；详情卡显示可见 chip，极简卡经 tooltip/ARIA 承载；空串不显示。 */
+  export let sourceCategoryTitle = ''
 
   let cachedIconFailed = false
   let fallbackFailed = false
@@ -82,6 +87,7 @@
   const LONG_PRESS_MS = 500
 
   $: openInNewTab = bookmark.open_method === 1
+  $: trustedView.set({ ...bookmark, visible: iconInView, preview, online_url: iconBaseState.proxiedHttpIconUrl })
   $: iconBaseState = deriveBookmarkCardIconBase({
     bookmark,
     iconInView,
@@ -89,7 +95,7 @@
     iconAccessKey,
   })
   $: iconText = iconBaseState.iconText
-  $: nextIconStateKey = iconBaseState.nextIconStateKey
+  $: nextIconStateKey = iconBaseState.nextIconStateKey + ':' + trustedImage.active
   $: localCacheKey = iconBaseState.localCacheKey
   $: shouldReadLocalIconCache = iconBaseState.shouldReadLocalIconCache
   $: shouldWaitForLocalIconCache = iconBaseState.shouldWaitForLocalIconCache
@@ -105,8 +111,8 @@
     localCachedIconUrl,
     localCachePending,
   })
-  $: iconUrl = iconUrlState.iconUrl
-  $: hasRenderableIcon = iconUrlState.hasRenderableIcon
+  $: iconUrl = trustedImage.active ? trustedImage.url : iconUrlState.iconUrl
+  $: hasRenderableIcon = trustedImage.active ? Boolean(trustedImage.url) : iconUrlState.hasRenderableIcon
   $: infoCardHeight = height > 0 ? height : 70
   $: safeInfoCardWidth = getInfoCardTrackWidth(width)
   $: infoIconInset = infoCardHeight <= 56 ? 6 : 8
@@ -133,7 +139,7 @@
     localIconReady = false
     iconRetry.reset()
     resetLocalCachedIconUrl()
-    if (shouldReadLocalIconCache) {
+    if (shouldReadLocalIconCache && !trustedImage.active) {
       void loadLocalCachedIcon(
         localCacheKey,
         shouldWaitForLocalIconCache,
@@ -154,6 +160,7 @@
   }
 
   async function loadLocalCachedIcon(cacheKey: string, waitForLocalCache: boolean, remoteUrl: string) {
+    if (trustedImage.active) return
     if (waitForLocalCache) {
       localCachePending = true
     }
@@ -170,7 +177,9 @@
     }
 
     if (remoteUrl) {
-      const remote = await fetchBookmarkIcon(cacheKey, remoteUrl)
+      const remote = await fetchBookmarkIcon(cacheKey, remoteUrl, {
+        reuseCompletedObject: reuseCompletedObject || iconBaseState.hasProjectedImageIcon,
+      })
       if (requestSequence !== localCacheRequest.current) {
         if (remote.url) revokeLocalIconUrl(remote.url)
         return
@@ -193,6 +202,7 @@
   }
 
   function handleIconError() {
+    if (trustedImage.active) { trustedView.failed(); return }
     if (localCachedIconUrl) {
       resetLocalCachedIconUrl()
       localIconReady = false
@@ -216,6 +226,7 @@
 
     if (!cachedIconFailed && (iconBaseState.hasEmbeddedIcon || iconBaseState.shouldUseIconProxy)) {
       cachedIconFailed = true
+      if (iconBaseState.shouldUseIconProxy) iconRetry.failed()
       return
     }
 
@@ -347,9 +358,8 @@
       return
     }
 
-    // Register click both locally and on server
-    publicStore.incrementClick(bookmark.id)
-    void api.public.registerClick(bookmark.id)
+    // 本地乐观 +1 + 持久化本地快照 + 异步登记服务端（见 dataService.recordBookmarkClick）
+    recordBookmarkClick(bookmark.id)
 
     if (!shouldOpenBookmarkModal({ sortMode, openMethod: bookmark.open_method })) return
     event.preventDefault()
@@ -416,6 +426,7 @@
   })
 
   onDestroy(() => {
+    trustedView.destroy()
     iconRetry.dispose()
     localCacheRequest.current += 1
     disconnectIconObserver()
@@ -443,6 +454,7 @@
   {#if style === 'info'}
     <BookmarkCardInfo
       {bookmark}
+      {sourceCategoryTitle}
       {openInNewTab}
       {sortMode}
       {cardLinkStyle}
@@ -466,7 +478,7 @@
       {bookmark}
       {openInNewTab}
       {sortMode}
-      {tooltipText}
+      tooltipText={sourceCategoryTitle ? tooltipText + '\n来自：' + sourceCategoryTitle : tooltipText}
       {compactIconSize}
       {compactIconStyle}
       {showIconTitle}

@@ -70,6 +70,8 @@
     `--category-root-icon-size-base: ${previewSettings.category_display.root_icon_size}px`,
     `--category-child-font-size-base: ${previewSettings.category_display.child_font_size}px`,
     `--category-child-icon-size-base: ${previewSettings.category_display.child_icon_size}px`,
+    previewSettings.category_display.root_title_color ? `--category-root-title-color: ${previewSettings.category_display.root_title_color}` : '',
+    previewSettings.category_display.child_title_color ? `--category-child-title-color: ${previewSettings.category_display.child_title_color}` : '',
     previewSettings.card_text_color ? `--card-text-color: ${previewSettings.card_text_color}` : '',
     `--preview-card-width: ${previewSettings.card_size.width}px`,
     `--preview-accent-fallback: ${theme === 'dark' ? '#7dd3fc' : '#2563eb'}`,
@@ -228,6 +230,7 @@
                 <div>
                   <h3>常用工具</h3>
                   <p>共 2 个站点</p>
+                  <p class="preview-subcategory">二级分类标题（示例）</p>
                 </div>
               </div>
             </header>
@@ -493,7 +496,7 @@
   }
 
   .preview-category h3 {
-    color: var(--card-title-color, currentColor);
+    color: var(--category-root-title-color, var(--card-title-color, currentColor));
     font-size: var(--category-root-font-size, 15px);
     line-height: 1.25;
   }
@@ -503,6 +506,14 @@
     color: var(--card-description-color, currentColor);
     font-size: 11px;
     opacity: 0.76;
+  }
+
+  .preview-category p.preview-subcategory {
+    margin-top: 2px;
+    color: var(--category-child-title-color, var(--card-title-color, currentColor));
+    font-size: var(--category-child-font-size, 13px);
+    font-weight: 600;
+    opacity: 1;
   }
 
   .preview-bookmarks {

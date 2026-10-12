@@ -1,3 +1,4 @@
+import { iconDevice } from './iconDeviceState'
 import { derived, writable, type Readable } from 'svelte/store'
 import type {
   AdminData,
@@ -10,6 +11,8 @@ import type {
   SiteConfig,
 } from '../../shared/types'
 import {
+  AUTH_STORAGE_KEY,
+  subscribeBrowserStorageChanges,
   authApi,
   clearStoredAuthSession,
   getErrorMessage,
@@ -127,11 +130,25 @@ function createPublicStore() {
 
 function createAuthStore() {
   const initialSession = getStoredAuthSession()
-  const { subscribe, set, update } = writable<AuthState>({
+  const { subscribe, update } = writable<AuthState>({
     session: initialSession,
     initialized: false,
     loading: false,
     error: null,
+  })
+
+  function reflectSession(session: LoginResp | null): void {
+    update(state => ({ ...state,
+      session: state.session?.token === session?.token && state.session?.expires_at === session?.expires_at && state.session?.username === session?.username ? state.session : session,
+      initialized: true, loading: false, error: null,
+    }))
+  }
+  subscribeBrowserStorageChanges(key => {
+    if (key === AUTH_STORAGE_KEY || key === null) {
+      const session = getStoredAuthSession()
+      if (!session) clearIconAccessKey()
+      reflectSession(session)
+    }
   })
 
   function applySession(session: LoginResp | null): void {
@@ -143,12 +160,7 @@ function createAuthStore() {
       clearIconAccessKey()
     }
 
-    set({
-      session,
-      initialized: true,
-      loading: false,
-      error: null,
-    })
+    reflectSession(session)
   }
 
   async function initialize(): Promise<void> {
@@ -180,6 +192,8 @@ function createAuthStore() {
   // 返回服务端的撤销结果，让调用方能区分「token 真的作废了」和「只清了本地登录态」。
   // 没有本地会话可退、或请求本身失败时返回 null——此时无从判断服务端状态。
   async function logout(): Promise<LogoutResp | null> {
+    const logoutToken = getStoredAuthSession()?.token
+    void iconDevice.beginLogout()
     update((state) => ({ ...state, loading: true, error: null }))
 
     let result: LogoutResp | null = null
@@ -193,9 +207,9 @@ function createAuthStore() {
         update((state) => ({ ...state, loading: false, error: toErrorMessage(error) }))
         throw error
       }
+    } finally {
+      if (getStoredAuthSession()?.token === logoutToken) applySession(null)
     }
-
-    applySession(null)
     return result
   }
 
@@ -219,6 +233,15 @@ function createAdminStore() {
       update((state) => ({ ...state, data: { ...state.data, categories }, loaded: true, error: null })),
     setBookmarks: (bookmarks: Bookmark[]) =>
       update((state) => ({ ...state, data: { ...state.data, bookmarks }, loaded: true, error: null })),
+    incrementClick: (bookmarkId: number) =>
+      update((state) => ({
+        ...state,
+        data: {
+          ...state.data,
+          bookmarks: state.data.bookmarks.map((bm) =>
+            bm.id === bookmarkId ? { ...bm, click_count: (bm.click_count ?? 0) + 1 } : bm),
+        },
+      })),
     setSettings: (settings: Settings | null) =>
       update((state) => ({ ...state, data: { ...state.data, settings }, loaded: true, error: null })),
     replaceData: (data: AdminData) => set({ data, loading: false, loaded: true, error: null }),

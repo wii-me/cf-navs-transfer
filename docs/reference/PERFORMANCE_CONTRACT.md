@@ -24,12 +24,23 @@ This document records the current performance-sensitive behavior that should not
 ## Bookmark Icons
 
 - Normal home rendering may lazy-load bookmark icons, but changes must not increase same-origin Cloudflare Worker request counts for the same browsing scenario without a measured budget update.
+- `perf:audit` 的图标请求预算（`PERF_MAX_ICON_REQUESTS`）为 **270**（2026-10-12 由 260 上调）。原 260 是 #31 第 3 点的基线（~255）；REQ-17 的一级分类聚合「常用」区固定上限 `CATEGORY_HOT_LIMIT=12`（与全局 `most_visited_count` 解耦）会让每个「空一级 + 有子分类」各多渲染至多 4 张卡片/图标，实测全流程由 ~255 升到 ~262。这是对已请求功能的有界、经测量的预算上调；突发并发仍受 #31 第 3 点的有界调度器约束，上调的只是总请求数上限。
 - HTTP(S) bookmark icons may use same-origin proxy URLs only where the current runtime path already does so.
 - Icon rendering should keep native lazy loading, async decoding, fixed image dimensions, and low fetch priority for bookmark icons.
 - Failed icon handling should prefer stable fallback behavior over repeated retries in the same interaction path.
 - Anonymous icon proxies must perform the current public-visibility metadata gate **before every shared edge-cache lookup**. Cache hits now pay the gate's targeted metadata read; this is intentional for privacy revocation and must be measured by `perf:audit` rather than removed to recover the old hit count. The gate must fail closed.
 
+## Trusted Device Icon Copies
+
+- Persistent object-icon copies are an explicit device opt-in and require a current authenticated receipt. Standard mode and anonymous visitors continue to use the ordinary `no-store` proxy path; ordinary proxy responses are never persisted.
+- Trusted bookmark copies are fetched only through the session-authenticated `/api/icon-local-copy` protocol and are stored in one IndexedDB database. The Service Worker, Cache Storage, aggregate snapshots, and `localStorage` must not mirror the image bodies.
+- The shared bookmark/category budget is 10 MiB of bodies, 1,000 entries, and 512 KiB of index metadata; one body is at most 512 KiB. LRU pressure evicts from the 10 MiB high-water mark to 8 MiB. Category icons do not yet use this storage path.
+- For an unchanged, warmed, authorized, non-evicted bookmark, refresh or same-profile reopen should issue zero icon-body requests. Version/authorization checks remain separately observable and are not counted as icon bodies.
+- `npm run test:icon-storage` measures the native IndexedDB path with synthetic SVGs: 20-item first-batch samples and full-set stress sweeps at 100/500/1,000 entries, five rounds each. Its decode timings are a storage-layer baseline only; it does not measure actual viewport rendering, Worker/D1 queries, production edge behavior, or another browser.
+
 ## Service Worker And Storage
+
+- The offline-shell fingerprint includes generated HTML response-header rules as well as HTML, scripts and styles. A policy-only change must not leave an old cached security policy indefinitely. HTML retains revalidation and uses `no-transform`; immutable build assets and the Service Worker retain their separate cache policies.
 
 - Navigation requests use stale-while-revalidate: the cached `/index.html` is served immediately and refreshed in the background. Do not revert to network-first without measuring the second-visit first paint.
 - The page sends the current document's `/assets/*` list to the Service Worker after `load` so hashed build output actually lands in Cache Storage on the first visit. Do not remove this without replacing it with a build-time manifest.

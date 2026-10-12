@@ -27,7 +27,7 @@ const settings: Settings = {
   card_size: { width: 80, height: 60 },
   card_style: 'info',
   card_icon_size: 60,
-  category_display: { root_font_size: 16, root_icon_size: 20, child_font_size: 14, child_icon_size: 18 },
+  category_display: { root_font_size: 16, root_icon_size: 20, child_font_size: 14, child_icon_size: 18, root_title_color: '#ff0000', child_title_color: '#00ff00' },
   card_show_description: true,
   card_description_mode: 'always',
   card_background_color: '#ffffff',
@@ -56,6 +56,8 @@ describe('shared settings metadata', () => {
     expect('public_mode' in publicSettings).toBe(false)
     expect('custom_css' in publicSettings).toBe(true)
     expect('custom_js' in publicSettings).toBe(true)
+    expect(publicSettings.category_display.root_title_color).toBe('#ff0000')
+    expect(publicSettings.category_display.child_title_color).toBe('#00ff00')
   })
 
   it('uses the public data key registry to fetch public mode plus public fields', () => {

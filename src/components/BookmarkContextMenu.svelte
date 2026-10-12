@@ -23,6 +23,7 @@
   let menuElement: HTMLDivElement | null = null
   let placement: 'down' | 'up' = 'down'
   let maxHeight: number | null = null
+  let topOffset: number | null = null
   let remeasureQueued = false
 
   function handleEditClick() {
@@ -69,9 +70,11 @@
     // bound variable would invalidate Svelte and recursively trigger afterUpdate.
     const element = menuElement
     const previousMaxHeight = element.style.maxHeight
+    const scrollPositions = [element, ...element.querySelectorAll<HTMLElement>('[role="tree"]')].map(node => ({ node, top: node.scrollTop, left: node.scrollLeft }))
     element.style.maxHeight = 'none'
     const naturalHeight = element.scrollHeight
     element.style.maxHeight = previousMaxHeight
+    for (const { node, top, left } of scrollPositions) { node.scrollTop = top; node.scrollLeft = left }
     if (naturalHeight <= 0) return
 
     const anchorRect = anchor.getBoundingClientRect()
@@ -81,9 +84,13 @@
     // Home publishes the fixed sorting bar's exclusion area. Other hosts omit
     // the variable and retain the full viewport as before.
     const toolbarInset = Math.max(0, Number.parseFloat(getComputedStyle(anchor).getPropertyValue('--home-sort-bottom-inset')) || 0)
-    const viewportBottom = Math.max(0, window.innerHeight - toolbarInset)
+    const topInset = Math.max(0, Number.parseFloat(getComputedStyle(anchor).getPropertyValue('--home-top-inset')) || 0)
+    const visualTop = window.visualViewport?.offsetTop ?? 0
+    const viewportTop = Math.max(visualTop, topInset)
+    const visualBottom = visualTop + (window.visualViewport?.height ?? window.innerHeight)
+    const viewportBottom = Math.max(viewportTop, Math.min(visualBottom, window.innerHeight - toolbarInset))
     const spaceBelow = viewportBottom - downStart - VIEWPORT_MARGIN_PX
-    const spaceAbove = upStart - VIEWPORT_MARGIN_PX
+    const spaceAbove = upStart - viewportTop - VIEWPORT_MARGIN_PX
 
     let nextPlacement: 'down' | 'up' = 'down'
     let nextMaxHeight: number | null = null
@@ -98,8 +105,27 @@
       nextMaxHeight = Math.max(0, Math.floor(nextPlacement === 'up' ? spaceAbove : spaceBelow))
     }
 
+    let nextTopOffset: number | null = null
+    if (movePickerOpen && nextMaxHeight !== null) {
+      // A tree needs more than the remainder on one side of a card. Permit it
+      // to overlap the anchor while staying inside the unobscured viewport.
+      // Otherwise the fixed controls can squeeze its scroll area below one row.
+      const available = Math.max(0, viewportBottom - viewportTop - VIEWPORT_MARGIN_PX * 2)
+      nextMaxHeight = Math.min(naturalHeight, Math.floor(available))
+      const preferredTop = nextPlacement === 'up' ? upStart - nextMaxHeight : downStart
+      const menuTop = Math.max(viewportTop + VIEWPORT_MARGIN_PX, Math.min(preferredTop, viewportBottom - VIEWPORT_MARGIN_PX - nextMaxHeight))
+      nextTopOffset = menuTop - anchorRect.top - anchor.clientTop
+    }
+    if (nextTopOffset !== topOffset) topOffset = nextTopOffset
     if (nextPlacement !== placement) placement = nextPlacement
     if (nextMaxHeight !== maxHeight) maxHeight = nextMaxHeight
+  }
+
+  function handleViewportScroll(event: Event): void {
+    // Internal tree scrolling changes neither the anchor nor available space.
+    // Remeasuring it would expand the scroller and reset the user's scrollTop.
+    if (event.target instanceof Node && menuElement?.contains(event.target)) return
+    scheduleMeasure()
   }
 
   function scheduleMeasure(): void {
@@ -117,12 +143,16 @@
   onMount(() => {
     measurePlacement()
     window.addEventListener('resize', scheduleMeasure)
-    window.addEventListener('scroll', scheduleMeasure, true)
+    window.addEventListener('scroll', handleViewportScroll, true)
+    window.visualViewport?.addEventListener('resize', scheduleMeasure)
+    window.visualViewport?.addEventListener('scroll', scheduleMeasure)
   })
 
   onDestroy(() => {
     window.removeEventListener('resize', scheduleMeasure)
-    window.removeEventListener('scroll', scheduleMeasure, true)
+    window.removeEventListener('scroll', handleViewportScroll, true)
+    window.visualViewport?.removeEventListener('resize', scheduleMeasure)
+    window.visualViewport?.removeEventListener('scroll', scheduleMeasure)
   })
 
   $: if (
@@ -146,7 +176,7 @@
   class:placement-up={placement === 'up'}
   class:clamped={maxHeight !== null}
   bind:this={menuElement}
-  style={maxHeight !== null ? `max-height: ${maxHeight}px;` : ''}
+  style={`${maxHeight !== null ? `max-height: ${maxHeight}px;` : ''}${topOffset !== null ? `top: ${topOffset}px; bottom: auto;` : ''}`}
   role="menu"
   tabindex="-1"
   on:click|stopPropagation

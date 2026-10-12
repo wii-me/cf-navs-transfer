@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { createTrustedIconView, emptyTrustedIcon } from '../lib/trustedIconView'
+  let trustedImage = emptyTrustedIcon
+  const trustedView = createTrustedIconView(value => { trustedImage = value })
   import { onDestroy } from 'svelte'
   import type { PublicBookmark } from '../../shared/types'
   import {
@@ -20,6 +23,7 @@
   export let bookmark: PublicBookmark
   /** 私密对象及其私密分类树下的书签需要授权 key；公开对象传空串以保留共享缓存。 */
   export let iconAccessKey = ''
+  export let reuseCompletedObject = false
 
   let cachedIconFailed = false
   let fallbackFailed = false
@@ -35,6 +39,7 @@
   let iconStateKey = ''
   const localCacheRequest = { current: 0 }
 
+  $: trustedView.set({ ...bookmark, visible: true, online_url: iconBaseState.proxiedHttpIconUrl })
   $: iconBaseState = deriveBookmarkCardIconBase({
     bookmark,
     iconInView: true,
@@ -53,18 +58,19 @@
     localCachedIconUrl,
     localCachePending,
   })
-  $: iconUrl = iconUrlState.hasRenderableIcon ? iconUrlState.iconUrl : ''
+  $: iconUrl = trustedImage.active ? trustedImage.url : iconUrlState.hasRenderableIcon ? iconUrlState.iconUrl : ''
   $: iconStyle = buildIconStyle(ICON_SIZE, {
     customBackground: bookmark.icon_background_color ?? '',
   })
-  $: if (iconBaseState.nextIconStateKey !== iconStateKey) {
-    iconStateKey = iconBaseState.nextIconStateKey
+  $: nextStateKey = iconBaseState.nextIconStateKey + ':' + trustedImage.active
+  $: if (nextStateKey !== iconStateKey) {
+    iconStateKey = nextStateKey
     cachedIconFailed = false
     fallbackFailed = false
     localIconReady = false
     iconRetry.reset()
     resetLocalCachedIconUrl()
-    if (iconBaseState.shouldReadLocalIconCache) {
+    if (iconBaseState.shouldReadLocalIconCache && !trustedImage.active) {
       void loadLocalCachedIcon(
         iconBaseState.localCacheKey,
         iconBaseState.shouldWaitForLocalIconCache,
@@ -83,6 +89,7 @@
   }
 
   async function loadLocalCachedIcon(cacheKey: string, waitForLocalCache: boolean, remoteUrl: string): Promise<void> {
+    if (trustedImage.active) return
     if (waitForLocalCache) localCachePending = true
 
     const result = await fetchCachedBookmarkIconUrl(cacheKey, localCacheRequest)
@@ -97,7 +104,9 @@
     }
 
     if (remoteUrl) {
-      const remote = await fetchBookmarkIcon(cacheKey, remoteUrl)
+      const remote = await fetchBookmarkIcon(cacheKey, remoteUrl, {
+        reuseCompletedObject: reuseCompletedObject || iconBaseState.hasProjectedImageIcon,
+      })
       if (requestSequence !== localCacheRequest.current) {
         if (remote.url) revokeLocalIconUrl(remote.url)
         return
@@ -120,6 +129,7 @@
   }
 
   function handleIconError(): void {
+    if (trustedImage.active) { trustedView.failed(); return }
     if (localCachedIconUrl) {
       resetLocalCachedIconUrl()
       localIconReady = false
@@ -143,6 +153,7 @@
 
     if (!cachedIconFailed && (iconBaseState.hasEmbeddedIcon || iconBaseState.shouldUseIconProxy)) {
       cachedIconFailed = true
+      if (iconBaseState.shouldUseIconProxy) iconRetry.failed()
       return
     }
 
@@ -156,6 +167,7 @@
   }
 
   onDestroy(() => {
+    trustedView.destroy()
     iconRetry.dispose()
     localCacheRequest.current += 1
     resetLocalCachedIconUrl()

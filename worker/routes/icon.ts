@@ -32,6 +32,7 @@ import {
 } from '../lib/iconResponses'
 import { createIconAccessGrant, verifyIconAccessGrant } from '../lib/iconSignature'
 import { getJwtSecret } from '../lib/jwt'
+import { decodeVersionedIcon } from '../lib/iconRevision'
 import { fail, ok } from '../lib/response'
 import type { HonoEnv } from '../types'
 
@@ -184,7 +185,7 @@ iconRoutes.get('/icon/:id', objectIconClientCache, async (c) => {
       }
     }
 
-    const bookmark = await getBookmarkIconData(c.env.DB, id)
+    let bookmark = await getBookmarkIconData(c.env.DB, id)
     if (!bookmark) {
       return fallbackIconResponse('', '', fallbackCache)
     }
@@ -192,7 +193,9 @@ iconRoutes.get('/icon/:id', objectIconClientCache, async (c) => {
     if (bookmark.icon_blob) {
       const response = dataUriToResponse(bookmark.icon_blob, successCache)
       if (!response) {
-        await setIconBlob(c.env.DB, id, null)
+        await setIconBlob(c.env.DB, id, null, bookmark)
+        bookmark = await getBookmarkIconData(c.env.DB, id)
+        if (!bookmark) return fallbackIconResponse('', '', fallbackCache)
       } else {
         cacheResponse(c, cacheKey, response)
         return response
@@ -204,7 +207,7 @@ iconRoutes.get('/icon/:id', objectIconClientCache, async (c) => {
     }
 
     if (bookmark.icon.startsWith('data:image/')) {
-      await setIconBlob(c.env.DB, id, bookmark.icon)
+      await setIconBlob(c.env.DB, id, bookmark.icon, bookmark)
       const response = dataUriToResponse(bookmark.icon, successCache)
       if (!response) return cachedFallbackIconResponse(c, cacheKey, bookmark.title, bookmark.url, fallbackCache)
       cacheResponse(c, cacheKey, response)
@@ -227,7 +230,7 @@ iconRoutes.get('/icon/:id', objectIconClientCache, async (c) => {
       return response
     }
 
-    await setIconBlob(c.env.DB, id, iconBytesToDataUri(fetchedIcon))
+    await setIconBlob(c.env.DB, id, iconBytesToDataUri(fetchedIcon), bookmark)
     const response = iconBytesToResponse(fetchedIcon, successCache)
     cacheResponse(c, cacheKey, response)
     return response
@@ -268,6 +271,14 @@ iconRoutes.get('/category-icon/:id', objectIconClientCache, async (c) => {
       // 授权路径也不能泄露「id 不存在」与「id 存在但无图标」的区别之外的信息，
       // 因此这里与匿名路径同样传空标题。
       return fallbackIconResponse('', '', fallbackCache)
+    }
+    if (!category.icon && category.icon_blob) {
+      const stored = decodeVersionedIcon(category.icon_blob)
+      if (stored) {
+        const response = iconBytesToResponse(stored, successCache)
+        cacheResponse(c, cacheKey, response)
+        return response
+      }
     }
     if (!category.icon) {
       return cachedFallbackIconResponse(c, cacheKey, category.title, '', fallbackCache)

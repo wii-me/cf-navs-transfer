@@ -23,6 +23,7 @@
   export let onContextMenu: ((event: MouseEvent) => AsyncVoid) | undefined = undefined
   export let onIconError: (() => AsyncVoid) | undefined = undefined
   export let onIconLoad: (() => AsyncVoid) | undefined = undefined
+  export let sourceCategoryTitle = ''
 
   function handleLinkClick(event: MouseEvent) {
     void onLinkClick?.(event)
@@ -65,6 +66,9 @@
 
   <div class="bookmark-text">
     <h3 class="bookmark-title">{bookmark.title}</h3>
+    {#if sourceCategoryTitle}
+      <span class="bookmark-source">{sourceCategoryTitle}</span>
+    {/if}
       {#if showDescription && descriptionMode === 'always' && bookmark.description}
       <p class="bookmark-description">{bookmark.description}</p>
     {/if}
@@ -229,6 +233,19 @@
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     box-shadow: 0 8px 22px color-mix(in srgb, var(--home-accent-color) 16%, transparent);
+  }
+
+  .bookmark-source {
+    display: block;
+    margin-top: 1px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--card-description-color, currentColor);
+    font-size: 0.62rem;
+    font-weight: 600;
+    opacity: 0.66;
   }
 
 </style>

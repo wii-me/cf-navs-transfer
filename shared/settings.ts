@@ -5,6 +5,8 @@ export const CATEGORY_DISPLAY_DEFAULTS: CategoryDisplaySetting = {
  root_icon_size: 20,
  child_font_size: 14,
  child_icon_size: 18,
+ root_title_color: '',
+ child_title_color: '',
 }
 
 export const CATEGORY_DISPLAY_LIMITS = {
@@ -13,6 +15,8 @@ export const CATEGORY_DISPLAY_LIMITS = {
  child_font_size: { min: 11, max: 24 },
  child_icon_size: { min: 12, max: 32 },
 } as const
+
+export const CATEGORY_TITLE_COLOR_MAX = 32
 
 function normalizeInteger(value: unknown, fallback: number, min: number, max: number): number {
  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
@@ -28,6 +32,8 @@ export function normalizeCategoryDisplaySetting(value: unknown): CategoryDisplay
   root_icon_size: normalizeInteger(source.root_icon_size, CATEGORY_DISPLAY_DEFAULTS.root_icon_size, CATEGORY_DISPLAY_LIMITS.root_icon_size.min, CATEGORY_DISPLAY_LIMITS.root_icon_size.max),
   child_font_size: normalizeInteger(source.child_font_size, CATEGORY_DISPLAY_DEFAULTS.child_font_size, CATEGORY_DISPLAY_LIMITS.child_font_size.min, CATEGORY_DISPLAY_LIMITS.child_font_size.max),
   child_icon_size: normalizeInteger(source.child_icon_size, CATEGORY_DISPLAY_DEFAULTS.child_icon_size, CATEGORY_DISPLAY_LIMITS.child_icon_size.min, CATEGORY_DISPLAY_LIMITS.child_icon_size.max),
+  root_title_color: typeof source.root_title_color === 'string' ? source.root_title_color.trim().slice(0, CATEGORY_TITLE_COLOR_MAX) : '',
+  child_title_color: typeof source.child_title_color === 'string' ? source.child_title_color.trim().slice(0, CATEGORY_TITLE_COLOR_MAX) : '',
  }
 }
 export const CARD_SIZE_DEFAULTS: CardSizeSetting = {

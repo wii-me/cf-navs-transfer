@@ -50,6 +50,9 @@
   export let publicCategoryIds: Set<number> = new Set()
   /** 私密对象的短期图标授权 key；只有需要授权的对象才会被附加。 */
   export let iconAccessKey = ''
+  export let reuseSharedIcon = false
+  /** REQ-17 聚合区：按书签 category_id 查来源二级分类名，用于卡片来源标注；未传则不显示。 */
+  export let sourceCategoryTitles: ReadonlyMap<number, string> | undefined = undefined
 
   // 排序会话由页面统一控制：进入后拖拽只改页面草稿，保存/取消都由页面处理。
   let savingSort = false
@@ -94,7 +97,7 @@
     <header class="section-header" class:no-heading={!showHeading} class:inline-actions={inlineActions && !showHeading}>
       {#if showHeading}
         <div class="section-title-wrap">
-          {#if showCategoryIcon && category.icon}
+          {#if showCategoryIcon && (category.icon || category.icon_display === 'image')}
             <CategoryIcon category={category} size={level === 2 ? 'var(--category-child-icon-size, 30px)' : 'var(--category-root-icon-size, 38px)'} className="section-icon" iconAccessKey={publicCategoryIds.has(Number(category.id)) ? '' : iconAccessKey} />
           {/if}
           <div class="section-copy">
@@ -207,6 +210,7 @@
         <div class="bookmark-grid-item" data-sortable-item data-sort-id={bookmark.id}>
           <BookmarkCard
             {bookmark}
+            sourceCategoryTitle={sourceCategoryTitles?.get(bookmark.category_id)}
             style={cardStyle}
             iconSize={cardIconSize}
             showDescription={resolveBookmarkDescriptionMode(bookmark, cardDescriptionMode) !== 'hidden'}
@@ -220,6 +224,7 @@
             onEdit={onEditBookmark}
             onMoveBookmark={onMoveBookmark}
             iconAccessKey={isBookmarkIconAccessRequired(bookmark, publicCategoryIds.has(Number(bookmark.category_id))) ? iconAccessKey : ''}
+            reuseCompletedObject={reuseSharedIcon}
           />
         </div>
       {/each}
@@ -252,6 +257,7 @@
     font-size: var(--category-child-font-size, 0.92rem);
     font-weight: 600;
     letter-spacing: 0.01em;
+    color: var(--category-child-title-color, var(--home-text-color, currentColor));
   }
 
   .section-header {
@@ -301,7 +307,7 @@
   .section-heading-row h3 {
     min-width: 0;
     flex: 1 1 auto;
-    color: var(--home-text-color, currentColor);
+    color: var(--category-root-title-color, var(--home-text-color, currentColor));
     font-size: var(--category-root-font-size, 1.02rem);
     font-weight: 650;
     line-height: 1.15;

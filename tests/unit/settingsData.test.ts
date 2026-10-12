@@ -147,6 +147,8 @@ describe('worker settings data helpers', () => {
       root_icon_size: 20,
       child_font_size: 14,
       child_icon_size: 18,
+      root_title_color: '',
+      child_title_color: '',
     })
     expect(settingsFromRows([
       {
@@ -160,6 +162,25 @@ describe('worker settings data helpers', () => {
       card_size: { width: 40, height: 300 },
       card_icon_size: 40,
     })
+  })
+
+  it('normalizes category title colors: trims, truncates, non-string falls back to empty', () => {
+    const result = settingsFromRows([
+      {
+        key: 'category_display',
+        value: JSON.stringify({
+          root_title_color: '  #ff0000  ',
+          child_title_color: 123,
+        }),
+      },
+    ]).category_display
+    expect(result.root_title_color).toBe('#ff0000')
+    expect(result.child_title_color).toBe('')
+
+    const long = settingsFromRows([
+      { key: 'category_display', value: JSON.stringify({ root_title_color: 'a'.repeat(50) }) },
+    ]).category_display
+    expect(long.root_title_color.length).toBe(32)
   })
 
   it('validates navigation payloads without mutating them', () => {

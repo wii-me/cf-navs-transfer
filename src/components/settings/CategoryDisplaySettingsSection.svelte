@@ -2,6 +2,7 @@
   import { tick } from 'svelte'
   import { cloneSettingsForm, type SettingsFormModel } from '../../lib/settingsForm'
   import Slider from '../ui/Slider.svelte'
+  import ColorAlphaInput from '../ColorAlphaInput.svelte'
 
   export let form: SettingsFormModel
   export let saving = false
@@ -39,6 +40,15 @@
         format="px"
         bind:value={form.category_display.root_icon_size}
       />
+      <div class="category-color-field">
+        <span>标题颜色</span>
+        <ColorAlphaInput
+          bind:value={form.category_display.root_title_color}
+          on:change={() => void syncForm()}
+          placeholder="留空跟随主题色"
+          inputLabel="一级分类标题颜色值"
+        />
+      </div>
     </section>
 
     <section class="category-display-level" aria-labelledby="category-display-child-title">
@@ -63,6 +73,15 @@
         format="px"
         bind:value={form.category_display.child_icon_size}
       />
+      <div class="category-color-field">
+        <span>标题颜色</span>
+        <ColorAlphaInput
+          bind:value={form.category_display.child_title_color}
+          on:change={() => void syncForm()}
+          placeholder="留空跟随主题色"
+          inputLabel="二级分类标题颜色值"
+        />
+      </div>
     </section>
   </div>
 </fieldset>
@@ -109,6 +128,17 @@
     margin: 0;
     color: var(--sp-strong);
     font-size: 13px;
+  }
+
+  .category-color-field {
+    display: grid;
+    gap: 6px;
+  }
+
+  .category-color-field span {
+    color: var(--sp-strong);
+    font-size: 12px;
+    font-weight: 600;
   }
 
   @media (max-width: 620px) {

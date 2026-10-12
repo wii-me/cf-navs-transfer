@@ -7,6 +7,9 @@
     id: number
     title: string
     icon: string | null
+    icon_display?: 'image' | 'text' | 'empty'
+    icon_revision?: string | null
+    icon_write_epoch?: number
     count: number
   }
 
@@ -15,6 +18,9 @@
   export let rootId: number
   export let title = ''
   export let icon: string | null = null
+  export let icon_display: 'image' | 'text' | 'empty' | undefined = undefined
+  export let icon_revision: string | null | undefined = undefined
+  export let icon_write_epoch: number | undefined = undefined
   export let totalCount = 0
   export let children: HomeCategoryScopeItem[] = []
   export let activeId: number | null = null
@@ -155,7 +161,7 @@
 <svelte:window on:pointerdown={handleWindowPointerDown} on:keydown={handleWindowKeyDown} on:resize={handleWindowResize} />
 <section class="category-scope" class:has-children={children.length > 0} class:has-actions={reserveActions} class:selected={rootActive} class:highlighted={highlightedId === rootId} data-home-category-scope={rootId} aria-labelledby={`home-category-heading-${rootId}`}>
   <div class="scope-heading">
-    <CategoryIcon category={{ id: rootId, title, icon }} size="var(--category-root-icon-size, 40px)" className="scope-icon" iconAccessKey={publicCategoryIds.has(Number(rootId)) ? '' : iconAccessKey} />
+    <CategoryIcon category={{ id: rootId, title, icon, icon_display, icon_revision, icon_write_epoch }} size="var(--category-root-icon-size, 40px)" className="scope-icon" iconAccessKey={publicCategoryIds.has(Number(rootId)) ? '' : iconAccessKey} />
     <div class="scope-accent" aria-hidden="true"></div>
     <div class="scope-copy">
       <div class="scope-title-row">
@@ -240,8 +246,8 @@
                 title={child.title}
                 on:click={() => select(child.id)}
               >
-                {#if child.icon}
-                  <CategoryIcon category={{ id: child.id, title: child.title, icon: child.icon }} size="var(--category-child-icon-size, 22px)" className="scope-tab-icon" iconAccessKey={publicCategoryIds.has(Number(child.id)) ? '' : iconAccessKey} />
+                {#if child.icon || child.icon_display === 'image'}
+                  <CategoryIcon category={child} size="var(--category-child-icon-size, 22px)" className="scope-tab-icon" iconAccessKey={publicCategoryIds.has(Number(child.id)) ? '' : iconAccessKey} />
                 {/if}
                 <span>{child.title}</span>
                 <small>{child.count}</small>
@@ -345,7 +351,7 @@
     flex: 0 1 auto;
     min-width: 0;
     max-width: 100%;
-    color: var(--home-text-color);
+    color: var(--category-root-title-color, var(--home-text-color));
     font-size: var(--category-root-font-size, 1.35rem);
     font-weight: 700;
     line-height: 1.15;
@@ -366,6 +372,7 @@
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     opacity: var(--home-muted-opacity);
+    color: var(--home-text-color);
   }
   .scope-action {
     display: inline-flex;
@@ -495,7 +502,7 @@
 
 
   .scope-tabs button {
-    color: var(--home-text-color, currentColor);
+    color: var(--category-child-title-color, var(--home-text-color, currentColor));
     font: inherit;
     font-size: var(--category-child-font-size, 0.82rem);
     font-weight: 600;
@@ -541,7 +548,7 @@
 
   .scope-tabs small {
     min-width: 1.2rem;
-    color: inherit;
+    color: var(--home-text-color);
     font-size: 0.66rem;
     font-variant-numeric: tabular-nums;
     text-align: right;

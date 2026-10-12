@@ -218,7 +218,7 @@ describe('settings form model', () => {
     })
     expect(normalized.card_size).toEqual({ width: 40, height: 300 })
     expect(normalized.card_icon_size).toBe(100)
-    expect(normalized.category_display).toEqual({ root_font_size: 16, root_icon_size: 20, child_font_size: 14, child_icon_size: 18 })
+    expect(normalized.category_display).toEqual({ root_font_size: 16, root_icon_size: 20, child_font_size: 14, child_icon_size: 18, root_title_color: '', child_title_color: '' })
     expect(normalized.card_background_color).toBe('#123456')
     expect(normalized.card_background_opacity).toBe(0.4)
     expect(normalized.content_layout.max_width).toBe(40)

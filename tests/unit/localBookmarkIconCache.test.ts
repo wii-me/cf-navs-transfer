@@ -120,13 +120,16 @@ describe('local bookmark icon cache', () => {
     expect(isDataImage('https://example.com/icon.png')).toBe(false)
   })
 
-  it('writes and reads cached data URIs through localStorage', async () => {
+  it('does not persist embedded data URIs through the legacy unscoped writer', async () => {
+    const storage = setupLocalStorage()
+    const entries = setupCacheStorage()
     const cacheKey = createBookmarkIconCacheKey({ id: 1, icon: 'data:image/png;base64,a', iconSource: 'custom' })
 
     await writeBookmarkIconDataUri(cacheKey, 'data:image/png;base64,a')
 
-    expect(readCachedBookmarkIconDataUri(cacheKey)).toBe('data:image/png;base64,a')
-    await expect(readCachedBookmarkIconUrl(cacheKey)).resolves.toBe('data:image/png;base64,a')
+    expect(storage.getItem(storageKey(cacheKey))).toBeNull()
+    expect(readCachedBookmarkIconDataUri(cacheKey)).toBeNull()
+    expect(entries.size).toBe(0)
   })
 
   it('ignores non-image data URIs', async () => {
@@ -137,17 +140,19 @@ describe('local bookmark icon cache', () => {
     expect(readCachedBookmarkIconDataUri(cacheKey)).toBeNull()
   })
 
-  it('removes stale localStorage entries for the same bookmark id', async () => {
+  it('removes old localStorage entries without writing an unscoped replacement', async () => {
     const localStorage = setupLocalStorage()
     const firstKey = createBookmarkIconCacheKey({ id: 9, icon: 'data:image/png;base64,old', iconSource: 'custom' })
     const secondKey = createBookmarkIconCacheKey({ id: 9, icon: 'data:image/png;base64,new', iconSource: 'custom' })
 
+    localStorage.setItem(storageKey(firstKey), 'data:image/png;base64,old')
+    localStorage.setItem(storageKey(secondKey), 'data:image/png;base64,stale')
     await writeBookmarkIconDataUri(firstKey, 'data:image/png;base64,old')
     await writeBookmarkIconDataUri(secondKey, 'data:image/png;base64,new')
 
     expect(localStorage.getItem(storageKey(firstKey))).toBeNull()
-    expect(localStorage.getItem(storageKey(secondKey))).toBe('data:image/png;base64,new')
-    expect(localStorage.keys().filter((key) => key.startsWith(`${STORAGE_PREFIX}9-`))).toHaveLength(1)
+    expect(localStorage.getItem(storageKey(secondKey))).toBeNull()
+    expect(localStorage.keys().filter((key) => key.startsWith(`${STORAGE_PREFIX}9-`))).toHaveLength(0)
   })
 
   it('deletes cached localStorage entries and degrades without Cache Storage', async () => {
@@ -176,7 +181,7 @@ describe('local bookmark icon cache', () => {
     expect(firstUrl).toMatch(/^blob:/)
     expect(reopenedUrl).toMatch(/^blob:/)
     expect(entries.size).toBe(1)
-    expect(legacyCacheDeletes).toContain('cf-navs-bookmark-icons-v1')
+    expect(legacyCacheDeletes).toEqual([])
     if (firstUrl) revokeLocalIconUrl(firstUrl)
     if (reopenedUrl) revokeLocalIconUrl(reopenedUrl)
   })
@@ -244,6 +249,25 @@ describe('local bookmark icon cache', () => {
     expect(entries.size).toBe(0)
     revokeLocalIconUrl(b!)
     revokeLocalIconUrl(later!)
+  })
+
+  it('reuses completed public projected icons within the short in-memory window', async () => {
+    setupCacheStorage()
+    const fetchMock = vi.fn().mockResolvedValue(new Response('<svg/>', {
+      headers: { 'content-type': 'image/svg+xml' },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    const url = '/api/icon/42?v=projected&cv=4'
+
+    const first = await fetchBookmarkIcon('42-projected', url, { reuseCompletedObject: true })
+    const second = await fetchBookmarkIcon('42-projected', url, { reuseCompletedObject: true })
+
+    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(first.url).toMatch(/^blob:/)
+    expect(second.url).toMatch(/^blob:/)
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(2)
+    if (first.url) revokeLocalIconUrl(first.url)
+    if (second.url) revokeLocalIconUrl(second.url)
   })
 
   it('never coalesces across authorization grants or icon versions', async () => {
@@ -341,19 +365,23 @@ describe('fetchCachedBookmarkIconUrl', () => {
 
   it('returns the cached URL and marks it as fresh when no race occurs', async () => {
     const cacheKey = createBookmarkIconCacheKey({ id: 1, icon: 'data:image/png;base64,a', iconSource: 'custom' })
-    await writeBookmarkIconDataUri(cacheKey, 'data:image/png;base64,a')
+    localStorage.setItem(storageKey(cacheKey), 'data:image/png;base64,a')
+    const entries = setupCacheStorage()
+    entries.set(`https://cf-navs.local/bookmark-icon/${encodeURIComponent(cacheKey)}`, new Response('a', { headers: { 'content-type': 'image/png' } }))
 
     const seq = { current: 0 }
     const result = await fetchCachedBookmarkIconUrl(cacheKey, seq)
 
     expect(result.stale).toBe(false)
-    expect(result.url).toBe('data:image/png;base64,a')
+    expect(result.url).toBe('blob:test')
     expect(seq.current).toBe(1)
   })
 
   it('returns stale=true and revokes URL when request counter has changed', async () => {
     const cacheKey = createBookmarkIconCacheKey({ id: 2, icon: 'data:image/png;base64,b', iconSource: 'custom' })
-    await writeBookmarkIconDataUri(cacheKey, 'data:image/png;base64,b')
+    localStorage.setItem(storageKey(cacheKey), 'data:image/png;base64,b')
+    const entries = setupCacheStorage()
+    entries.set(`https://cf-navs.local/bookmark-icon/${encodeURIComponent(cacheKey)}`, new Response('b', { headers: { 'content-type': 'image/png' } }))
 
     const seq = { current: 0 }
 
@@ -378,7 +406,9 @@ describe('fetchCachedBookmarkIconUrl', () => {
 
   it('increments the request sequence counter', async () => {
     const cacheKey = createBookmarkIconCacheKey({ id: 3, icon: 'data:image/png;base64,c', iconSource: 'custom' })
-    await writeBookmarkIconDataUri(cacheKey, 'data:image/png;base64,c')
+    localStorage.setItem(storageKey(cacheKey), 'data:image/png;base64,c')
+    const entries = setupCacheStorage()
+    entries.set(`https://cf-navs.local/bookmark-icon/${encodeURIComponent(cacheKey)}`, new Response('c', { headers: { 'content-type': 'image/png' } }))
 
     const seq = { current: 5 }
     await fetchCachedBookmarkIconUrl(cacheKey, seq)
@@ -389,6 +419,27 @@ describe('fetchCachedBookmarkIconUrl', () => {
 
 
 describe('remote icon response classification', () => {
+  it.each(['headers', 'body'])('bounds a stalled object proxy %s and releases its shared request for recovery', async boundary => {
+    setupCacheStorage(); vi.useFakeTimers()
+    let release!: (response: Response) => void
+    const stalled = new Promise<Response>(resolve => { release = resolve })
+    const response = new Response(new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode('<svg>')) } }), { headers: { 'content-type': 'image/svg+xml' } })
+    const fetcher = vi.fn().mockImplementationOnce(() => boundary === 'headers' ? stalled : Promise.resolve(response))
+      .mockResolvedValue(new Response('<svg/>', { headers: { 'content-type': 'image/svg+xml' } }))
+    vi.stubGlobal('fetch', fetcher)
+    try {
+      let settled = false
+      const first = fetchBookmarkIcon('deadline', '/api/icon/456?cv=deadline').then(result => { settled = true; return result })
+      await vi.advanceTimersByTimeAsync(10001)
+      expect(settled).toBe(true)
+      expect(await first).toEqual({ url: null, status: 'retryable' })
+      expect(fetcher.mock.calls[0][1].signal.aborted).toBe(true)
+      const next = await fetchBookmarkIcon('deadline', '/api/icon/456?cv=deadline')
+      expect(next.status).toBe('ready'); expect(fetcher).toHaveBeenCalledTimes(2)
+      if (next.url) revokeLocalIconUrl(next.url)
+    } finally { release(new Response('<svg/>')); vi.useRealTimers(); vi.unstubAllGlobals() }
+  })
+
   it.each([
     [200, '1', 'retryable'],
     [200, null, 'ready'],

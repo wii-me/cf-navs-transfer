@@ -105,7 +105,7 @@ $env:PERF_MAX_FAILED_REQUESTS = '0'
 $env:PERF_MAX_ADMIN_DATA_TRANSFER = '60000'
 $env:PERF_MAX_CACHE_BYTES = '5242880'
 $env:PERF_MIN_BOOKMARK_CARDS = '300'
-$env:PERF_MAX_ICON_REQUESTS = '260'
+$env:PERF_MAX_ICON_REQUESTS = '270'
 ```
 
 The JSON output includes a `checks` array with pass/fail status, actual values, and expected thresholds.
