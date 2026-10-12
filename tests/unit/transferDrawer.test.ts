@@ -201,4 +201,71 @@ describe('TransferDrawer Component', () => {
 
     deleteSpy.mockRestore()
   })
+
+  it('renders upload progress card with progress info and cancel button', async () => {
+    transferStore.openDrawer()
+    const state = {
+      notes: [],
+      loading: false,
+      uploading: true,
+      uploadProgress: {
+        fileName: 'presentation.pdf',
+        fileSize: 10 * 1024 * 1024,
+        loaded: 4 * 1024 * 1024,
+        total: 10 * 1024 * 1024,
+        percent: 40,
+        speed: 2 * 1024 * 1024,
+        eta: 3,
+        stage: 'uploading' as const,
+      },
+      hasMore: false,
+      drawerOpen: true,
+      activeLightboxImage: null,
+      error: null,
+    }
+    // @ts-ignore
+    transferStore.set ? transferStore.set(state) : null
+
+    render(TransferDrawer)
+
+    expect(screen.getByTestId('upload-progress-card')).toBeDefined()
+    expect(screen.getByText('presentation.pdf')).toBeDefined()
+    expect(screen.getByText(/40%/)).toBeDefined()
+    expect(screen.getByText(/2.0 MB\/s/)).toBeDefined()
+
+    const cancelSpy = vi.spyOn(transferStore, 'cancelUpload')
+    const cancelBtn = screen.getByTestId('btn-cancel-upload')
+    await fireEvent.click(cancelBtn)
+    expect(cancelSpy).toHaveBeenCalledTimes(1)
+    cancelSpy.mockRestore()
+  })
+
+  it('renders saving indicator in progress card when stage is saving', () => {
+    transferStore.openDrawer()
+    const state = {
+      notes: [],
+      loading: false,
+      uploading: true,
+      uploadProgress: {
+        fileName: 'backup.tar.gz',
+        fileSize: 50 * 1024 * 1024,
+        loaded: 50 * 1024 * 1024,
+        total: 50 * 1024 * 1024,
+        percent: 100,
+        speed: 5 * 1024 * 1024,
+        eta: 0,
+        stage: 'saving' as const,
+      },
+      hasMore: false,
+      drawerOpen: true,
+      activeLightboxImage: null,
+      error: null,
+    }
+    // @ts-ignore
+    transferStore.set ? transferStore.set(state) : null
+
+    render(TransferDrawer)
+
+    expect(screen.getByText(/云端存储写入中/)).toBeDefined()
+  })
 })

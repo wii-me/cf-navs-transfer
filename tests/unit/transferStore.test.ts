@@ -63,6 +63,7 @@ describe('Transfer Store', () => {
     expect(state.notes).toEqual([])
     expect(state.loading).toBe(false)
     expect(state.uploading).toBe(false)
+    expect(state.uploadProgress).toBeNull()
     expect(state.drawerOpen).toBe(false)
     expect(state.activeLightboxImage).toBeNull()
   })
@@ -91,12 +92,110 @@ describe('Transfer Store', () => {
     const file = new File(['123'], 'screenshot.png', { type: 'image/png' })
     const success = await store.uploadFile(file)
     expect(success).toBe(true)
-    expect(mockService.uploadFile).toHaveBeenCalledWith(file, undefined)
+    expect(mockService.uploadFile).toHaveBeenCalledWith(
+      file,
+      undefined,
+      expect.any(Function),
+      expect.any(AbortSignal)
+    )
 
     const state = get(store)
     expect(state.notes).toHaveLength(1)
     expect(state.notes[0].id).toBe('n3')
     expect(state.notes[0].file_name).toBe('screenshot.png')
+    expect(state.uploadProgress).toBeNull()
+  })
+
+  it('updates uploadProgress and calculates ETA and stage during upload', async () => {
+    const file = new File(['content'], 'test.mp4', { type: 'video/mp4' })
+    let progressCallback: any
+
+    mockService.uploadFile = vi.fn().mockImplementation((_file, _ttl, onProgress) => {
+      progressCallback = onProgress
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({
+            id: 'n4',
+            type: 'file',
+            content: null,
+            file_key: 'transfers/test.mp4',
+            file_name: 'test.mp4',
+            file_size: 1000,
+            mime_type: 'video/mp4',
+            created_at: 4000,
+            expires_at: null,
+          })
+        }, 10)
+      })
+    })
+
+    const uploadPromise = store.uploadFile(file)
+
+    // Initial progress state set
+    let state = get(store)
+    expect(state.uploading).toBe(true)
+    expect(state.uploadProgress?.fileName).toBe('test.mp4')
+    expect(state.uploadProgress?.percent).toBe(0)
+    expect(state.uploadProgress?.stage).toBe('uploading')
+
+    // Simulate progress 50%
+    progressCallback({
+      loaded: 500,
+      total: 1000,
+      percent: 50,
+      speed: 250,
+    })
+
+    state = get(store)
+    expect(state.uploadProgress?.percent).toBe(50)
+    expect(state.uploadProgress?.loaded).toBe(500)
+    expect(state.uploadProgress?.speed).toBe(250)
+    expect(state.uploadProgress?.eta).toBe(2) // (1000 - 500) / 250 = 2s
+    expect(state.uploadProgress?.stage).toBe('uploading')
+
+    // Simulate progress 100% (saving stage)
+    progressCallback({
+      loaded: 1000,
+      total: 1000,
+      percent: 100,
+      speed: 300,
+    })
+
+    state = get(store)
+    expect(state.uploadProgress?.percent).toBe(100)
+    expect(state.uploadProgress?.stage).toBe('saving')
+
+    await uploadPromise
+    state = get(store)
+    expect(state.uploading).toBe(false)
+    expect(state.uploadProgress).toBeNull()
+  })
+
+  it('cancels active upload when cancelUpload is called', async () => {
+    const file = new File(['content'], 'large.iso')
+    let capturedSignal: AbortSignal | undefined
+
+    mockService.uploadFile = vi.fn().mockImplementation((_file, _ttl, _onProgress, signal) => {
+      capturedSignal = signal
+      return new Promise((_, reject) => {
+        signal.addEventListener('abort', () => {
+          reject(new DOMException('Upload aborted', 'AbortError'))
+        })
+      })
+    })
+
+    const uploadPromise = store.uploadFile(file)
+    expect(get(store).uploading).toBe(true)
+    expect(capturedSignal?.aborted).toBe(false)
+
+    store.cancelUpload()
+
+    const result = await uploadPromise
+    expect(result).toBe(false)
+    expect(capturedSignal?.aborted).toBe(true)
+    expect(get(store).uploading).toBe(false)
+    expect(get(store).uploadProgress).toBeNull()
+    expect(get(store).error).toBeNull() // Cancelled upload should not report an error toast
   })
 
   it('deletes note from store', async () => {

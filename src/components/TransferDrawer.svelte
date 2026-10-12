@@ -18,6 +18,7 @@
   $: notes = $transferStore.notes
   $: loading = $transferStore.loading
   $: uploading = $transferStore.uploading
+  $: uploadProgress = $transferStore.uploadProgress
   $: lightboxImage = $transferStore.activeLightboxImage
   $: currentToken = $authStore.session?.token || getAuthToken() || ''
 
@@ -108,7 +109,6 @@
       return
     }
 
-    toastStore.addToast(`正在上传 ${file.name}...`, 'info')
     const success = await transferStore.uploadFile(file, selectedTtlDays > 0 ? selectedTtlDays : undefined)
     if (success) {
       toastStore.addToast('文件传输成功', 'success')
@@ -229,6 +229,20 @@
     if (bytes < 1024) return `${bytes} B`
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  function formatSpeed(bytesPerSec: number): string {
+    if (!bytesPerSec || bytesPerSec <= 0) return '0 KB/s'
+    if (bytesPerSec < 1024 * 1024) return `${(bytesPerSec / 1024).toFixed(1)} KB/s`
+    return `${(bytesPerSec / (1024 * 1024)).toFixed(1)} MB/s`
+  }
+
+  function formatEta(seconds: number): string {
+    if (!seconds || seconds <= 0) return '即将完成'
+    if (seconds < 60) return `剩余约 ${seconds} 秒`
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `剩余约 ${mins}分${secs > 0 ? `${secs}秒` : ''}`
   }
 
   function formatExpiration(expiresAt: number | null): string {
@@ -480,6 +494,51 @@
 
     <!-- 底部发送与上传区 -->
     <div class="drawer-footer">
+      {#if uploadProgress}
+        <div class="upload-progress-card" data-testid="upload-progress-card">
+          <div class="upload-progress-header">
+            <div class="upload-file-info" title={uploadProgress.fileName}>
+              <span class="upload-file-icon">📎</span>
+              <span class="upload-file-name">{uploadProgress.fileName}</span>
+              <span class="upload-file-total">({formatFileSize(uploadProgress.total)})</span>
+            </div>
+            <button
+              type="button"
+              class="btn-cancel-upload"
+              data-testid="btn-cancel-upload"
+              on:click={() => transferStore.cancelUpload()}
+              title="取消上传"
+            >
+              取消
+            </button>
+          </div>
+
+          <div class="upload-progress-track">
+            <div
+              class="upload-progress-bar"
+              style="width: {uploadProgress.percent}%"
+              class:indeterminate={uploadProgress.stage === 'saving'}
+            ></div>
+          </div>
+
+          <div class="upload-progress-meta">
+            {#if uploadProgress.stage === 'saving'}
+              <span class="upload-stage-saving">
+                <span class="upload-saving-spinner"></span>
+                100% · 云端存储写入中，请稍候...
+              </span>
+            {:else}
+              <span class="upload-meta-left">
+                {formatFileSize(uploadProgress.loaded)} / {formatFileSize(uploadProgress.total)} ({uploadProgress.percent}%)
+              </span>
+              <span class="upload-meta-right">
+                {formatSpeed(uploadProgress.speed)} · {formatEta(uploadProgress.eta)}
+              </span>
+            {/if}
+          </div>
+        </div>
+      {/if}
+
       <div class="input-container">
         <textarea
           bind:value={textContent}
@@ -942,6 +1001,153 @@
     background: rgba(59, 130, 246, 0.15);
     border-color: rgba(59, 130, 246, 0.3);
     color: #93c5fd;
+  }
+
+  /* 上传实时进度卡片 */
+  .upload-progress-card {
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 0.5rem;
+    padding: 0.65rem 0.85rem;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  :global([data-theme='dark']) .upload-progress-card {
+    background: rgba(30, 41, 59, 0.95);
+    border-color: rgba(59, 130, 246, 0.4);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .upload-progress-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .upload-file-info {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+    flex: 1;
+    font-size: 0.85rem;
+  }
+
+  .upload-file-icon {
+    flex-shrink: 0;
+  }
+
+  .upload-file-name {
+    font-weight: 600;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  :global([data-theme='dark']) .upload-file-name {
+    color: #f1f5f9;
+  }
+
+  .upload-file-total {
+    flex-shrink: 0;
+    color: #64748b;
+    font-size: 0.8rem;
+  }
+
+  :global([data-theme='dark']) .upload-file-total {
+    color: #94a3b8;
+  }
+
+  .btn-cancel-upload {
+    flex-shrink: 0;
+    background: transparent;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+    padding: 0.15rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: background var(--transition-base), border-color var(--transition-base);
+  }
+
+  .btn-cancel-upload:hover {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: #ef4444;
+  }
+
+  .upload-progress-track {
+    width: 100%;
+    height: 6px;
+    background: rgba(226, 232, 240, 0.8);
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  :global([data-theme='dark']) .upload-progress-track {
+    background: rgba(51, 65, 85, 0.8);
+  }
+
+  .upload-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #2563eb);
+    border-radius: 999px;
+    transition: width var(--transition-base) ease-out;
+  }
+
+  .upload-progress-bar.indeterminate {
+    width: 100% !important;
+    background: linear-gradient(90deg, #3b82f6, #60a5fa, #3b82f6);
+    background-size: 200% 100%;
+    animation: upload-shimmer 1.5s infinite linear;
+  }
+
+  @keyframes upload-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  .upload-progress-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    color: #64748b;
+  }
+
+  :global([data-theme='dark']) .upload-progress-meta {
+    color: #94a3b8;
+  }
+
+  .upload-stage-saving {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: #2563eb;
+    font-weight: 500;
+  }
+
+  :global([data-theme='dark']) .upload-stage-saving {
+    color: #60a5fa;
+  }
+
+  .upload-saving-spinner {
+    width: 0.75rem;
+    height: 0.75rem;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    display: inline-block;
+    animation: upload-spin 0.8s linear infinite;
+  }
+
+  @keyframes upload-spin {
+    to { transform: rotate(360deg); }
   }
 
   .drawer-footer {
