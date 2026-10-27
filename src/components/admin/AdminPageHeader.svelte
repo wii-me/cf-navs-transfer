@@ -61,7 +61,7 @@
         type="button"
         class="icon-button"
         data-testid="admin-transfer-button"
-        on:click={() => transferStore.openDrawer()}
+        onclick={() => transferStore.openDrawer()}
         title="传输助手 (Ctrl+J)"
         aria-label="传输助手"
       >

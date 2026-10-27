@@ -3,7 +3,8 @@ import type {
   TransferNote,
   TransferNotesResp,
 } from '../../../shared/types'
-import { getAuthToken, ApiError } from '../api'
+import { ApiError } from '../api'
+import { getAuthToken } from '../authSession'
 
 export interface UploadProgressEvent {
   loaded: number

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { Hono } from 'hono'
 import { transfersRoutes } from '../../worker/routes/transfers'
 import type { HonoEnv } from '../../worker/types'
@@ -95,7 +95,7 @@ describe('Transfer Routes', () => {
 
   const createMockStorage = () => {
     return {
-      put: async (key: string, body: ReadableStream | ArrayBuffer | Uint8Array, options?: { httpMetadata?: { contentType?: string } }) => {
+      put: async (key: string, _body: ReadableStream | ArrayBuffer | Uint8Array, options?: { httpMetadata?: { contentType?: string } }) => {
         storageObjects.set(key, {
           body: new Uint8Array([1, 2, 3]),
           contentType: options?.httpMetadata?.contentType || 'application/octet-stream',

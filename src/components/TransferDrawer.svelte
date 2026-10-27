@@ -1,26 +1,27 @@
+<svelte:options runes />
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte'
   import { transferStore } from '../lib/stores/transferStore'
   import { authStore } from '../lib/stores'
-  import { getAuthToken } from '../lib/api'
+  import { getAuthToken } from '../lib/authSession'
   import { toastStore } from '../lib/toast'
 
-  let textContent = ''
-  let selectedTtlDays = 7
-  let fileInput: HTMLInputElement | null = null
-  let isDragging = false
-  let imageErrorMap = new Set<string>()
-  let deletingNoteIds = new Set<string>()
-  let isDeleteCooldown = false
-  let cooldownTimer: ReturnType<typeof setTimeout> | null = null
+  let textContent = $state('')
+  let selectedTtlDays = $state(7)
+  let fileInput: HTMLInputElement | null = $state(null)
+  let isDragging = $state(false)
+  let imageErrorMap = $state(new Set<string>())
+  let deletingNoteIds = $state(new Set<string>())
+  let isDeleteCooldown = $state(false)
+  let cooldownTimer: ReturnType<typeof setTimeout> | null = $state(null)
 
-  $: isOpen = $transferStore.drawerOpen
-  $: notes = $transferStore.notes
-  $: loading = $transferStore.loading
-  $: uploading = $transferStore.uploading
-  $: uploadProgress = $transferStore.uploadProgress
-  $: lightboxImage = $transferStore.activeLightboxImage
-  $: currentToken = $authStore.session?.token || getAuthToken() || ''
+  let isOpen = $derived($transferStore.drawerOpen)
+  let notes = $derived($transferStore.notes)
+  let loading = $derived($transferStore.loading)
+  let uploading = $derived($transferStore.uploading)
+  let uploadProgress = $derived($transferStore.uploadProgress)
+  let lightboxImage = $derived($transferStore.activeLightboxImage)
+  let currentToken = $derived($authStore.session?.token || getAuthToken() || '')
 
   function getFileUrl(id: string, isDownload = false): string {
     const token = currentToken || $authStore.session?.token || getAuthToken() || ''
@@ -69,9 +70,11 @@
   }
 
   // 当抽屉打开时，拉取最新的记录
-  $: if (isOpen) {
-    void transferStore.fetchNotes()
-  }
+  $effect(() => {
+    if (isOpen) {
+      void transferStore.fetchNotes()
+    }
+  })
 
   function handleClose() {
     transferStore.closeDrawer()
@@ -285,7 +288,7 @@
   <div
     class="drawer-backdrop"
     data-testid="transfer-drawer-backdrop"
-    on:click={handleClose}
+    onclick={handleClose}
     role="presentation"
   ></div>
 
@@ -293,9 +296,9 @@
   <div
     class="drawer-panel"
     data-testid="transfer-drawer-panel"
-    on:dragover={handleDragOver}
-    on:dragleave={handleDragLeave}
-    on:drop={handleDrop}
+    ondragover={handleDragOver}
+    ondragleave={handleDragLeave}
+    ondrop={handleDrop}
     role="dialog"
     aria-modal="true"
     aria-label="传输助手"
@@ -325,14 +328,14 @@
       </div>
       <div class="header-actions">
         {#if notes.length > 0}
-          <button type="button" class="btn-text danger" on:click={handleClearAll} title="清空全部">
+          <button type="button" class="btn-text danger" onclick={handleClearAll} title="清空全部">
             清空
           </button>
         {/if}
         <button
           type="button"
           class="btn-icon"
-          on:click={() => transferStore.fetchNotes()}
+          onclick={() => transferStore.fetchNotes()}
           title="刷新列表"
           disabled={loading}
         >
@@ -344,7 +347,7 @@
           type="button"
           class="btn-icon close-btn"
           data-testid="transfer-drawer-close"
-          on:click={handleClose}
+          onclick={handleClose}
           title="关闭 (ESC)"
         >
           &times;
@@ -383,7 +386,7 @@
                 class="note-delete-btn"
                 class:is-deleting={deletingNoteIds.has(note.id)}
                 disabled={deletingNoteIds.size > 0 || isDeleteCooldown}
-                on:click={() => handleDeleteNote(note.id)}
+                onclick={() => handleDeleteNote(note.id)}
                 title={deletingNoteIds.has(note.id) ? '正在删除...' : '删除此条'}
                 aria-label={deletingNoteIds.has(note.id) ? '正在删除' : '删除'}
                 data-testid={`delete-note-${note.id}`}
@@ -407,7 +410,7 @@
                     type="button"
                     class="btn-copy"
                     data-testid={`copy-text-${note.id}`}
-                    on:click={() => handleCopyText(note.content || '')}
+                    onclick={() => handleCopyText(note.content || '')}
                   >
                     <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
                       <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
@@ -426,14 +429,14 @@
                     <button
                       type="button"
                       class="image-thumb-btn"
-                      on:click={() => transferStore.openLightbox(getFileUrl(note.id))}
+                      onclick={() => transferStore.openLightbox(getFileUrl(note.id))}
                       title="点击放大预览"
                     >
                       <img
                         src={getFileUrl(note.id)}
                         alt={note.file_name || '图片'}
                         loading="eager"
-                        on:error={() => handleImageError(note.id)}
+                        onerror={() => handleImageError(note.id)}
                       />
                     </button>
                   {/if}
@@ -449,7 +452,7 @@
                     class="btn-copy"
                     target="_blank"
                     rel="noopener noreferrer"
-                    on:click={(e) => handleDownload(e, note.id, note.file_name || 'image.png')}
+                    onclick={(e) => handleDownload(e, note.id, note.file_name || 'image.png')}
                   >
                     <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -475,7 +478,7 @@
                     class="btn-copy"
                     target="_blank"
                     rel="noopener noreferrer"
-                    on:click={(e) => handleDownload(e, note.id, note.file_name || 'file')}
+                    onclick={(e) => handleDownload(e, note.id, note.file_name || 'file')}
                   >
                     <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -506,7 +509,7 @@
               type="button"
               class="btn-cancel-upload"
               data-testid="btn-cancel-upload"
-              on:click={() => transferStore.cancelUpload()}
+              onclick={() => transferStore.cancelUpload()}
               title="取消上传"
             >
               取消
@@ -542,7 +545,7 @@
       <div class="input-container">
         <textarea
           bind:value={textContent}
-          on:keydown={handleTextKeyDown}
+          onkeydown={handleTextKeyDown}
           placeholder="输入要传输的文字... (Ctrl+Enter 发送)"
           rows="3"
         ></textarea>
@@ -553,13 +556,13 @@
           <input
             type="file"
             bind:this={fileInput}
-            on:change={handleFileInputChange}
+            onchange={handleFileInputChange}
             style="display: none;"
           />
           <button
             type="button"
             class="btn-tool"
-            on:click={() => fileInput?.click()}
+            onclick={() => fileInput?.click()}
             title="选择文件或图片上传"
             disabled={uploading}
           >
@@ -577,7 +580,7 @@
         <button
           type="button"
           class="btn-send"
-          on:click={handleSendText}
+          onclick={handleSendText}
           disabled={uploading || !textContent.trim()}
         >
           {uploading ? '发送中...' : '发送'}
@@ -588,10 +591,10 @@
 
   <!-- 大图灯箱预览模态框 -->
   {#if lightboxImage}
-    <div class="lightbox-overlay" on:click={() => transferStore.closeLightbox()} role="presentation">
+    <div class="lightbox-overlay" onclick={() => transferStore.closeLightbox()} role="presentation">
       <div class="lightbox-content">
         <img src={lightboxImage} alt="高清预览" />
-        <button type="button" class="lightbox-close" on:click={() => transferStore.closeLightbox()}>
+        <button type="button" class="lightbox-close" onclick={() => transferStore.closeLightbox()}>
           &times;
         </button>
       </div>

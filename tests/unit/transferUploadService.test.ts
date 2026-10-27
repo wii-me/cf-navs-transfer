@@ -4,7 +4,6 @@ import { transferService } from '../../src/lib/services/transferService'
 
 describe('transferService uploadFile with XHR and progress', () => {
   let originalXHR: any
-  let mockXHR: any
 
   beforeEach(() => {
     originalXHR = window.XMLHttpRequest

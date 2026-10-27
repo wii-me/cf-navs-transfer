@@ -34,6 +34,7 @@ import {
   type SortReq,
 } from '../../shared/types'
 import { clearStoredAuthSession, getAuthToken } from './authSession'
+export { getAuthToken } from './authSession'
 
 export interface ApiErrorOptions {
   status?: number

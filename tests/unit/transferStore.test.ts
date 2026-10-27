@@ -38,7 +38,7 @@ describe('Transfer Store', () => {
           expires_at: ttlDays ? 2000 + ttlDays * 86400000 : null,
         } as TransferNote
       }),
-      uploadFile: vi.fn().mockImplementation(async (file: File, ttlDays?: number) => {
+      uploadFile: vi.fn().mockImplementation(async (file: File, _ttlDays?: number) => {
         return {
           id: 'n3',
           type: 'image',

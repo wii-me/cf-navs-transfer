@@ -201,7 +201,7 @@
         type="button"
         class="icon-button transfer-button"
         data-testid="home-transfer-button"
-        on:click={handleOpenTransfer}
+        onclick={handleOpenTransfer}
         title="传输助手 (Ctrl+J)"
         aria-label="传输助手"
       >

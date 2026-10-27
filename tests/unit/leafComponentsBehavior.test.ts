@@ -342,7 +342,11 @@ describe('AdminPageHeader', () => {
 
     await view.rerender({ isAuthenticated: true, canSeeHome: true, onOpenLogin, onLogout, onSwitchToHome })
     expect(screen.queryByTestId('admin-login-button')).toBeNull()
-    expect(screen.getAllByRole('button').map((b) => b.dataset.testid)).toEqual(['admin-home-button', 'admin-logout-button'])
+    expect(screen.getAllByRole('button').map((b) => b.dataset.testid)).toEqual([
+      'admin-home-button',
+      'admin-transfer-button',
+      'admin-logout-button',
+    ])
     expect(screen.getByRole('button', { name: '返回首页' }).title).toBe('返回首页')
     await fireEvent.click(screen.getByTestId('admin-home-button'))
     await fireEvent.click(screen.getByTestId('admin-logout-button'))
