@@ -1,4 +1,4 @@
-import type { IconCopyMetadata } from './iconLocalCopy'
+import type { IconDataMetadata } from './iconDescriptor'
 
 // CF-Navs 前后端共享类型与 API 契约（单一事实来源）
 // 前端 src/ 与后端 worker/ 都从这里 import，禁止各自重新定义。
@@ -184,16 +184,19 @@ export interface ApiResponse<T = unknown> {
   code: number // 0=成功，非0=错误
   msg: string
   data: T
+  /** 写接口确实提升了数据版本时附带的新版本号（附加字段，见 API_CONTRACT「通用约定」）。 */
+  data_version?: string
 }
 
 // 错误码约定
+// HTTP 状态与 code 的对应约定见 docs/reference/API_CONTRACT.md「错误码与 HTTP 状态约定」。
 export const ErrCode = {
   OK: 0,
   UNAUTHORIZED: 1001, // 未登录 / token 失效
   BAD_REQUEST: 1002, // 参数错误
   NOT_FOUND: 1003, // 资源不存在
-  RATE_LIMITED: 1004, // 登录限流
-  FORBIDDEN: 1005, // 公开模式关闭且未登录
+  RATE_LIMITED: 1004, // 限流（登录 / 安装 / 找回 / 错误上报）
+  FORBIDDEN: 1005, // 公开模式关闭且未登录；跨域安装 / 找回 / 图标副本（后者为真实 HTTP 403）
   CONFLICT: 1006, // 当前资源状态不允许该操作
   SERVER_ERROR: 1500,
 } as const
@@ -262,7 +265,7 @@ export interface RecoverReq {
 }
 
 // GET /api/public/data  （公开只读聚合）
-export interface PublicData extends IconCopyMetadata {
+export interface PublicData extends IconDataMetadata {
   categories: PublicCategory[]
   bookmarks: PublicBookmark[]
   settings: PublicSettings
@@ -270,7 +273,7 @@ export interface PublicData extends IconCopyMetadata {
 }
 
 // GET /api/admin/data  登录态后台聚合数据
-export interface AdminData extends IconCopyMetadata {
+export interface AdminData extends IconDataMetadata {
   categories: Category[]
   bookmarks: Bookmark[]
   settings: Settings | null
@@ -278,7 +281,7 @@ export interface AdminData extends IconCopyMetadata {
 }
 
 // GET /api/data/version  lightweight data version check
-export interface DataVersionResp extends IconCopyMetadata {
+export interface DataVersionResp extends IconDataMetadata {
   version: string
   site_title: string
   public_mode: boolean

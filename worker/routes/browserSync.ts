@@ -1,10 +1,10 @@
 import { Hono } from 'hono'
 import { ErrCode, type BrowserSyncReq } from '../../shared/types'
-import { getSettings, syncBrowserBookmarks, touchDataVersion } from '../lib/db'
-import { invalidatePublicDataCache } from '../lib/cache'
-import { fail, ok } from '../lib/response'
-import { badRequest, readJson } from '../lib/routeHelpers'
-import { invalidateRuntimeDataCache } from '../lib/runtimeCache'
+import { getSettings, syncBrowserBookmarks } from '../lib/db'
+import { createMutationReceipt } from '../lib/db/mutation'
+import { mutationJson } from '../lib/mutationResponse'
+import { fail } from '../lib/response'
+import { badRequest, readJson, serverError } from '../lib/routeHelpers'
 import type { HonoEnv } from '../types'
 
 const MAX_BATCH_SIZE = 100
@@ -28,15 +28,11 @@ browserSyncRoutes.post('/bookmarks', async (c) => {
   }
 
   try {
-    const result = await syncBrowserBookmarks(c.env.DB, body.bookmarks)
-    if (result.created > 0) {
-      await touchDataVersion(c.env.DB)
-      invalidateRuntimeDataCache()
-      invalidatePublicDataCache(c, c.req.url)
-    }
-    return c.json(ok(result))
-  } catch {
-    return c.json(fail(ErrCode.SERVER_ERROR, 'failed to sync browser bookmarks'))
+    const receipt = createMutationReceipt()
+    const result = await syncBrowserBookmarks(c.env.DB, body.bookmarks, receipt)
+    return mutationJson(c, result, receipt)
+  } catch (error) {
+    return serverError(c, 'failed to sync browser bookmarks', error)
   }
 })
 

@@ -1,19 +1,25 @@
+<svelte:options runes />
+
 <script lang="ts">
   type AsyncVoid<T = void> = T | Promise<T>
 
-  export let selected = false
-  export let title = ''
-  export let imageUrl = ''
-  export let imageAlt = ''
-  export let label = ''
-  export let onSelect: (() => AsyncVoid) | undefined = undefined
+  interface Props {
+    selected?: boolean
+    title?: string
+    imageUrl?: string
+    imageAlt?: string
+    label?: string
+    onSelect?: () => AsyncVoid
+  }
+
+  let { selected = false, title = '', imageUrl = '', imageAlt = '', label = '', onSelect }: Props = $props()
 </script>
 
 <button
   type="button"
   class="candidate-card"
   class:selected
-  on:click={() => onSelect?.()}
+  onclick={() => onSelect?.()}
   {title}
 >
   <img src={imageUrl} alt={imageAlt || label} loading="lazy" />

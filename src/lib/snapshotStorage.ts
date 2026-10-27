@@ -1,6 +1,31 @@
 const CACHE_ORIGIN = 'https://cf-navs.local'
 export const DEFAULT_MAX_SNAPSHOT_BYTES = 1_500_000
 
+// Envelope version of every persisted data snapshot. Bump it when the payload
+// shape changes incompatibly: readers then treat older or newer envelopes as a
+// cache miss instead of handing a foreign shape to `parse`. Payloads written
+// before the field existed are the version-1 shape and stay readable.
+export const SNAPSHOT_SCHEMA_VERSION = 1
+const SNAPSHOT_SCHEMA_FIELD = 'snapshot_schema_version'
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export function hasSupportedSnapshotSchema(value: unknown): boolean {
+  if (!isPlainObject(value)) return false
+  const version = value[SNAPSHOT_SCHEMA_FIELD]
+  return version === undefined || version === SNAPSHOT_SCHEMA_VERSION
+}
+
+function parseSnapshot<T>(config: SnapshotStorageConfig<T>, value: unknown): T | null {
+  return hasSupportedSnapshotSchema(value) ? config.parse(value) : null
+}
+
+function stampSnapshot(value: unknown): unknown {
+  return isPlainObject(value) ? { ...value, [SNAPSHOT_SCHEMA_FIELD]: SNAPSHOT_SCHEMA_VERSION } : value
+}
+
 export type SnapshotStorageConfig<T> = {
   cacheName: string
   cachePathPrefix: string
@@ -93,7 +118,7 @@ export async function readSnapshot<T>(config: SnapshotStorageConfig<T>, key: str
     try {
       const raw = localStorage.getItem(localStorageKey(config.storagePrefix, key))
       if (raw) {
-        const parsed = config.parse(JSON.parse(raw))
+        const parsed = parseSnapshot(config, JSON.parse(raw))
         if (parsed) return parsed
       }
     } catch {
@@ -105,14 +130,14 @@ export async function readSnapshot<T>(config: SnapshotStorageConfig<T>, key: str
   try {
     const cache = await caches.open(config.cacheName)
     const cached = await cache.match(cacheRequest(config.cachePathPrefix, key))
-    return cached ? config.parse(await cached.json()) : null
+    return cached ? parseSnapshot(config, await cached.json()) : null
   } catch {
     return null
   }
 }
 
 export async function writeSnapshot<T>(config: SnapshotStorageConfig<T>, key: string, value: unknown): Promise<void> {
-  const serialized = JSON.stringify(value)
+  const serialized = JSON.stringify(stampSnapshot(value))
   if (serialized.length > (config.maxBytes ?? DEFAULT_MAX_SNAPSHOT_BYTES)) {
     await clearSnapshots(config)
     return

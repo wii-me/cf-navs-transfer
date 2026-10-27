@@ -1,5 +1,5 @@
 import { readBoundedBody } from '../../shared/boundedBody'
-import type { IconCopyRequest, IconCopyResult, IconDescriptor } from '../../shared/iconLocalCopy'
+import type { IconDescriptor } from '../../shared/iconDescriptor'
 import {
   ErrCode,
   type AdminData,
@@ -33,8 +33,7 @@ import {
   type SiteMetaResp,
   type SortReq,
 } from '../../shared/types'
-
-export interface StoredAuthSession extends LoginResp { }
+import { clearStoredAuthSession, getAuthToken } from './authSession'
 
 export interface ApiErrorOptions {
   status?: number
@@ -61,20 +60,6 @@ export class ApiError extends Error {
   }
 }
 
-export const AUTH_STORAGE_KEY = 'cf-navs.auth'
-const browserStorageSubscribers = new Set<(key: string | null) => void>()
-export function notifyBrowserStorageChange(key: string | null): void {
-  for (const listener of browserStorageSubscribers) listener(key)
-}
-export function subscribeBrowserStorageChanges(listener: (key: string | null) => void): () => void {
-  ensureAuthStorageListener()
-  browserStorageSubscribers.add(listener)
-  return () => browserStorageSubscribers.delete(listener)
-}
-export function refreshStoredAuthSession(): void {
-  cachedAuthSession = undefined
-  notifyBrowserStorageChange(AUTH_STORAGE_KEY)
-}
 const JSON_HEADERS = {
   accept: 'application/json',
   'content-type': 'application/json',
@@ -85,25 +70,17 @@ const NO_CACHE_HEADERS = {
 }
 
 let apiBaseUrl = '/api'
-let cachedAuthSession: StoredAuthSession | null | undefined = undefined
-let authStorageListenerAttached = false
 
-function isBrowser() {
-  return typeof window !== 'undefined' && typeof localStorage !== 'undefined'
+// 写接口在包络上附带本次提交后的 data_version。请求层只负责把它广播出去，
+// 由 dataService 判断写后是否还需要整包重拉（接线见 appServices）。
+const mutationVersionListeners = new Set<(version: string) => void>()
+function notifyMutationDataVersion(version: string): void {
+  for (const listener of mutationVersionListeners) listener(version)
 }
-
-function ensureAuthStorageListener(): void {
-  if (!isBrowser() || authStorageListenerAttached) {
-    return
-  }
-
-  window.addEventListener('storage', (event) => {
-    if (event.key === AUTH_STORAGE_KEY || event.key === null) cachedAuthSession = undefined
-    notifyBrowserStorageChange(event.key)
-  })
-  authStorageListenerAttached = true
+export function subscribeMutationDataVersion(listener: (version: string) => void): () => void {
+  mutationVersionListeners.add(listener)
+  return () => { mutationVersionListeners.delete(listener) }
 }
-
 function isApiResponse<T>(value: unknown): value is ApiResponse<T> {
   if (!value || typeof value !== 'object') {
     return false
@@ -153,92 +130,8 @@ function maybeAttachAuth(headers: Headers): void {
   }
 }
 
-function normalizeStoredAuthSession(value: unknown): StoredAuthSession | null {
-  if (!value || typeof value !== 'object') {
-    return null
-  }
-
-  const candidate = value as Partial<StoredAuthSession>
-  if (typeof candidate.token !== 'string' || typeof candidate.expires_at !== 'number') {
-    return null
-  }
-
-  if (candidate.expires_at <= Date.now()) {
-    return null
-  }
-
-  return {
-    token: candidate.token,
-    expires_at: candidate.expires_at,
-    username: typeof candidate.username === 'string' ? candidate.username : '',
-  }
-}
-
 export function setApiBaseUrl(baseUrl: string): void {
   apiBaseUrl = baseUrl || '/api'
-}
-
-export function getStoredAuthSession(): StoredAuthSession | null {
-  if (!isBrowser()) {
-    return null
-  }
-
-  ensureAuthStorageListener()
-
-  if (cachedAuthSession === null) return null
-  if (cachedAuthSession !== undefined) {
-    const session = normalizeStoredAuthSession(cachedAuthSession)
-    if (!session) {
-      clearStoredAuthSession()
-    }
-    return session
-  }
-
-  const raw = localStorage.getItem(AUTH_STORAGE_KEY)
-  if (!raw) {
-    cachedAuthSession = null
-    return null
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as unknown
-    const session = normalizeStoredAuthSession(parsed)
-    if (!session) {
-      clearStoredAuthSession()
-      return null
-    }
-    cachedAuthSession = session
-    return session
-  } catch {
-    clearStoredAuthSession()
-    return null
-  }
-}
-
-export function setStoredAuthSession(session: StoredAuthSession): void {
-  cachedAuthSession = session
-  if (!isBrowser()) {
-    return
-  }
-
-  ensureAuthStorageListener()
-  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session))
-  notifyBrowserStorageChange(AUTH_STORAGE_KEY)
-}
-
-export function clearStoredAuthSession(): void {
-  cachedAuthSession = null
-  if (!isBrowser()) {
-    return
-  }
-
-  ensureAuthStorageListener()
-  localStorage.removeItem(AUTH_STORAGE_KEY)
-  notifyBrowserStorageChange(AUTH_STORAGE_KEY)
-}
-
-export function getAuthToken(): string | null {
-  return getStoredAuthSession()?.token ?? null
 }
 
 export function isApiError(error: unknown): error is ApiError {
@@ -334,6 +227,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     })
   }
 
+  if (typeof envelope.data_version === 'string' && envelope.data_version) notifyMutationDataVersion(envelope.data_version)
   return envelope.data
 }
 
@@ -363,9 +257,17 @@ export const installApi = {
     jsonRequest<LoginResp>('/install', 'POST', payload, false, { 'X-Setup-Token': setupToken }),
 }
 
+export function publicDataPath(version?: string | null): string {
+  return version ? `/public/data?v=${encodeURIComponent(version)}` : '/public/data'
+}
+
 export const publicApi = {
-  getData: (auth = false) =>
-    request<PublicData>('/public/data', { auth, cache: 'no-store', headers: NO_CACHE_HEADERS, keepSessionOnUnauthorized: true }),
+  // 匿名请求带上已知的 data_version（`?v=`），服务端按版本命中 edge cache，且会忽略匿名
+  // 请求的 no-cache 指令，因此匿名请求不再发送 no-cache 头。登录态请求从不读共享缓存。
+  getData: (auth = false, version?: string | null) =>
+    request<PublicData>(publicDataPath(auth ? null : version), auth
+      ? { auth, cache: 'no-store', headers: NO_CACHE_HEADERS, keepSessionOnUnauthorized: true }
+      : { cache: 'no-store', keepSessionOnUnauthorized: true }),
   registerClick: (id: number) =>
     request<null>(`/public/bookmarks/${id}/click`, { method: 'POST', keepalive: true }),
 }
@@ -452,9 +354,3 @@ export const api = {
 }
 
 export default api
-
-/** Only this known protocol can materialize an authenticated no-store data response. */
-export function fetchIconCopy(payload: IconCopyRequest, signal?: AbortSignal): Promise<IconCopyResult> {
-  return request<IconCopyResult>('/icon-local-copy', { auth: true, method: 'POST', cache: 'no-store', signal,
-    headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload), maxResponseBytes: 768 * 1024 })
-}

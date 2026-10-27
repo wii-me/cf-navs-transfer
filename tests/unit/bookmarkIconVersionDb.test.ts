@@ -119,14 +119,14 @@ describe('bookmark image version database boundary', () => {
 
   it('migrates old schema idempotently without reading image bodies', async () => {
     const legacy = schema.split('-- Versioned bookmark images:')[0]
-      .replace(/^  icon_revision.*\n/m, '').replace(/^  icon_write_epoch.*\n/m, '')
+      .replace(/^ {2}icon_revision.*\n/m, '').replace(/^ {2}icon_write_epoch.*\n/m, '')
     const { db, sqlite, statements } = database(legacy)
     await ensureSchema(db)
     await ensureSchema(db, true)
     const columns = sqlite.prepare('PRAGMA table_info(bookmarks)').all().map(row => row.name)
     expect(columns).toContain('icon_revision')
     expect(columns).toContain('icon_write_epoch')
-    expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'bookmark_icon_%'").all()).toHaveLength(3)
+    expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'bookmark_icon_%' AND name NOT LIKE 'bookmark_icon_epoch_%'").all()).toHaveLength(3)
     expect(statements.some(sql => /^SELECT.*icon_blob/i.test(sql))).toBe(false)
     expect(schema).toContain(INITIALIZE_ICON_DATASET_SQL)
     for (const trigger of BOOKMARK_ICON_TRIGGERS) expect(schema).toContain(trigger)

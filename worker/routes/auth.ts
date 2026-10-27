@@ -11,12 +11,12 @@ import {
 import { clearLoginFailures, getClientIp, loginRateLimit, recordLoginFailure } from '../middleware/rateLimit'
 import { ensureAdminBootstrap, type AdminCredentials } from '../lib/bootstrap'
 import { hashPassword, verifyPassword } from '../lib/crypto'
-import { setSettingValue } from '../lib/db'
 import { fail, ok } from '../lib/response'
 import { createSession } from '../lib/session'
 import { revokeSession } from '../lib/sessionRevocation'
 import { hasSessionBinding } from '../lib/sessionStore'
 import type { HonoEnv } from '../types'
+import { serverError } from '../lib/routeHelpers'
 
 const ADMIN_PASSWORD_KEY = 'admin_password'
 const MIN_PASSWORD_LENGTH = 8
@@ -28,14 +28,17 @@ export function isValidNewPassword(value: unknown): value is string {
   return typeof value === 'string' && value.length >= MIN_PASSWORD_LENGTH && value.length <= MAX_PASSWORD_LENGTH
 }
 
-export const authRoutes = new Hono<HonoEnv>()
+// 公开：登录。受保护：登出、改密码、当前用户——worker/index.ts 把它们挂进统一
+// authRequired 的受保护子应用；逐路由的 authRequired 保留为纵深防御（幂等，不重复校验）。
+export const authPublicRoutes = new Hono<HonoEnv>()
+export const authProtectedRoutes = new Hono<HonoEnv>()
 
-authRoutes.post('/login', loginRateLimit, async (c) => {
+authPublicRoutes.post('/login', loginRateLimit, async (c) => {
   let credentials: AdminCredentials
   try {
     credentials = await ensureAdminBootstrap(c.env)
-  } catch {
-    return c.json(fail(ErrCode.SERVER_ERROR, 'admin bootstrap failed'))
+  } catch (error) {
+    return serverError(c, 'admin bootstrap failed', error)
   }
 
   let body: LoginReq
@@ -73,7 +76,7 @@ authRoutes.post('/login', loginRateLimit, async (c) => {
   return c.json(ok(data))
 })
 
-authRoutes.post('/logout', authRequired, async (c) => {
+authProtectedRoutes.post('/logout', authRequired, async (c) => {
   // authRequired 已经校验过 token，这里只是取回原始串用于写撤销名单。
   const token = extractBearerToken(c.req.header('Authorization'))
   if (!token) {
@@ -106,7 +109,7 @@ authRoutes.post('/logout', authRequired, async (c) => {
   return c.json(ok(result))
 })
 
-authRoutes.post('/password', authRequired, async (c) => {
+authProtectedRoutes.post('/password', authRequired, async (c) => {
   let body: ChangePasswordReq
   try {
     body = await c.req.json<ChangePasswordReq>()
@@ -125,8 +128,8 @@ authRoutes.post('/password', authRequired, async (c) => {
   let credentials: AdminCredentials
   try {
     credentials = await ensureAdminBootstrap(c.env, { applyCredentialReset: false })
-  } catch {
-    return c.json(fail(ErrCode.SERVER_ERROR, 'admin bootstrap failed'))
+  } catch (error) {
+    return serverError(c, 'admin bootstrap failed', error)
   }
 
   const currentPasswordOk = await verifyPassword(body.current_password, credentials.passwordHash)
@@ -135,17 +138,22 @@ authRoutes.post('/password', authRequired, async (c) => {
   }
 
   try {
-    await setSettingValue(c.env.DB, ADMIN_PASSWORD_KEY, await hashPassword(body.new_password))
-    await clearAllSessions(c.env)
+    // 新密码与新的 JWT 签名密钥同一条语句写入：要么都生效，要么都不生效。
+    await clearAllSessions(c.env, [[ADMIN_PASSWORD_KEY, await hashPassword(body.new_password)]])
     clearAllCachedSessions()
     return c.json(ok(null))
-  } catch {
-    return c.json(fail(ErrCode.SERVER_ERROR, 'failed to update password'))
+  } catch (error) {
+    return serverError(c, 'failed to update password', error)
   }
 })
 
-authRoutes.get('/me', authRequired, (c) => {
+authProtectedRoutes.get('/me', authRequired, (c) => {
   return c.json(ok({ username: c.get('username') }))
 })
+
+/** 两组合并的完整认证路由（单测与独立挂载用）。 */
+export const authRoutes = new Hono<HonoEnv>()
+authRoutes.route('/', authPublicRoutes)
+authRoutes.route('/', authProtectedRoutes)
 
 export default authRoutes

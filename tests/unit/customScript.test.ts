@@ -127,11 +127,10 @@ describe('custom script injection', () => {
   })
 })
 
-// 下面这一组是**接线断言**，不迁移到组件层（PROB-18）。它守的是一个已发生过的回归形态：
-// `custom_js` 一旦被写进主题那条响应式语句，用户脚本就会跟着 `activeTheme` / 背景样式每次变化
-// 重跑一遍。要用真 DOM 证明「切主题不会重跑用户脚本」得挂载 `src/App.svelte`（约 1100 行，
-// 同时编排认证、CRUD、弹窗与备份接线）并 mock 整个 `src/lib/api`，属 PROB-24 的编排拆分前置。
-// 在那之前，「`custom_js` 在 App.svelte 里只出现一次、且不在主题块内」这个源码事实是唯一可及的证据。
+// 下面这一组是**接线断言**（PROB-18）。它守的是一个已发生过的回归形态：`custom_js` 一旦被写进主题那个
+// 响应式副作用，用户脚本就会跟着 `activeTheme` / 背景样式每次变化重跑一遍。挂载真实 App 的行为证明见
+// `tests/unit/appComponent.test.ts`（代码审查三轮第 18 项：切主题 / 系统深色不重跑 apply）；这里保留源码层的护栏。
+// 第 19 项起 App 为 runes 模式，响应式语句是 `$effect.pre` 而不是 `$:`。
 
 describe('app wiring', () => {
   const source = readFileSync('src/App.svelte', 'utf8')
@@ -141,13 +140,13 @@ describe('app wiring', () => {
     // 它会跟着 activeTheme / homeBackgroundStyle 一起被触发。
     const occurrences = source.match(/custom_js/g) ?? []
     expect(occurrences).toHaveLength(1)
-    expect(source).toContain('$: customScriptController?.apply(publicData?.settings?.custom_js)')
+    expect(source).toContain('customScriptController?.apply(publicData?.settings?.custom_js)')
 
     const themeBlock = source.slice(
-      source.indexOf("$: if (typeof document !== 'undefined')"),
-      source.indexOf('$: customScriptController?.apply'),
+      source.indexOf('rootStyleWriter?.applyTheme('),
+      source.indexOf('customScriptController?.apply('),
     )
-    expect(themeBlock).toContain('custom-css-inject')
+    expect(themeBlock).toContain('rootStyleWriter?.applyCustomCss(customCss)')
     expect(themeBlock).not.toContain('custom-js-inject')
   })
 

@@ -1,0 +1,60 @@
+name: Deploy Worker (GitHub Actions fallback)
+
+# 备选部署方式：默认不运行。仓库变量 CF_NAVS_DEPLOY_PROVIDER=github-actions
+# 才会部署；默认部署仍是 Cloudflare 账号关联的 Git 构建。
+# 启用前请先断开 Cloudflare Workers Builds 的 Git 集成，避免同一次推送部署两次。
+on:
+  push:
+    branches:
+      - develop
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-worker-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      vars.CF_NAVS_DEPLOY_PROVIDER == 'github-actions' &&
+      github.ref_name == (vars.CF_NAVS_DEPLOY_BRANCH || 'develop')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # 用现有 CLI 配置生成逻辑按名称查找 D1 cf-navs-db 与 KV SESSION，
+      # 把真实资源 ID 写进仅存在于 runner 的 wrangler.local.toml。
+      - name: Generate Wrangler config
+        run: npm run setup:wrangler
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: "false"
+
+      - name: Deploy
+        run: npm run wrangler -- deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: "false"

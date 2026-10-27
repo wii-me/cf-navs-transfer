@@ -1,5 +1,7 @@
+<svelte:options runes />
+
 <script lang="ts">
-  import { onDestroy, onMount, tick } from 'svelte'
+  import { onDestroy, onMount, tick, untrack } from 'svelte'
   import type { NavigationSetting } from '../../shared/types'
   import CategoryIcon from './CategoryIcon.svelte'
   import {
@@ -21,110 +23,163 @@
     children?: NavigationItem[]
   }
 
-  export let items: NavigationItem[] = []
-  export let activeId: string | number | null = null
-  export let navigation: NavigationSetting = { position: 'left', always_expanded: false, top_layout: 'scroll' }
-  export let onNavigate: ((id: string | number) => void) | undefined = undefined
-  export let onPersistentExpansionChange: ((expanded: boolean) => void) | undefined = undefined
-  export let onTopNavHeightChange: ((height: number) => void) | undefined = undefined
-  export let onTopNavBottomChange: ((bottom: number) => void) | undefined = undefined
-  /**
-   * 对匿名访客可见的分类 id 集合。登录态下导航会列出私密分类，不在该集合里的分类图标
-   * 需带授权 key 才能取到真实图片（Issue #28）。
-   */
-  export let publicCategoryIds: Set<number> = new Set()
-  export let iconAccessKey = ''
+  interface Props {
+    items?: NavigationItem[]
+    activeId?: string | number | null
+    navigation?: NavigationSetting
+    onNavigate?: (id: string | number) => void
+    onPersistentExpansionChange?: (expanded: boolean) => void
+    onTopNavHeightChange?: (height: number) => void
+    onTopNavBottomChange?: (bottom: number) => void
+    /**
+     * 对匿名访客可见的分类 id 集合。登录态下导航会列出私密分类，不在该集合里的分类图标
+     * 需带授权 key 才能取到真实图片（Issue #28）。
+     */
+    publicCategoryIds?: Set<number>
+    iconAccessKey?: string
+  }
+
+  let {
+    items = [],
+    activeId = null,
+    navigation = { position: 'left', always_expanded: false, top_layout: 'scroll' },
+    onNavigate,
+    onPersistentExpansionChange,
+    onTopNavHeightChange,
+    onTopNavBottomChange,
+    publicCategoryIds = new Set(),
+    iconAccessKey = '',
+  }: Props = $props()
 
   const MOBILE_WIDTH = 800
   const DRAG_THRESHOLD_PX = 6
   const RESIZE_DEBOUNCE_MS = 120
   const TOP_SUBMENU_WIDTH = 220
 
-  let isMobileView = false
-  let mobileSidebarOpen = false
-  let hoverExpanded = false
-  let manuallyCollapsed = false
-  let mounted = false
+  let isMobileView = $state(false)
+  let mobileSidebarOpen = $state(false)
+  let hoverExpanded = $state(false)
+  let manuallyCollapsed = $state(false)
+  let mounted = $state(false)
+  // 以下普通变量只在副作用与处理器里比较 / 读写，不进模板。
   let leftPreferenceLoaded = false
-  let topTrack: HTMLElement | null = null
-  let resizeObserver: ResizeObserver | null = null
+  // 元素引用：副作用依赖它们出现（与原 `$:` 的语法依赖一致），且位于 {#if} 内，用 $state（DOM 节点不被代理）。
+  let topTrack: HTMLElement | null = $state(null)
+  let navigationRoot: HTMLElement | null = $state(null)
+  let topMenuElement: HTMLElement | null = $state(null)
+  // onMount 赋值后需让观察器重绑副作用重跑一次（同原 `$:`）；观察器对象不做深层代理。
+  let resizeObserver: ResizeObserver | null = $state.raw(null)
   let resizeTimer: ReturnType<typeof setTimeout> | null = null
   let overflowFrame: number | null = null
-  let overflow = false
-  let canScrollLeft = false
-  let canScrollRight = false
-  let dragging = false
+  let overflow = $state(false)
+  let canScrollLeft = $state(false)
+  let canScrollRight = $state(false)
+  let dragging = $state(false)
   let suppressNextClick = false
   let clickSuppressionTimer: ReturnType<typeof setTimeout> | null = null
   let dragPointerId: number | null = null
   let dragStartX = 0
   let dragStartScrollLeft = 0
   let reportedPersistentExpansion: boolean | null = null
-  let navigationRoot: HTMLElement | null = null
-  let expandedParentIds = new Set<string>()
+  // 展开集合整体替换；不做深层代理。
+  let expandedParentIds = $state.raw(new Set<string>())
   let revealedActiveParentId = ''
-  let openTopMenuId = ''
-  let topMenuStyle = ''
+  let openTopMenuId = $state('')
+  let topMenuStyle = $state('')
   let topMenuAnchor: HTMLElement | null = null
   let topMenuToggle: HTMLButtonElement | null = null
-  let topMenuElement: HTMLElement | null = null
 
-  $: isTop = navigation.position === 'top'
+  // 以下派生值与副作用按原 `$:` 的拓扑顺序声明；副作用与原语句一样先于 DOM 更新执行（$effect.pre），
+  // 只读取原语句语法上出现的响应式变量，写回自身所读变量或调用函数的部分放在 untrack 中。
+  const isTop = $derived(navigation.position === 'top')
   // 分行仅在桌面/宽屏生效；移动端强制横向滚动（FR-B7）。
-  $: isWrap = isTop && navigation.top_layout === 'wrap' && !isMobileView
-  $: isPersistentLeft = !isTop && !isMobileView && navigation.always_expanded
-  $: isExpanded = isMobileView
+  const isWrap = $derived(isTop && navigation.top_layout === 'wrap' && !isMobileView)
+  const isPersistentLeft = $derived(!isTop && !isMobileView && navigation.always_expanded)
+
+  // 挂载后首次进入常驻展开时读取本地收起偏好（原拓扑序在 isExpanded 之前）。
+  $effect.pre(() => {
+    if (mounted && isPersistentLeft && !leftPreferenceLoaded) {
+      untrack(() => {
+        manuallyCollapsed = readLeftNavigationCollapsed(window.localStorage)
+        leftPreferenceLoaded = true
+      })
+    }
+  })
+
+  const isExpanded = $derived(isMobileView
     ? mobileSidebarOpen
     : isPersistentLeft
       ? !manuallyCollapsed
-      : hoverExpanded
+      : hoverExpanded)
 
-  $: {
+  // 常驻展开状态变化时上报（比较变量为普通变量，同值不重复上报）。
+  $effect.pre(() => {
     const nextPersistentExpansion = isPersistentLeft && isExpanded
-    if (nextPersistentExpansion !== reportedPersistentExpansion) {
-      reportedPersistentExpansion = nextPersistentExpansion
-      onPersistentExpansionChange?.(nextPersistentExpansion)
-    }
-  }
-
-  $: if (mounted && isPersistentLeft && !leftPreferenceLoaded) {
-    manuallyCollapsed = readLeftNavigationCollapsed(window.localStorage)
-    leftPreferenceLoaded = true
-  }
-
-  $: if (isTop && mobileSidebarOpen) {
-    mobileSidebarOpen = false
-  }
-
-  $: if (isTop && topTrack) {
-    void items.length
-    void tick().then(() => {
-      updateOverflowState()
-      scrollActiveItemIntoView('auto')
+    const report = onPersistentExpansionChange
+    untrack(() => {
+      if (nextPersistentExpansion !== reportedPersistentExpansion) {
+        reportedPersistentExpansion = nextPersistentExpansion
+        report?.(nextPersistentExpansion)
+      }
     })
-  }
+  })
 
-  $: if (isTop && activeId != null && topTrack) {
-    void activeId
-    void tick().then(() => scrollActiveItemIntoView('smooth'))
-  }
+  $effect.pre(() => {
+    if (isTop && mobileSidebarOpen) {
+      mobileSidebarOpen = false
+    }
+  })
 
-  $: activeParentId = items.find((item) => (
+  const activeParentId = $derived(items.find((item) => (
     item.children?.some((child) => String(child.id) === String(activeId))
-  ))?.id
+  ))?.id)
 
-  $: if (isTop || activeParentId == null) revealedActiveParentId = ''
+  // 原语句依赖 isTop / topTrack / items（读 items.length 只为建立依赖）。
+  $effect.pre(() => {
+    if (isTop && topTrack) {
+      void items.length
+      untrack(() => {
+        void tick().then(() => {
+          updateOverflowState()
+          scrollActiveItemIntoView('auto')
+        })
+      })
+    }
+  })
 
-  $: if (openTopMenuId && (!isTop || !items.some((item) => (
-    String(item.id) === openTopMenuId && Boolean(item.children?.length)
-  )))) {
-    closeTopMenu()
-  }
+  $effect.pre(() => {
+    if (isTop && activeId != null && topTrack) {
+      void activeId
+      untrack(() => {
+        void tick().then(() => scrollActiveItemIntoView('smooth'))
+      })
+    }
+  })
 
-  $: if (!isTop && activeParentId != null && String(activeParentId) !== revealedActiveParentId) {
-    revealedActiveParentId = String(activeParentId)
-    expandedParentIds = new Set([...expandedParentIds, revealedActiveParentId])
-  }
+  // revealedActiveParentId 为普通变量：本段把它清空时，下面「展开当前父级」那段必然因 isTop / activeParentId
+  // 同时变化而重跑且条件为假，与原先两条 `$:` 同序执行的结果一致。
+  $effect.pre(() => {
+    if (isTop || activeParentId == null) revealedActiveParentId = ''
+  })
+
+  $effect.pre(() => {
+    if (openTopMenuId && (!isTop || !items.some((item) => (
+      String(item.id) === openTopMenuId && Boolean(item.children?.length)
+    )))) {
+      untrack(() => closeTopMenu())
+    }
+  })
+
+  $effect.pre(() => {
+    const parentId = activeParentId
+    if (!isTop && parentId != null) {
+      untrack(() => {
+        if (String(parentId) === revealedActiveParentId) return
+        revealedActiveParentId = String(parentId)
+        expandedParentIds = new Set([...expandedParentIds, revealedActiveParentId])
+      })
+    }
+  })
 
   function checkIsMobile(): void {
     isMobileView = window.innerWidth < MOBILE_WIDTH
@@ -373,8 +428,8 @@
 
   function handlePointerMove(event: PointerEvent): void {
     if (!topTrack || dragPointerId !== event.pointerId) return
-    // Mutate through a local DOM reference so Svelte does not invalidate the
-    // bound element variable and rerun active-item auto-scrolling mid-drag.
+    // Mutate through a local DOM reference (historically so Svelte would not invalidate
+    // the bound element variable and rerun active-item auto-scrolling mid-drag).
     const track = topTrack
     const delta = event.clientX - dragStartX
     if (!dragging && Math.abs(delta) >= DRAG_THRESHOLD_PX) {
@@ -427,18 +482,31 @@
     reportTopNavHeight()
   })
 
-  $: if (resizeObserver && topTrack) {
-    resizeObserver.disconnect()
-    resizeObserver.observe(topTrack)
-    if (navigationRoot) resizeObserver.observe(navigationRoot)
-  }
+  // 原语句依赖 resizeObserver / topTrack / navigationRoot：onMount 建好观察器后、顶部轨道或导航根节点
+  // 换新后都重新绑定观察目标（观察器的回调只排一帧测量，重复触发会被合并）。
+  $effect.pre(() => {
+    const observer = resizeObserver
+    const track = topTrack
+    const root = navigationRoot
+    if (observer && track) {
+      untrack(() => {
+        observer.disconnect()
+        observer.observe(track)
+        if (root) observer.observe(root)
+      })
+    }
+  })
 
   // 分行开关/项数变化后，等布局稳定再上报顶部导航高度，供首页调整留白。
-  $: if (isTop) {
-    void isWrap
-    void items.length
-    void tick().then(reportTopNavHeight)
-  }
+  $effect.pre(() => {
+    if (isTop) {
+      void isWrap
+      void items.length
+      untrack(() => {
+        void tick().then(reportTopNavHeight)
+      })
+    }
+  })
 
   onDestroy(() => {
     mounted = false
@@ -459,7 +527,7 @@
       class="scroll-arrow scroll-arrow-left"
       class:hidden={!overflow || isWrap}
       disabled={!canScrollLeft}
-      on:click={() => scrollTopTrack(-1)}
+      onclick={() => scrollTopTrack(-1)}
       aria-label="向左滚动分类"
       title="向左滚动分类"
     >
@@ -471,12 +539,12 @@
       class:wrap={isWrap}
       class:dragging
       bind:this={topTrack}
-      on:scroll={handleTopTrackScroll}
-      on:wheel={handleTopTrackWheel}
-      on:pointerdown={handlePointerDown}
-      on:pointermove={handlePointerMove}
-      on:pointerup={finishPointerDrag}
-      on:pointercancel={finishPointerDrag}
+      onscroll={handleTopTrackScroll}
+      onwheel={handleTopTrackWheel}
+      onpointerdown={handlePointerDown}
+      onpointermove={handlePointerMove}
+      onpointerup={finishPointerDrag}
+      onpointercancel={finishPointerDrag}
     >
       {#each items as item (item.id)}
         <div class="top-item-group" data-navigation-id={item.id}>
@@ -486,7 +554,7 @@
             title={item.title}
             class:active={String(activeId) === String(item.id) || String(activeParentId) === String(item.id)}
             aria-current={String(activeId) === String(item.id) ? 'location' : undefined}
-            on:click={() => handleItemClick(item.id)}
+            onclick={() => handleItemClick(item.id)}
           >
             {#if item.icon || item.icon_display === 'image'}
               <CategoryIcon category={getCategoryIconValue(item)} size="var(--category-root-icon-size, 22px)" className="top-category-icon" iconAccessKey={publicCategoryIds.has(Number(item.categoryId)) ? '' : iconAccessKey} />
@@ -500,7 +568,7 @@
               class="top-submenu-toggle"
               aria-label={`${openTopMenuId === String(item.id) ? '收起' : '展开'} ${item.title} 的子分类`}
               aria-expanded={openTopMenuId === String(item.id)}
-              on:click={(event) => toggleParent(item, event)}
+              onclick={(event) => toggleParent(item, event)}
             >
               ▾
             </button>
@@ -514,7 +582,7 @@
       class="scroll-arrow scroll-arrow-right"
       class:hidden={!overflow || isWrap}
       disabled={!canScrollRight}
-      on:click={() => scrollTopTrack(1)}
+      onclick={() => scrollTopTrack(1)}
       aria-label="向右滚动分类"
       title="向右滚动分类"
     >
@@ -531,7 +599,7 @@
           tabindex="-1"
           aria-label={`${parent.title} 子分类`}
           bind:this={topMenuElement}
-          on:keydown={handleTopMenuKeyDown}
+          onkeydown={handleTopMenuKeyDown}
         >
           {#each parent.children as child (child.id)}
             <button
@@ -539,7 +607,7 @@
               role="menuitem"
               title={child.title}
               class:active={String(activeId) === String(child.id)}
-              on:click={() => handleItemClick(child.id)}
+              onclick={() => handleItemClick(child.id)}
             >
               <span class="top-submenu-title">
                 {#if child.icon || child.icon_display === 'image'}
@@ -559,7 +627,7 @@
     type="button"
     class="toc-mobile-btn"
     class:hidden={!isMobileView}
-    on:click={handleMobileBtnClick}
+    onclick={handleMobileBtnClick}
     aria-label="目录导航"
     aria-expanded={mobileSidebarOpen}
   >
@@ -569,7 +637,7 @@
   </button>
 
   {#if isMobileView && mobileSidebarOpen}
-    <button type="button" class="sidebar-overlay" on:click={closeMobileSidebar} aria-label="关闭目录导航"></button>
+    <button type="button" class="sidebar-overlay" onclick={closeMobileSidebar} aria-label="关闭目录导航"></button>
   {/if}
 
   <aside
@@ -578,17 +646,17 @@
     class:persistent={isPersistentLeft}
     class:mobile-hidden={isMobileView && !mobileSidebarOpen}
     aria-label="分类导航"
-    on:mouseenter={handleMouseEnter}
-    on:mouseleave={handleMouseLeave}
+    onmouseenter={handleMouseEnter}
+    onmouseleave={handleMouseLeave}
     bind:this={navigationRoot}
   >
     {#if isMobileView}
-      <button type="button" class="toc-close-btn" on:click={closeMobileSidebar} aria-label="收起目录">‹</button>
+      <button type="button" class="toc-close-btn" onclick={closeMobileSidebar} aria-label="收起目录">‹</button>
     {:else if isPersistentLeft}
       <button
         type="button"
         class="toc-collapse-btn"
-        on:click={togglePersistentLeft}
+        onclick={togglePersistentLeft}
         aria-label={isExpanded ? '收缩分类导航' : '展开分类导航'}
         aria-expanded={isExpanded}
         title={isExpanded ? '收缩分类导航' : '展开分类导航'}
@@ -607,7 +675,7 @@
               title={item.title}
               class:active={String(activeId) === String(item.id)}
               aria-current={String(activeId) === String(item.id) ? 'location' : undefined}
-              on:click={() => handleItemClick(item.id)}
+              onclick={() => handleItemClick(item.id)}
             >
               {#if item.icon || item.icon_display === 'image'}
                 <span class="toc-icon-slot">
@@ -625,7 +693,7 @@
                 class="toc-expand-button"
                 aria-label={`${expandedParentIds.has(String(item.id)) ? '收起' : '展开'} ${item.title} 的子分类`}
                 aria-expanded={expandedParentIds.has(String(item.id))}
-                on:click={() => toggleParent(item)}
+                onclick={() => toggleParent(item)}
               >
                 {expandedParentIds.has(String(item.id)) ? '▾' : '▸'}
               </button>
@@ -640,7 +708,7 @@
                   title={child.title}
                   class:active={String(activeId) === String(child.id)}
                   aria-current={String(activeId) === String(child.id) ? 'location' : undefined}
-                  on:click={() => handleItemClick(child.id)}
+                  onclick={() => handleItemClick(child.id)}
                 >
                   <span class="toc-child-title">
                     {#if child.icon || child.icon_display === 'image'}

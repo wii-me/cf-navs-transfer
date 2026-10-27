@@ -1,3 +1,5 @@
+<svelte:options runes />
+
 <script lang="ts">
   import { tick } from 'svelte'
   import { cloneSettingsForm, type SettingsFormModel } from '../../lib/settingsForm'
@@ -6,16 +8,21 @@
   import InputGroup from '../ui/InputGroup.svelte'
   import Slider from '../ui/Slider.svelte'
 
-  export let form: SettingsFormModel
-  export let saving = false
+  interface Props {
+    /** SettingsPanel 以 `bind:form` 传入；写回字段或整体替换都经 bindable setter 通知父组件。 */
+    form: SettingsFormModel
+    saving?: boolean
+  }
+
+  let { form = $bindable(), saving = false }: Props = $props()
 
   async function syncForm(): Promise<void> {
     await tick()
     form = cloneSettingsForm(form)
   }
 
-  $: isLeft = form.navigation.position === 'left'
-  $: isTop = form.navigation.position === 'top'
+  const isLeft = $derived(form.navigation.position === 'left')
+  const isTop = $derived(form.navigation.position === 'top')
 
   function setAlwaysExpanded(value: boolean): void {
     form.navigation.always_expanded = value
@@ -44,7 +51,7 @@
               type="radio"
               bind:group={form.navigation.position}
               value="left"
-              on:change={() => void syncForm()}
+              onchange={() => void syncForm()}
             />
             <span>左侧悬浮</span>
           </label>
@@ -53,7 +60,7 @@
               type="radio"
               bind:group={form.navigation.position}
               value="top"
-              on:change={() => void syncForm()}
+              onchange={() => void syncForm()}
             />
             <span>顶部固定</span>
           </label>
@@ -69,7 +76,7 @@
           checked={form.navigation.always_expanded}
           disabled={saving || !isLeft}
           ariaLabel="左侧导航始终展开"
-          on:change={(event) => setAlwaysExpanded(event.detail)}
+          onchange={setAlwaysExpanded}
         />
       </div>
 
@@ -82,7 +89,7 @@
           checked={form.navigation.top_layout === 'wrap'}
           disabled={saving || !isTop}
           ariaLabel="顶部分类分行显示"
-          on:change={(event) => setTopLayout(event.detail)}
+          onchange={setTopLayout}
         />
       </div>
     </div>
@@ -101,18 +108,19 @@
           step={10}
           bind:value={form.content_layout.max_width}
           ariaLabel="最大宽度"
-          on:input={() => void syncForm()}
+          oninput={() => void syncForm()}
         >
-          <select
-            slot="suffix"
-            bind:value={form.content_layout.max_width_unit}
-            class="unit-select native-select"
-            aria-label="最大宽度单位"
-            on:change={() => void syncForm()}
-          >
-            <option value="px">px</option>
-            <option value="%">%</option>
-          </select>
+          {#snippet suffix()}
+            <select
+              bind:value={form.content_layout.max_width_unit}
+              class="unit-select native-select"
+              aria-label="最大宽度单位"
+              onchange={() => void syncForm()}
+            >
+              <option value="px">px</option>
+              <option value="%">%</option>
+            </select>
+          {/snippet}
         </InputGroup>
       </label>
 
@@ -124,7 +132,7 @@
           max={100}
           step={1}
           bind:value={form.content_layout.margin_x}
-          on:input={() => void syncForm()}
+          oninput={() => void syncForm()}
         />
       </div>
 
@@ -136,7 +144,7 @@
           max={50}
           step={1}
           bind:value={form.content_layout.margin_top}
-          on:input={() => void syncForm()}
+          oninput={() => void syncForm()}
         />
       </div>
 
@@ -148,7 +156,7 @@
           max={50}
           step={1}
           bind:value={form.content_layout.margin_bottom}
-          on:input={() => void syncForm()}
+          oninput={() => void syncForm()}
         />
       </div>
     </div>

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ErrCode } from '../../shared/types'
-import { api, getAuthToken, setApiBaseUrl, setStoredAuthSession } from '../../src/lib/api'
+import { api, setApiBaseUrl } from '../../src/lib/api'
+import { getAuthToken, setStoredAuthSession } from '../../src/lib/authSession'
 
 function stubBrowserStorage() {
   const store = new Map<string, string>()
@@ -61,7 +62,7 @@ describe('background request session handling', () => {
   )
 
   it('does not leak the option into the fetch init', async () => {
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
       new Response(JSON.stringify({ code: 0, msg: 'ok', data: { title: 'Example', final_url: 'https://example.com/' } }), {
         status: 200,
         headers: { 'content-type': 'application/json' },

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   createOptimisticSortState,
   isLatestSortRequest,
@@ -158,5 +158,26 @@ describe('app sort queue helpers', () => {
       'remote:2',
       'persist',
     ])
+  })
+
+  it('warns instead of silently swallowing a failed restore, keeping the save error as the reported one', async () => {
+    const state = createOptimisticSortState()
+    const saveError = new Error('save failed')
+    const restoreError = new Error('restore failed')
+    const errors: unknown[] = []
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      await expect(runOptimisticSort(state, [1], {
+        applyLocalSort: async () => undefined,
+        saveRemoteSort: async () => { throw saveError },
+        persist: async () => undefined,
+        restoreOnError: async () => { throw restoreError },
+        onError: (error) => { errors.push(error) },
+      })).resolves.toBeUndefined()
+      expect(errors).toEqual([saveError])
+      expect(warn).toHaveBeenCalledWith('[CF-Navs] failed to restore sort order after save error', restoreError)
+    } finally {
+      warn.mockRestore()
+    }
   })
 })

@@ -1,5 +1,5 @@
 import { decodeIconDataUri } from '../../shared/iconDataUri'
-import { iconBytesRevision } from '../../shared/iconLocalCopy'
+import { iconBytesRevision } from '../../shared/iconDescriptor'
 import { sniffImageContentType, type FetchedIcon } from './iconData'
 
 // A persisted revision certifies recognized image bytes, not a URL or HTTP success.

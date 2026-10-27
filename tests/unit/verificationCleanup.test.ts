@@ -5,6 +5,9 @@ import { assertFixtureOwnership, createVerificationCleanup } from '../../scripts
 
 const run = '1234abcd'
 const fixtures = { categories: [10, 11], bookmarks: [20] }
+// cleanup() 的 deletions/sessions 在 JS 里以空数组字面量初始化，推断为 never[]；这里给出测试读取的证据字段。
+type CleanupEvidence = { attempts?: number; absent?: boolean; error?: string }
+const evidence = (rows: unknown[]) => rows as CleanupEvidence[]
 function setup(options: Record<string, any> = {}) {
   const data = { categories: [{ id: 10, title: 'Browser regression ' + run, parent_id: null }, { id: 11, title: 'Browser child ' + run, parent_id: 10 }], bookmarks: [{ id: 20, title: 'Browser ' + run + ' 0', category_id: 10 }] }
   const live = new Set(['owned-A', 'owned-B', 'user-unrelated'])
@@ -51,7 +54,8 @@ function setup(options: Record<string, any> = {}) {
     throw Error('Unexpected request')
   })
   let time = 0
-  const owner = createVerificationCleanup({ baseUrl: 'https://example.test', run, credentials: { username: 'synthetic', password: 'not-real' }, fetchImpl,
+  // 替身只覆盖脚本实际发出的 (URL, init) 调用形状，不实现完整的 fetch 重载。
+  const owner = createVerificationCleanup({ baseUrl: 'https://example.test', run, credentials: { username: 'synthetic', password: 'not-real' }, fetchImpl: fetchImpl as unknown as typeof fetch,
     revocationWaitMs: 3000, sleep: async () => { time += 1000 }, now: () => time })
   return { data, live, calls, owner, fetchImpl }
 }
@@ -109,11 +113,11 @@ describe('test-owned host cleanup', () => {
   it('lost delete acknowledgements do not cause blind repeats', async () => {
     const f = setup({ lostDelete: true }); f.owner.rememberSession('owned-A')
     const result = await f.owner.cleanup(fixtures)
-    expect(result.serverFixturesRemoved).toBe(true); expect(result.deletions.every(e => e.attempts === 1 && e.absent)).toBe(true)
+    expect(result.serverFixturesRemoved).toBe(true); expect(evidence(result.deletions).every(e => e.attempts === 1 && e.absent)).toBe(true)
   })
   it('a still-present record gets at most one retry', async () => {
     const f = setup({ deleteFailsOnce: true }); f.owner.rememberSession('owned-A')
-    expect((await f.owner.cleanup(fixtures)).deletions[0].attempts).toBe(2)
+    expect(evidence((await f.owner.cleanup(fixtures)).deletions)[0].attempts).toBe(2)
   })
   it('permanent delete failure stays failed but does not prevent revocation', async () => {
     const f = setup({ deleteNeverSucceeds: true }); f.owner.rememberSession('owned-A')
@@ -158,7 +162,7 @@ describe('test-owned host cleanup', () => {
   it('waits for actual rejection, not just logout HTTP 200', async () => {
     const f = setup({ revocationFails: true }); f.owner.rememberSession('owned-A')
     const result = await f.owner.cleanup(fixtures)
-    expect(result.sessionRevoked).toBe(false); expect(result.sessions[0].error).toContain('remains valid')
+    expect(result.sessionRevoked).toBe(false); expect(evidence(result.sessions)[0].error).toContain('remains valid')
   })
   it('accepts a lost logout response only when the same token is actually rejected', async () => {
     const f = setup({ lostLogout: true }); f.owner.rememberSession('owned-A')
@@ -205,7 +209,7 @@ describe('test-owned host cleanup', () => {
       owner.rememberSession('owned-A'); owner.rememberSession('owned-B')
       const result = await owner.cleanup({ categories: [], bookmarks: [] })
       expect(result.sessionRevoked).toBe(false); expect(result.sessions).toHaveLength(2)
-      expect(result.sessions.every(e => e.error?.includes('transport failed'))).toBe(true)
+      expect(evidence(result.sessions).every(e => e.error?.includes('transport failed'))).toBe(true)
     } finally { sockets.forEach(socket => socket.destroy()); await new Promise<void>(resolve => server.close(() => resolve())) }
   })
 })

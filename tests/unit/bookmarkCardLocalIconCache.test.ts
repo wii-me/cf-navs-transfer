@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, waitFor } from '@testing-library/svelte'
 import BookmarkCard from '../../src/components/BookmarkCard.svelte'
 import type { PublicBookmark } from '../../shared/types'
+vi.mock('../../src/lib/localIconView', () => import('../helpers/inactiveLocalIconView'))
 
 type CacheEntries = Map<string, Response>
 

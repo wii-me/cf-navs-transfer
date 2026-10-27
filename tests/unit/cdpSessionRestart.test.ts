@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { EventEmitter } from 'node:events'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 
 const io = vi.hoisted(() => ({
   spawn: vi.fn(), count: vi.fn(), exists: vi.fn(), mkdir: vi.fn(), rm: vi.fn(), stat: vi.fn(),
@@ -22,9 +22,9 @@ import { CdpSession } from '../../scripts/lib/cdpSession.mjs'
 
 type Command = { id: number; method: string; params: Record<string, unknown>; sessionId?: string }
 type Reply = { result?: Record<string, unknown>; error?: { message: string; code: number } }
-type Process = EventEmitter & { pid: number; exitCode: number | null; unref: ReturnType<typeof vi.fn> }
+type Process = EventEmitter & { pid: number; exitCode: number | null; unref: Mock }
 type Socket = EventEmitter & {
-  readyState: number; send: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn>;
+  readyState: number; send: Mock; close: Mock;
   commands: Command[]; url: string;
 }
 const profile = path.resolve('unit-fixtures', 'cf-navs-chrome-profile-restart')
@@ -54,6 +54,12 @@ async function live(options = {}) {
   await value.attach()
   trace.length = 0
   return value
+}
+// restart() 的证据对象在 JS 里以 current: null 初始化，推断不出成功重启后的快照形状；
+// 这里给出该快照的实际字段，成功路径上 current 必然已赋值。
+type RestartSnapshot = { pid: number | null; targetId: string | null; profile: string }
+function restarted(evidence: { current: RestartSnapshot | null }): RestartSnapshot {
+  return evidence.current!
 }
 function event(socket: Socket, method: string, params: unknown = {}) {
   socket.emit('message', Buffer.from(JSON.stringify({ method, params })))
@@ -190,14 +196,15 @@ describe('CdpSession cleanup ownership and profile policy', () => {
     const relative = path.join('unit-fixtures', '..', 'unit-fixtures', 'cf-navs-chrome-profile-locked')
     const absolute = path.resolve(relative)
     const options = { userDataDir: relative }
-    const value = await live(options)
+    // userDataDir 由 CdpSession 在运行时冻结（defineProperty），类型推断看不到它，这里显式补上以验证重赋值会抛错。
+    const value = await live(options) as CdpSession & { userDataDir: string }
     options.userDataDir = path.resolve('unit-fixtures', 'cf-navs-chrome-profile-other')
     expect(() => { value.userDataDir = options.userDataDir }).toThrow(TypeError)
     expect(() => Object.defineProperty(value, 'userDataDir', { value: options.userDataDir })).toThrow(TypeError)
     expect(value.userDataDir).toBe(absolute)
     const result = await value.restart()
     expect(result.previous.profile).toBe(absolute)
-    expect(result.current.profile).toBe(absolute)
+    expect(restarted(result).profile).toBe(absolute)
     for (const [, args] of io.spawn.mock.calls) expect(args).toContain(`--user-data-dir=${absolute}`)
     expect(io.stat).toHaveBeenCalledWith(absolute)
     await value.cleanup()
@@ -212,7 +219,7 @@ describe('CdpSession cleanup ownership and profile policy', () => {
     value.createdTarget = true
     value.targetId = 'claimed-target'
     value.sessionId = 'claimed-session'
-    value.chromeProcess = { pid: 123 }
+    value.chromeProcess = { pid: 123 } as unknown as NonNullable<typeof value.chromeProcess>
     const error = await restartError(value)
     expect(error.restartEvidence.closed).toBeNull()
     expect(io.spawn).not.toHaveBeenCalled()
@@ -329,7 +336,7 @@ describe('strict profile process counting', () => {
     const value = await live({ userDataDir: windowsProfile })
     const result = await value.restart()
     expect(result.previous).toMatchObject({ profile: windowsProfile, remainingProcesses: 1 })
-    expect(result.current.profile).toBe(windowsProfile)
+    expect(restarted(result).profile).toBe(windowsProfile)
     for (const [, args] of io.spawn.mock.calls) expect(args).toContain(`--user-data-dir=${windowsProfile}`)
     for (const [, args] of io.count.mock.calls) {
       const literalLine = args.at(-1).split('\n').find((line: string) => line.startsWith('$profileDir = '))
@@ -555,7 +562,7 @@ describe('CdpSession restart lifecycle', () => {
     const first = value.restart()
     const second = await restartError(value)
     expect(second.restartEvidence.closed).toBeNull()
-    expect((await first).current.pid).toBe(101)
+    expect(restarted(await first).pid).toBe(101)
     expect(io.spawn).toHaveBeenCalledTimes(2)
     await value.cleanup()
   })

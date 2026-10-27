@@ -1,39 +1,67 @@
+<svelte:options runes />
+
 <script lang="ts">
-  import { onDestroy } from 'svelte'
+  import { onDestroy, untrack } from 'svelte'
   import type { SearchEngineSetting } from '../../shared/types'
 
-  export let searchEngine: SearchEngineSetting | null = null
-  export let query = ''
-  export let showEngineSelector = true
-  export let preview = false
-  export let themeOverride: 'light' | 'dark' | null = null
+  interface Props {
+    searchEngine?: SearchEngineSetting | null
+    /** HomeHeroSearch 以 `bind:query` 传入。 */
+    query?: string
+    showEngineSelector?: boolean
+    preview?: boolean
+    themeOverride?: 'light' | 'dark' | null
+  }
 
-  let selectedName = ''
-  let engineMenuOpen = false
+  let {
+    searchEngine = null,
+    query = $bindable(''),
+    showEngineSelector = true,
+    preview = false,
+    themeOverride = null,
+  }: Props = $props()
+
+  let selectedName = $state('')
+  let engineMenuOpen = $state(false)
   // 手动点选的引擎只在默认引擎不变时保持；默认引擎变更后让位于新默认值（Issue #25）。
+  // 两者只在副作用与事件处理器里读写、不进模板，保持普通变量。
   let userSelected = false
   let lastDefaultEngine = ''
 
-  $: engines = searchEngine?.engines ?? []
-  $: defaultEngineName = searchEngine?.current ?? ''
+  const engines = $derived(searchEngine?.engines ?? [])
+  const defaultEngineName = $derived(searchEngine?.current ?? '')
 
+  // 以下三段与原 `$:` 同序、同在 DOM 更新前执行。原语句只依赖语法上出现的响应式变量：
   // 默认引擎变化时清除手动选择标记，让新默认值立即生效。
-  $: if (defaultEngineName !== lastDefaultEngine) {
-    lastDefaultEngine = defaultEngineName
-    userSelected = false
-  }
+  $effect.pre(() => {
+    const name = defaultEngineName
+    if (name !== lastDefaultEngine) {
+      lastDefaultEngine = name
+      userSelected = false
+    }
+  })
 
-  $: if (engines.length === 0) {
-    selectedName = ''
-  } else if (!userSelected || !engines.some((engine) => engine.name === selectedName)) {
-    selectedName = engines.find((engine) => engine.name === defaultEngineName)?.name ?? engines[0].name
-  }
+  // 依赖 engines / defaultEngineName / selectedName（userSelected 是普通变量，选择引擎时 selectedName 同时变化会让本段重跑）。
+  $effect.pre(() => {
+    const list = engines
+    const current = selectedName
+    const fallbackName = defaultEngineName
+    untrack(() => {
+      if (list.length === 0) {
+        selectedName = ''
+      } else if (!userSelected || !list.some((engine) => engine.name === current)) {
+        selectedName = list.find((engine) => engine.name === fallbackName)?.name ?? list[0].name
+      }
+    })
+  })
 
-  $: currentEngine = engines.find((engine) => engine.name === selectedName) ?? null
+  const currentEngine = $derived(engines.find((engine) => engine.name === selectedName) ?? null)
 
-  $: if (!showEngineSelector || engines.length <= 1) {
-    engineMenuOpen = false
-  }
+  $effect.pre(() => {
+    if (!showEngineSelector || engines.length <= 1) {
+      untrack(() => { engineMenuOpen = false })
+    }
+  })
 
   function isIconImage(icon: string | null | undefined): boolean {
     return /^(https?:\/\/|data:image\/)/i.test(icon?.trim() ?? '')
@@ -69,7 +97,8 @@
     engineMenuOpen = false
   }
 
-  function handleSubmit() {
+  function handleSubmit(event: SubmitEvent) {
+    event.preventDefault()
     if (preview) return
     const keyword = query.trim()
 
@@ -91,10 +120,10 @@
   class:has-engine-selector={showEngineSelector}
   class:is-preview={preview}
   class:preview-light={preview && themeOverride === 'light'}
-  on:submit|preventDefault={handleSubmit}
+  onsubmit={handleSubmit}
 >
   {#if showEngineSelector}
-    <div class="engine-picker" on:focusout={handlePickerFocusOut}>
+    <div class="engine-picker" onfocusout={handlePickerFocusOut}>
       <button
         type="button"
         class="engine-icon-button"
@@ -103,8 +132,8 @@
         aria-expanded={engineMenuOpen}
         disabled={preview || engines.length === 0}
         title={currentEngine ? `搜索引擎：${currentEngine.name}` : '选择搜索引擎'}
-        on:click={toggleEngineMenu}
-        on:keydown={handleKeydown}
+        onclick={toggleEngineMenu}
+        onkeydown={handleKeydown}
       >
         <span class="engine-current-icon">
           {#if currentEngine && isIconImage(currentEngine.icon)}
@@ -126,8 +155,8 @@
               class:is-selected={engine.name === selectedName}
               role="option"
               aria-selected={engine.name === selectedName}
-              on:click={() => selectEngine(engine.name)}
-              on:keydown={handleKeydown}
+              onclick={() => selectEngine(engine.name)}
+              onkeydown={handleKeydown}
             >
               <span class="engine-menu-icon">
                 {#if isIconImage(engine.icon)}

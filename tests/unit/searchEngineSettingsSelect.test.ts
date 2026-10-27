@@ -4,11 +4,13 @@ import { cleanup, fireEvent, render } from '@testing-library/svelte'
 import { tick } from 'svelte'
 import SearchEngineSettingsSection from '../../src/components/settings/SearchEngineSettingsSection.svelte'
 import { createSettingsFormState } from '../../src/lib/settingsForm'
+import { reactiveState } from '../helpers/reactiveState.svelte'
 
 afterEach(cleanup)
 
+// 第 8j 步起 SettingsPanel 的 form 是 $state：这里同样传深层代理，模拟真实父组件。
 function engineForm() {
-  return createSettingsFormState({
+  return reactiveState(createSettingsFormState({
     search_engine: {
       current: 'Google',
       engines: [
@@ -16,7 +18,7 @@ function engineForm() {
         { name: 'Bing', icon: '', url_template: 'https://www.bing.com/search?q={q}' },
       ],
     },
-  })
+  }))
 }
 
 describe('默认搜索引擎下拉的真实事件序列（Issue #25 复现）', () => {
@@ -26,7 +28,9 @@ describe('默认搜索引擎下拉的真实事件序列（Issue #25 复现）', 
     // 把用户刚选中的选项重置回去。select 必须在自己这一层于 input 阶段立即提交。
     const form = engineForm()
     const { container } = render(SearchEngineSettingsSection, { props: { form, saving: false, enginesValid: true } })
-    const select = container.querySelector('label.field-select select') as HTMLSelectElement
+    // 测试程序同时加载了 @cloudflare/workers-types，其 HTMLRewriter 的 Element 会并入 DOM Element，
+    // 导致 HTMLSelectElement 与之不再兼容，只能经 unknown 收窄。
+    const select = container.querySelector('label.field-select select') as unknown as HTMLSelectElement
     expect(select.value).toBe('Google')
 
     select.value = 'Bing'
@@ -39,7 +43,7 @@ describe('默认搜索引擎下拉的真实事件序列（Issue #25 复现）', 
   it('input + change 完整序列后 current 保持为用户选择', async () => {
     const form = engineForm()
     const { container } = render(SearchEngineSettingsSection, { props: { form, saving: false, enginesValid: true } })
-    const select = container.querySelector('label.field-select select') as HTMLSelectElement
+    const select = container.querySelector('label.field-select select') as unknown as HTMLSelectElement
 
     select.value = 'Bing'
     fireEvent.input(select)

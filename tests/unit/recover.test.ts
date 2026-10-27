@@ -1,9 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import recoverRoutes, { isValidRecoverPassword } from '../../worker/routes/recover'
 import { resetJwtSecretCache } from '../../worker/lib/jwt'
 import type { Env } from '../../worker/types'
-
-const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000
 
 interface RateRow {
   count: number
@@ -29,6 +27,8 @@ class FakeStatement {
 }
 
 class FakeDb {
+  failSettingsWrite = false
+  settingsWriteStatements = 0
   readonly settings: Map<string, string>
   readonly rateLimits = new Map<string, RateRow>()
 
@@ -58,8 +58,10 @@ class FakeDb {
       return { success: true, meta: { changes: 1 } }
     }
     if (sql.includes('INSERT INTO settings')) {
-      const [key, value] = args as [string, string]
-      this.settings.set(key, value)
+      if (this.failSettingsWrite) throw new Error('D1 write failed')
+      // setSettingValues writes several (key, value) pairs in one statement.
+      for (let index = 0; index < args.length; index += 2) this.settings.set(args[index] as string, args[index + 1] as string)
+      this.settingsWriteStatements += 1
       return { success: true, meta: { changes: 1 } }
     }
     throw new Error(`unhandled exec sql: ${sql}`)
@@ -87,7 +89,7 @@ class FakeDb {
     throw new Error(`unhandled queryFirst sql: ${sql}`)
   }
 
-  queryAll<T>(sql: string, args: unknown[]): { results: T[] } {
+  queryAll<T>(_sql: string, args: unknown[]): { results: T[] } {
     const wanted = new Set(args as string[])
     const rows = [...this.settings.entries()]
       .filter(([key]) => wanted.has(key))
@@ -132,7 +134,7 @@ function installedSeed(extra: Record<string, unknown> = {}): Record<string, unkn
   }
 }
 
-function post(
+async function post(
   env: Env,
   body: unknown,
   headers: Record<string, string> = { 'X-Setup-Token': 'setup-secret' },
@@ -190,6 +192,25 @@ describe('POST /api/recover', () => {
     expect(JSON.parse(db.settings.get('admin_bootstrap_username')!)).toBe('admin')
     // jwt secret 已轮换
     expect(JSON.parse(db.settings.get('jwt_secret')!)).not.toBe('old-secret')
+  })
+
+  it('writes the new password and the rotated jwt secret in one statement', async () => {
+    const db = new FakeDb(installedSeed())
+    const env = createEnv(db, createKv())
+    const res = await post(env, { password: 'abcd1234' })
+    expect(res.status).toBe(200)
+    // jwt_secret + admin_password in the same upsert; a later session write may add jwt reads only.
+    expect(db.settingsWriteStatements).toBe(1)
+  })
+
+  it('leaves both the password and the session secret untouched when the atomic write fails', async () => {
+    const db = new FakeDb(installedSeed())
+    db.failSettingsWrite = true
+    const env = createEnv(db, createKv())
+    const res = await post(env, { password: 'abcd1234' })
+    expect((await res.json<any>()).msg).toBe('failed to reset password')
+    expect(JSON.parse(db.settings.get('admin_password')!)).toBe('oldsalt:oldhash')
+    expect(JSON.parse(db.settings.get('jwt_secret')!)).toBe('old-secret')
   })
 
   it('ignores a username field in the body', async () => {
@@ -270,5 +291,43 @@ describe('POST /api/recover', () => {
     expect(res.status).toBe(200)
     expect((await res.json<any>()).code).toBe(1500)
     expect(JSON.parse(db.settings.get('admin_password')!)).toBe('oldsalt:oldhash')
+  })
+})
+
+describe('POST /api/recover catch logging', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  function loggedText(spy: { mock: { calls: unknown[][] } }): string {
+    return spy.mock.calls.map((args) => args.map((arg) => (arg instanceof Error ? arg.message : String(arg))).join(' ')).join('\n')
+  }
+
+  it('logs a failed password write without leaking the password and keeps the response', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const db = new FakeDb(installedSeed())
+    db.failSettingsWrite = true
+    const res = await post(createEnv(db, createKv()), { password: 'abcd1234' })
+    expect(res.status).toBe(200)
+    expect(await res.json<any>()).toEqual({ code: 1500, msg: 'failed to reset password', data: null })
+    expect(errorSpy).toHaveBeenCalledWith('[recover] password reset write failed:', expect.objectContaining({ message: 'D1 write failed' }))
+    expect(loggedText(errorSpy)).not.toContain('abcd1234')
+    expect(loggedText(errorSpy)).not.toContain('setup-secret')
+  })
+
+  it('logs an unreachable session store and keeps the response', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const kv = createKv({ get: vi.fn(async () => { throw new Error('KV unavailable') }) as unknown as KVNamespace['get'] })
+    const res = await post(createEnv(new FakeDb(installedSeed()), kv), { password: 'abcd1234' })
+    expect(await res.json<any>()).toEqual({ code: 1500, msg: 'required bindings are unavailable', data: null })
+    expect(errorSpy).toHaveBeenCalledWith('[recover] session store probe failed:', expect.objectContaining({ message: 'KV unavailable' }))
+  })
+
+  it('does not log expected branches (wrong token, invalid body, invalid password)', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const env = createEnv(new FakeDb(installedSeed()), createKv())
+    expect((await post(env, { password: 'abcd1234' }, { 'X-Setup-Token': 'nope' })).status).toBe(401)
+    const invalid = await recoverRoutes.request('/recover', { method: 'POST', headers: { 'X-Setup-Token': 'setup-secret' }, body: '{' }, env)
+    expect(await invalid.json<any>()).toEqual({ code: 1002, msg: 'invalid request body', data: null })
+    expect((await (await post(env, { password: '12345678' })).json<any>()).code).toBe(1002)
+    expect(errorSpy).not.toHaveBeenCalled()
   })
 })

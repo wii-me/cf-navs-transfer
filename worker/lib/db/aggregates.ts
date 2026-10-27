@@ -1,5 +1,5 @@
-import type { IconCopyMetadata } from '../../../shared/iconLocalCopy'
-import { iconMetadataFromRows } from '../iconCopyMetadata'
+import type { IconDataMetadata } from '../../../shared/iconDescriptor'
+import { iconMetadataFromRows } from '../iconMetadata'
 import { dataVersionFromValue } from './settings'
 // 跨表聚合读取：公开首页数据源与后台聚合数据
 
@@ -10,7 +10,6 @@ import {
   type PublicBookmark,
   type PublicCategory,
   type Settings,
-  type SiteConfig,
 } from '../../../shared/types'
 import {
   BOOKMARK_AGGREGATE_LIST_SQL,
@@ -24,12 +23,12 @@ import {
 import { withSchemaRetry } from './schema'
 import { settingsFromRows } from '../settingsData'
 
-export async function getPublicDataSource(db: D1Database, _siteConfig?: SiteConfig, includePrivate = false): Promise<{
+export async function getPublicDataSource(db: D1Database, includePrivate = false): Promise<{
   categories: PublicCategory[]
   bookmarks: PublicBookmark[]
   settings: Settings
   version: string
-} & IconCopyMetadata> {
+} & IconDataMetadata> {
   return await withSchemaRetry(db, async () => {
     // Visibility and its version must come from the same batch, not an earlier config cache.
     const settingsSql = PUBLIC_DATA_SETTINGS_LIST_SQL

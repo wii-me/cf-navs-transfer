@@ -1,3 +1,5 @@
+<svelte:options runes />
+
 <script lang="ts">
   import { onMount } from 'svelte'
   import type { ThemeMode } from '../../shared/types'
@@ -6,48 +8,72 @@
   type AsyncVoid<T = void> = T | Promise<T>
   const BACK_TO_TOP_VISIBILITY_OFFSET = 320
 
-  export let isAuthenticated = false
-  export let authLoading = false
-  export let activeTheme: 'light' | 'dark' = 'light'
-  export let activeThemeMode: ThemeMode = 'auto'
-  export let onToggleTheme: (() => AsyncVoid) | undefined = undefined
-  export let onSwitchToAdmin: (() => AsyncVoid) | undefined = undefined
-  export let onLogout: (() => AsyncVoid) | undefined = undefined
-  export let onOpenLogin: (() => AsyncVoid) | undefined = undefined
-  export let onOpenCreateRootCategory: (() => AsyncVoid) | undefined = undefined
-  export let topNavigation = false
-  export let sortActive = false
-  export let searchBoxVisible = false
-  export let searchBoxShow = true
-  export let onOpenSearch: (() => AsyncVoid) | undefined = undefined
+  interface Props {
+    isAuthenticated?: boolean
+    authLoading?: boolean
+    activeTheme?: 'light' | 'dark'
+    activeThemeMode?: ThemeMode
+    onToggleTheme?: () => AsyncVoid
+    onSwitchToAdmin?: () => AsyncVoid
+    onLogout?: () => AsyncVoid
+    onOpenLogin?: () => AsyncVoid
+    onOpenCreateRootCategory?: () => AsyncVoid
+    topNavigation?: boolean
+    sortActive?: boolean
+    searchBoxVisible?: boolean
+    searchBoxShow?: boolean
+    onOpenSearch?: () => AsyncVoid
+    onOpenGuide?: () => AsyncVoid
+  }
 
-  let showBackToTop = false
-  let isMac = false
+  let {
+    isAuthenticated = false,
+    authLoading = false,
+    activeTheme = 'light',
+    activeThemeMode = 'auto',
+    onToggleTheme,
+    onSwitchToAdmin,
+    onLogout,
+    onOpenLogin,
+    onOpenCreateRootCategory,
+    topNavigation = false,
+    sortActive = false,
+    searchBoxVisible = false,
+    searchBoxShow = true,
+    onOpenSearch,
+    onOpenGuide,
+  }: Props = $props()
+
+  let showBackToTop = $state(false)
+  let isMac = $state(false)
   // 搜索框离屏时显示；`search_box_show=false` 时恒显，保证仍有搜索入口（REQ-01 / FR-1.2）。
-  $: showSearchButton = !searchBoxVisible || !searchBoxShow
-  $: searchShortcutHint = isMac ? '⌘K' : 'Ctrl+K'
+  const showSearchButton = $derived(!searchBoxVisible || !searchBoxShow)
+  const searchShortcutHint = $derived(isMac ? '⌘K' : 'Ctrl+K')
 
   function handleOpenSearch() {
     closeMenu()
     void onOpenSearch?.()
   }
 
-  // 移动端把整组操作收进一个「更多」触发器，点开后向下弹出；桌面端仍平铺（纯 CSS @media 切换）。
-  // 触发器与操作组始终在 DOM，由 @media 决定形态——jsdom 不解析 @media，所以操作按钮在单元测试里
-  // 始终可查，不会因折叠而丢失可访问入口。
+  function handleOpenGuide() {
+    closeMenu()
+    void onOpenGuide?.()
+  }
+
+  // 所有视口统一由「更多」触发器控制操作组；顶部导航在中小视口向下弹出。
   let menuTrigger: HTMLButtonElement | null = null
   let menuGroup: HTMLElement | null = null
-  let menuOpen = false
+  let menuOpen = $state(false)
   const menuId = 'home-actions-menu'
 
-  $: currentThemeLabel = activeThemeMode === 'auto'
+  const currentThemeLabel = $derived(activeThemeMode === 'auto'
     ? `跟随系统，当前${activeTheme === 'dark' ? '暗色' : '浅色'}`
-    : activeThemeMode === 'dark' ? '暗色模式' : '浅色模式'
-  $: nextThemeLabel = activeThemeMode === 'light'
+    : activeThemeMode === 'dark' ? '暗色模式' : '浅色模式')
+  const nextThemeLabel = $derived(activeThemeMode === 'light'
     ? '暗色模式'
-    : activeThemeMode === 'dark' ? '跟随系统' : '浅色模式'
-  $: themeToggleLabel = `当前${currentThemeLabel}，点击切换到${nextThemeLabel}`
-  $: themeToggleIcon = activeThemeMode === 'auto' ? 'A' : activeTheme === 'dark' ? '☾' : '☀'
+    : activeThemeMode === 'dark' ? '跟随系统' : '浅色模式')
+  const themeToggleLabel = $derived(`当前${currentThemeLabel}，点击切换到${nextThemeLabel}`)
+  const themeToggleIcon = $derived(activeThemeMode === 'auto' ? 'A' : activeTheme === 'dark' ? '☾' : '☀')
 
   function toggleMenu() {
     menuOpen = !menuOpen
@@ -97,7 +123,7 @@
     window.scrollTo({ top: 0, behavior })
   }
 
-  // 弹层外点击与 Escape 关闭：仅在移动端 menuOpen 为真时生效；桌面 menuOpen 恒为 false，处理器直接返回。
+  // 弹层外点击与 Escape 关闭。
   function handleWindowPointerDown(event: PointerEvent) {
     if (!menuOpen) return
     const target = event.target as Node | null
@@ -127,43 +153,36 @@
   })
 </script>
 
-<svelte:window on:pointerdown={handleWindowPointerDown} on:keydown={handleWindowKeyDown} />
+<svelte:window onpointerdown={handleWindowPointerDown} onkeydown={handleWindowKeyDown} />
 
-<div class="floating-actions" class:below-top-navigation={topNavigation} class:menu-open={menuOpen}>
-  <!-- 折叠触发器：竖三点「更多」，与 Sidebar 目录的横三线汉堡区分；仅移动端可见（@media 控制）。 -->
+<div class="floating-actions" class:below-top-navigation={topNavigation} class:menu-open={menuOpen} class:search-visible={showSearchButton}>
   <button
     type="button"
-    class="icon-button actions-menu-trigger"
-    data-testid="home-actions-menu-trigger"
-    aria-haspopup="true"
-    aria-expanded={menuOpen}
-    aria-controls={menuId}
-    on:click={toggleMenu}
-    bind:this={menuTrigger}
-    title="更多操作"
-    aria-label="更多操作"
+    class="icon-button search-fab"
+    class:is-visible={showSearchButton}
+    data-testid="home-search-button"
+    onclick={handleOpenSearch}
+    title={`搜索书签 (${searchShortcutHint})`}
+    aria-label="搜索书签"
+    aria-hidden={!showSearchButton}
+    tabindex={showSearchButton ? undefined : -1}
+    aria-keyshortcuts="Control+K Meta+K"
   >
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 6h.01M12 12h.01M12 18h.01" />
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
     </svg>
   </button>
   <div class="actions-group" id={menuId} bind:this={menuGroup}>
     <button
       type="button"
-      class="icon-button search-fab"
-      class:is-visible={showSearchButton}
-      data-testid="home-search-button"
-      on:click={handleOpenSearch}
-      title={`搜索书签 (${searchShortcutHint})`}
-      aria-label="搜索书签"
-      aria-hidden={!showSearchButton}
-      tabindex={showSearchButton ? undefined : -1}
-      aria-keyshortcuts="Control+K Meta+K"
+      class="icon-button guide-button"
+      data-testid="home-guide-button"
+      onclick={handleOpenGuide}
+      title="使用指南"
+      aria-label="使用指南"
     >
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="11" cy="11" r="7" />
-        <path d="m20 20-3.5-3.5" />
-      </svg>
+      ?
     </button>
     <button
       type="button"
@@ -171,7 +190,7 @@
       data-testid="home-theme-toggle"
       class:is-dark={activeTheme === 'dark'}
       class:is-auto={activeThemeMode === 'auto'}
-      on:click={handleToggleTheme}
+      onclick={handleToggleTheme}
       title={themeToggleLabel}
       aria-label={themeToggleLabel}
     >
@@ -195,7 +214,7 @@
         type="button"
         class="icon-button"
         data-testid="home-admin-button"
-        on:click={handleSwitchToAdmin}
+        onclick={handleSwitchToAdmin}
         title="管理后台"
         aria-label="管理后台"
       >
@@ -206,7 +225,7 @@
         type="button"
         class="icon-button create-category-button"
         data-testid="home-create-root-category"
-        on:click={handleOpenCreateRootCategory}
+        onclick={handleOpenCreateRootCategory}
         title="新增主分类"
         aria-label="新增主分类"
       >
@@ -219,7 +238,7 @@
         type="button"
         class="icon-button"
         data-testid="home-logout-button"
-        on:click={handleLogout}
+        onclick={handleLogout}
         disabled={authLoading}
         title="退出登录"
         aria-label="退出登录"
@@ -231,7 +250,7 @@
         type="button"
         class="icon-button"
         data-testid="home-login-button"
-        on:click={handleOpenLogin}
+        onclick={handleOpenLogin}
         title="管理员登录"
         aria-label="管理员登录"
       >
@@ -239,6 +258,22 @@
       </button>
     {/if}
   </div>
+  <button
+    type="button"
+    class="icon-button actions-menu-trigger"
+    data-testid="home-actions-menu-trigger"
+    aria-haspopup="true"
+    aria-expanded={menuOpen}
+    aria-controls={menuId}
+    onclick={toggleMenu}
+    bind:this={menuTrigger}
+    title="更多操作"
+    aria-label="更多操作"
+  >
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 6h.01M12 12h.01M12 18h.01" />
+    </svg>
+  </button>
 </div>
 
 {#if showBackToTop}
@@ -247,7 +282,7 @@
     class="icon-button back-to-top-button"
     class:above-sort-bar={sortActive}
     data-testid="home-back-to-top"
-    on:click={handleBackToTop}
+    onclick={handleBackToTop}
     title="回到顶部"
     aria-label="回到顶部"
   >
@@ -274,13 +309,16 @@
   }
 
   .actions-group {
-    display: flex;
+    display: none;
     gap: 0.5rem;
   }
 
-  /* 折叠触发器只在移动端出现，桌面保持整组平铺 */
+  .floating-actions.menu-open .actions-group {
+    display: flex;
+  }
+
   .floating-actions .actions-menu-trigger {
-    display: none;
+    display: flex;
   }
 
   .actions-menu-trigger svg {
@@ -375,7 +413,7 @@
   }
 
   /* 隐藏态移出 flex 流，避免在按钮组里留永久空槽/间隙（搜索框在视口内时的首页常态）。
-     绝对定位锚到最近定位祖先角落（随布局模式为 .floating-actions 或 .actions-group），
+     绝对定位锚到 .floating-actions 角落，
      因不可见（opacity/visibility/pointer-events）在各模式下均无视觉与交互影响。 */
   .search-fab:not(.is-visible) {
     position: absolute;
@@ -408,6 +446,11 @@
     color: #bfdbfe;
     background: rgba(30, 58, 138, 0.55);
     border-color: rgba(96, 165, 250, 0.5);
+  }
+
+  .guide-button {
+    font-weight: 800;
+    font-size: 1.05rem;
   }
 
   .theme-toggle-button {
@@ -465,18 +508,14 @@
       top: 4rem;
     }
 
-    .floating-actions .actions-menu-trigger {
-      display: flex;
-    }
-
-    /* 移动端整组收进触发器下方的弹层，向下展开 */
+    /* 窄屏将操作组横向展开到触发器左侧，不挡住首页标题与搜索框。 */
     .actions-group {
       position: absolute;
-      top: calc(100% + 6px);
-      right: 0;
+      top: 0;
+      right: calc(100% + 6px);
       z-index: 80;
       display: none;
-      flex-direction: column;
+      flex-direction: row;
       gap: 0.4rem;
       padding: 0.4rem;
       border: 1px solid rgba(148, 163, 184, 0.28);
@@ -484,6 +523,12 @@
       background: rgba(255, 255, 255, 0.96);
       backdrop-filter: blur(12px);
       box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+    }
+
+    .floating-actions.search-visible .actions-group {
+      top: calc(100% + 6px);
+      right: 0;
+      flex-direction: column;
     }
 
     .floating-actions.menu-open .actions-group {
@@ -517,17 +562,10 @@
     }
   }
 
-  /* 平板到中屏（800–1650px）的顶部导航模式：居中导航栏（max-width 1200px）右缘距视口仅约 16px，
-     与右上角平铺按钮组（约占右侧 204px）必然重叠——按钮会盖住导航栏右滚动箭头与末端标签。
-     判据：(vw − content-max-width) / 2 ≥ 204 → 约 vw ≥ 1608px 才不重叠，取 1650px 留冗余。
-     故此区间也折叠为「更多」菜单并下移到导航栏下方；>1650px 恢复平铺，侧栏模式不受影响。 */
+  /* 顶部导航模式的中屏布局会占用右上角空间，把操作组放到触发器下方。 */
   @media (min-width: 800px) and (max-width: 1650px) {
     .floating-actions.below-top-navigation {
       top: 4.5rem;
-    }
-
-    .floating-actions.below-top-navigation .actions-menu-trigger {
-      display: flex;
     }
 
     .floating-actions.below-top-navigation .actions-group {

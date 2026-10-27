@@ -24,14 +24,9 @@ import { existsSync, lstatSync, mkdirSync, realpathSync, rmSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { randomBytes } from 'node:crypto'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { resolveWranglerConfig, rootDir, runWranglerSync, wranglerBin } from './lib/wranglerLocal.mjs'
 
-const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const wranglerBin = path.join(rootDir, 'node_modules', 'wrangler', 'bin', 'wrangler.js')
-const localConfig = path.join(rootDir, 'wrangler.local.toml')
-const publicConfig = path.join(rootDir, 'wrangler.toml')
-const configPath =
-  process.env.SMOKE_WRANGLER_CONFIG || (existsSync(localConfig) ? localConfig : publicConfig)
+const configPath = resolveWranglerConfig(process.env.SMOKE_WRANGLER_CONFIG)
 const persistParent = path.join(rootDir, '.wrangler')
 const persistTo = path.resolve(process.env.SMOKE_PERSIST_TO || path.join(persistParent, 'state-smoke-' + randomBytes(6).toString('hex')))
 function verifyOwnedPersistPath() {
@@ -68,11 +63,11 @@ function findFreePort() {
 }
 
 function runWrangler(args, label) {
-  const result = spawnSync(process.execPath, [wranglerBin, ...args, '--config', configPath], {
-    cwd: rootDir,
-    stdio: ['ignore', 'ignore', 'inherit'],
-  })
-  if (result.status !== 0) fail(`${label} failed with exit code ${result.status}`)
+  try {
+    runWranglerSync(configPath, args, label)
+  } catch (error) {
+    fail(error.message)
+  }
 }
 
 // 结束整棵进程树：wrangler 会派生 workerd，只杀父进程会留下占端口的孤儿。
@@ -142,9 +137,7 @@ async function main() {
   try {
     await waitForHealth(baseUrl, child)
     console.log(`smoke: local worker ready at ${baseUrl}`)
-    const smokeScript = process.argv.includes('--issues') ? 'issue-browser-regression.mjs' : process.argv.includes('--category-perf')
-      ? 'category-icon-perf-regression.mjs'
-      : process.argv.includes('--icons') ? 'icon-ui-regression.mjs' : 'smoke-test.mjs'
+    const smokeScript = 'smoke-test.mjs'
     const smoke = spawnSync(process.execPath, [path.join(rootDir, 'scripts', smokeScript)], {
       cwd: rootDir,
       stdio: 'inherit',

@@ -41,6 +41,14 @@ CREATE TABLE IF NOT EXISTS error_report_rate_limits (
   reset_at INTEGER NOT NULL
 );
 
+-- 公开点击计数限流（每 IP + 书签 10 分钟最多 3 次）；与 worker/lib/clickRateLimit.ts 保持一致。
+CREATE TABLE IF NOT EXISTS click_rate_limits (
+  client_key TEXT PRIMARY KEY,
+  count INTEGER NOT NULL DEFAULT 0,
+  reset_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_click_rate_limits_reset ON click_rate_limits(reset_at);
+
 CREATE INDEX IF NOT EXISTS idx_bookmarks_category ON bookmarks(category_id);
 CREATE INDEX IF NOT EXISTS idx_bookmarks_sort ON bookmarks(category_id, sort);
 CREATE INDEX IF NOT EXISTS idx_bookmarks_sort_global ON bookmarks(sort, id);
@@ -158,3 +166,31 @@ CREATE TRIGGER IF NOT EXISTS category_icon_publish
   BEGIN
     INSERT OR REPLACE INTO settings (key, value) VALUES ('data_version', json_quote(lower(hex(randomblob(16)))));
   END;
+
+-- Global icon epoch (local-first icon cache v2): mirrors ICON_EPOCH_TRIGGERS in worker/lib/db/iconSchema.ts.
+INSERT OR IGNORE INTO settings (key, value) VALUES ('icon_epoch', '0');
+
+CREATE TRIGGER IF NOT EXISTS bookmark_icon_epoch_insert AFTER INSERT ON bookmarks
+  BEGIN UPDATE settings SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT) WHERE key = 'icon_epoch'; END;
+
+CREATE TRIGGER IF NOT EXISTS bookmark_icon_epoch_delete AFTER DELETE ON bookmarks
+  BEGIN UPDATE settings SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT) WHERE key = 'icon_epoch'; END;
+
+CREATE TRIGGER IF NOT EXISTS bookmark_icon_epoch_update
+  AFTER UPDATE OF icon, icon_source, icon_blob, icon_revision, is_private, category_id, title, url ON bookmarks
+  WHEN NEW.icon IS NOT OLD.icon OR NEW.icon_source IS NOT OLD.icon_source OR NEW.icon_blob IS NOT OLD.icon_blob
+    OR NEW.icon_revision IS NOT OLD.icon_revision OR NEW.is_private IS NOT OLD.is_private
+    OR NEW.category_id IS NOT OLD.category_id OR NEW.title IS NOT OLD.title OR NEW.url IS NOT OLD.url
+  BEGIN UPDATE settings SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT) WHERE key = 'icon_epoch'; END;
+
+CREATE TRIGGER IF NOT EXISTS category_icon_epoch_insert AFTER INSERT ON categories
+  BEGIN UPDATE settings SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT) WHERE key = 'icon_epoch'; END;
+
+CREATE TRIGGER IF NOT EXISTS category_icon_epoch_delete AFTER DELETE ON categories
+  BEGIN UPDATE settings SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT) WHERE key = 'icon_epoch'; END;
+
+CREATE TRIGGER IF NOT EXISTS category_icon_epoch_update
+  AFTER UPDATE OF icon, icon_blob, icon_revision, is_private, parent_id, title ON categories
+  WHEN NEW.icon IS NOT OLD.icon OR NEW.icon_blob IS NOT OLD.icon_blob OR NEW.icon_revision IS NOT OLD.icon_revision
+    OR NEW.is_private IS NOT OLD.is_private OR NEW.parent_id IS NOT OLD.parent_id OR NEW.title IS NOT OLD.title
+  BEGIN UPDATE settings SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT) WHERE key = 'icon_epoch'; END;

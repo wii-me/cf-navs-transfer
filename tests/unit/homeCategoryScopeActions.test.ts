@@ -116,7 +116,7 @@ describe('HomeCategoryScope 更多操作菜单', () => {
     // 桌面：CategorySection 操作行统一提供「新建子分类」「新增书签」「排序」
     expect(scope).not.toContain('scope-action-direct')
     expect(scope).toContain('class="scope-action scope-more-trigger"')
-    expect(section).toContain('export let onCreateSubcategory')
+    expect(section).toContain('onCreateSubcategory?: () => AsyncVoid')
     expect(section).toContain('aria-label="新建子分类"')
     // 移动端：Scope 只留菜单入口，CategorySection 的非排序操作行整体隐藏
     expect(scopeMobile).not.toContain('scope-action-direct')

@@ -1,6 +1,7 @@
 import { decodeIconDataUri } from '../../shared/iconDataUri'
 import { readBoundedBody } from './boundedBody'
 import type { IconSource } from '../../shared/types'
+import { BlockedFetchTargetError, MAX_SAFE_REDIRECTS, fetchFollowingSafeRedirects, parseTargetUrl } from './pageMetadata'
 
 export interface FetchedIcon {
   bytes: Uint8Array
@@ -21,7 +22,7 @@ function decodeTextPrefix(bytes: Uint8Array, limit = 2048): string {
 }
 
 function looksLikeSvg(bytes: Uint8Array): boolean {
-  const head = decodeTextPrefix(bytes).replace(/^﻿/, '').trim().toLowerCase()
+  const head = decodeTextPrefix(bytes).replace(/^\uFEFF/, '').trim().toLowerCase()
   if (!head || head.startsWith('<!doctype html') || head.startsWith('<html')) {
     return false
   }
@@ -90,7 +91,7 @@ export function sniffImageContentType(bytes: Uint8Array, declaredType: string | 
   // signature, while still rejecting auth walls / error pages.
   const declared = declaredType?.split(';')[0]?.trim().toLowerCase() || ''
   if (declared.startsWith('image/') && declared !== 'image/svg+xml') {
-    const head = decodeTextPrefix(b, 512).replace(/^﻿/, '').trim().toLowerCase()
+    const head = decodeTextPrefix(b, 512).replace(/^\uFEFF/, '').trim().toLowerCase()
     const looksLikeHtml =
       head.startsWith('<!doctype html') || head.startsWith('<html') || head.startsWith('<head')
     if (!looksLikeHtml) return declared
@@ -123,6 +124,9 @@ export type IconFetchOutcome =
   | { ok: true; icon: FetchedIcon }
   | { ok: false; failure: IconFetchFailure }
 
+// 重定向最多跟随的跳数；超出按永久失败处理（重定向环 / 刻意拖延）。
+export const MAX_ICON_REDIRECTS = MAX_SAFE_REDIRECTS
+
 // 纯函数，便于单测：null 表示网络错误或超时。
 export function classifyIconFailure(status: number | null): IconFetchFailure {
   return status === 404 || status === 410 ? 'missing' : 'transient'
@@ -136,18 +140,27 @@ export function classifyIconFailure(status: number | null): IconFetchFailure {
  * 下一个请求（下一次页面加载、下一次渲染）拿到的就是真图标。
  */
 export async function fetchIcon(iconUrl: string, timeoutMs = CACHE_TIMEOUT_MS, maxBytes = MAX_ICON_SIZE): Promise<IconFetchOutcome> {
+  // 出网目标过滤（SSRF）：入口地址与每一跳重定向都经 fetchFollowingSafeRedirects 过滤，
+  // 与 fetch-site-meta / fetch-favicon 同一口径。被拒绝的地址按「不存在」处理（永久失败）。
+  if (!parseTargetUrl(iconUrl)) return { ok: false, failure: 'missing' }
+
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
-    const response = await fetch(iconUrl, {
-      signal: controller.signal,
-      redirect: 'follow',
-      headers: {
-        Accept: ICON_ACCEPT,
-        'User-Agent': 'Mozilla/5.0 (compatible; CF-Navs/1.0)',
-      },
-    })
+    let response: Response
+    try {
+      ({ response } = await fetchFollowingSafeRedirects(iconUrl, {
+        signal: controller.signal,
+        headers: {
+          Accept: ICON_ACCEPT,
+          'User-Agent': 'Mozilla/5.0 (compatible; CF-Navs/1.0)',
+        },
+      }, MAX_ICON_REDIRECTS))
+    } catch (error) {
+      if (error instanceof BlockedFetchTargetError) return { ok: false, failure: 'missing' }
+      throw error
+    }
 
     if (!response.ok) return { ok: false, failure: classifyIconFailure(response.status) }
 

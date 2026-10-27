@@ -5,7 +5,7 @@ describe('app lazy component helper', () => {
   it('loads a component once for concurrent ensure calls', async () => {
     const component = { name: 'AdminComponent' }
     let current: typeof component | null = null
-    let resolveLoad: ((module: { default: typeof component }) => void) | null = null
+    let resolveLoad = null as ((module: { default: typeof component }) => void) | null
     const load = vi.fn(() => new Promise<{ default: typeof component }>((resolve) => {
       resolveLoad = resolve
     }))
@@ -46,7 +46,7 @@ describe('app lazy component helper', () => {
     const component = { name: 'BookmarkEditModal' }
     let current: typeof component | null = null
     const load = vi
-      .fn<[], Promise<{ default: typeof component }>>()
+      .fn<() => Promise<{ default: typeof component }>>()
       .mockRejectedValueOnce(new Error('load failed'))
       .mockResolvedValueOnce({ default: component })
 

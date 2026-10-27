@@ -31,6 +31,7 @@ import path from 'node:path'
 import WebSocket from 'ws'
 import { requireAdminCredentials } from './lib/verifyCredentials.mjs'
 import { resolveBaseUrl, resolveChromeProfileRoot, resolveSetting } from './lib/verifyTarget.mjs'
+import { loginInPage } from './lib/browserLogin.mjs'
 
 const BASE_URL = resolveBaseUrl()
 const CHROME_DEBUG_PORT = resolveSetting('CHROME_DEBUG_PORT', 'chromeDebugPort', '9228')
@@ -394,19 +395,9 @@ async function clearBrowserState() {
 }
 
 async function login() {
-  return pageFunction(async function loginInPage(baseUrl, username, password) {
-    const response = await fetch(`${baseUrl}/api/login`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-    })
-    const body = await response.json()
-    if (!response.ok || body.code !== 0) {
-      throw new Error(`login failed: ${JSON.stringify(body)}`)
-    }
-    localStorage.setItem('cf-navs.auth', JSON.stringify(body.data))
-    return { username: body.data.username, expires_at: body.data.expires_at }
-  }, TARGET_ORIGIN, ADMIN_USER, ADMIN_PASS)
+  const result = await pageFunction(loginInPage, TARGET_ORIGIN, ADMIN_USER, ADMIN_PASS)
+  if (!result?.ok) throw new Error(`login failed: ${JSON.stringify(result?.body ?? result)}`)
+  return { username: result.username, expires_at: result.expires_at }
 }
 
 async function navigateHome() {
@@ -615,13 +606,6 @@ async function runAdminChecks() {
     const buttonByText = (text) =>
       Array.from(document.querySelectorAll('button'))
         .find((button) => button.textContent?.includes(text))
-    const click = async (selector) => {
-      const button = document.querySelector(selector)
-      if (!button) return false
-      button.click()
-      await delay(450)
-      return true
-    }
     const clickTab = async (testIdSelector, text) => {
       const button = document.querySelector(testIdSelector) || buttonByText(text)
       if (!button) return false

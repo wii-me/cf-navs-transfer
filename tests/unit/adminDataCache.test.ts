@@ -34,8 +34,8 @@ const { authSession } = vi.hoisted(() => ({
   authSession: { current: null as LoginResp | null },
 }))
 
-vi.mock('../../src/lib/api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../src/lib/api')>()
+vi.mock('../../src/lib/authSession', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/lib/authSession')>()
   return {
     ...actual,
     getStoredAuthSession: () => authSession.current,

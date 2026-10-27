@@ -1,74 +1,230 @@
+<svelte:options runes />
+
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte'
+  import { untrack } from 'svelte'
   import {
     clampAlpha,
     cssColorIncludesAlpha,
     formatAlpha,
     formatCssColor,
-    normalizeHexColor,
+    hsvToRgb,
     parseCssColor,
+    rgbToHex,
+    rgbToHsv,
   } from '../lib/color'
 
-  export let value = '#ffffff'
-  export let alpha: number | null = null
-  export let placeholder = '#ffffff'
-  export let inputLabel = '颜色值'
-  export let swatchTitle = '打开颜色选择器'
-  export let alphaText = '透明度'
+  interface Props {
+    value?: string
+    // null = 透明度并入 value（rgba / 8 位 hex）；数字 = 独立透明度，value 保持 6 位 hex
+    alpha?: number | null
+    placeholder?: string
+    inputLabel?: string
+    swatchTitle?: string
+    hueText?: string
+    alphaText?: string
+    // 颜色变化后的 value（原 change 事件的 e.detail）；bind:value / bind:alpha 已在回调前写回。
+    onchange?: (value: string) => void
+  }
 
-  const dispatch = createEventDispatcher<{ change: string }>()
+  let {
+    value = $bindable('#ffffff'),
+    alpha = $bindable(null),
+    placeholder = '#ffffff',
+    inputLabel = '颜色值',
+    swatchTitle = '打开颜色选择器',
+    hueText = '色相',
+    alphaText = '透明度',
+    onchange,
+  }: Props = $props()
 
-  let pickerOpen = false
-  let pickerHex = '#ffffff'
-  let internalAlpha = 1
-  let lastParsedSource = ''
+  type DragKind = 'area' | 'hue' | 'alpha'
 
-  $: effectiveAlpha = alpha ?? internalAlpha
+  // 元素引用与拖动状态只在处理器里读，保持普通变量。
+  let shellEl: HTMLDivElement | undefined
+  let pickerOpen = $state(false)
+  let dragging: DragKind | null = null
 
-  $: if (value !== lastParsedSource) {
-    lastParsedSource = value
-    const parsed = parseCssColor(value)
-    if (parsed) {
-      pickerHex = parsed.hex
-      if (alpha === null) {
-        internalAlpha = parsed.alpha
+  // 组件内 HSV 是唯一真值源，避免 hsv→rgb→hex→reparse→hsv 的回灌漂移与灰度丢色相。
+  let hue = $state(0)
+  let saturation = $state(0)
+  let brightness = $state(100)
+  let internalAlpha = $state(1)
+  let hasParsedValue = $state(false)
+  // 比较用变量：只在同步语句与处理器里读写，不驱动模板。
+  let lastEmitted = ''
+  let lastParsedAlphaMode: boolean | null = null
+
+  // Sync external value or alpha-mode changes; ignore values emitted by this component.
+  // 原 `$:` 的语法依赖是 value / alpha（lastEmitted 等比较变量只随 value 一起变化）；
+  // 语句体会写回 value / alpha 与 HSV，放进 untrack，避免把写入目标变成依赖。
+  // 用 .pre：与原 `$:` 一样在同一次刷新中先于 DOM 更新执行（首次在挂载前同步执行）。
+  $effect.pre(() => {
+    const currentValue = value
+    const currentAlpha = alpha
+    untrack(() => {
+      if (currentValue !== lastEmitted || (currentAlpha === null) !== lastParsedAlphaMode) {
+        lastEmitted = currentValue
+        lastParsedAlphaMode = currentAlpha === null
+        const parsed = parseCssColor(currentValue)
+        hasParsedValue = Boolean(parsed)
+        if (parsed) {
+          const next = rgbToHsv(parsed.red, parsed.green, parsed.blue)
+          // 灰度/黑色（s=0）时 rgbToHsv 的色相无意义，保留上一次色相避免指针跳回 0。
+          if (next.s !== 0) hue = next.h
+          saturation = next.s
+          brightness = next.v
+          if (currentAlpha === null) {
+            internalAlpha = parsed.alpha
+          } else if (cssColorIncludesAlpha(currentValue)) {
+            alpha = parsed.alpha
+            value = parsed.hex
+            lastEmitted = parsed.hex
+          }
+        }
       }
+    })
+  })
+
+  // 原 `$:` 拓扑顺序：同步语句写 internalAlpha / alpha，故 effectiveAlpha 等排在其后。
+  const effectiveAlpha = $derived(alpha ?? internalAlpha)
+  const areaRgb = $derived(hsvToRgb(hue, 100, 100))
+  const solidRgb = $derived(hsvToRgb(hue, saturation, brightness))
+  const areaBackground = $derived(`rgb(${areaRgb.red}, ${areaRgb.green}, ${areaRgb.blue})`)
+  const previewColor = $derived(hasParsedValue ? `rgba(${solidRgb.red}, ${solidRgb.green}, ${solidRgb.blue}, ${effectiveAlpha})` : 'transparent')
+  const alphaFill = $derived(`linear-gradient(to right, rgba(${solidRgb.red}, ${solidRgb.green}, ${solidRgb.blue}, 0), rgb(${solidRgb.red}, ${solidRgb.green}, ${solidRgb.blue}))`)
+  const pointerLeft = $derived(saturation)
+  const pointerTop = $derived(100 - brightness)
+  const hueLeft = $derived((hue / 360) * 100)
+  const alphaLeft = $derived(effectiveAlpha * 100)
+
+  function emit() {
+    const rgb = hsvToRgb(hue, saturation, brightness)
+    const hex = rgbToHex(rgb.red, rgb.green, rgb.blue)
+    if (alpha === null) {
+      internalAlpha = clampAlpha(internalAlpha)
+      value = formatCssColor(hex, internalAlpha)
+    } else {
+      alpha = clampAlpha(alpha)
+      value = hex
+    }
+    hasParsedValue = true
+    lastEmitted = value
+    onchange?.(value)
+  }
+
+  function setSaturationBrightness(nextS: number, nextV: number) {
+    saturation = Math.min(100, Math.max(0, nextS))
+    brightness = Math.min(100, Math.max(0, nextV))
+    emit()
+  }
+
+  function setHue(nextH: number) {
+    hue = Math.min(360, Math.max(0, nextH))
+    emit()
+  }
+
+  function setAlpha(nextA: number) {
+    const clamped = clampAlpha(nextA)
+    if (alpha === null) {
+      internalAlpha = clamped
+    } else {
+      alpha = clamped
+    }
+    emit()
+  }
+
+  function clamp01(input: number): number {
+    return Math.min(1, Math.max(0, input))
+  }
+
+  function fractionOf(el: HTMLElement, clientX: number, clientY: number) {
+    const rect = el.getBoundingClientRect()
+    return {
+      x: rect.width > 0 ? clamp01((clientX - rect.left) / rect.width) : 0,
+      y: rect.height > 0 ? clamp01((clientY - rect.top) / rect.height) : 0,
     }
   }
 
-  function updateValueFromPicker(nextHex: string, nextAlpha = effectiveAlpha) {
-    const normalized = normalizeHexColor(nextHex) ?? pickerHex
-    pickerHex = normalized
-
-    if (alpha === null) {
-      internalAlpha = clampAlpha(nextAlpha)
-      value = formatCssColor(normalized, internalAlpha)
-      dispatch('change', value)
-      return
+  function applyDrag(kind: DragKind, el: HTMLElement, clientX: number, clientY: number) {
+    const { x, y } = fractionOf(el, clientX, clientY)
+    if (kind === 'area') {
+      setSaturationBrightness(x * 100, (1 - y) * 100)
+    } else if (kind === 'hue') {
+      setHue(x * 360)
+    } else {
+      setAlpha(x)
     }
+  }
 
-    alpha = clampAlpha(nextAlpha)
-    value = normalized
-    dispatch('change', value)
+  function handlePointerDown(kind: DragKind, event: PointerEvent) {
+    event.preventDefault()
+    const el = event.currentTarget as HTMLElement
+    el.setPointerCapture?.(event.pointerId)
+    el.focus()
+    dragging = kind
+    applyDrag(kind, el, event.clientX, event.clientY)
+  }
+
+  function handlePointerMove(kind: DragKind, event: PointerEvent) {
+    if (dragging !== kind) return
+    applyDrag(kind, event.currentTarget as HTMLElement, event.clientX, event.clientY)
+  }
+
+  function clearDrag() {
+    dragging = null
+  }
+
+  function handlePointerUp(event: PointerEvent) {
+    const el = event.currentTarget as HTMLElement
+    el.releasePointerCapture?.(event.pointerId)
+    clearDrag()
   }
 
   function handleTextInput(event: Event) {
-    const nextValue = (event.currentTarget as HTMLInputElement).value
-    value = nextValue
-
+    const input = event.currentTarget as HTMLInputElement
+    const nextValue = input.value
     const parsed = parseCssColor(nextValue)
-    if (parsed && alpha !== null && cssColorIncludesAlpha(nextValue)) {
-      alpha = parsed.alpha
+
+    if (parsed && alpha !== null) {
+      // 独立 alpha 模式的 value 始终保持不带透明度的六位 hex；透明度另行绑定。
+      if (cssColorIncludesAlpha(nextValue)) alpha = parsed.alpha
+      value = parsed.hex
+      // 当前 value 已相同时，Svelte 不会重写 input DOM，需覆盖用户刚输入的原文。
+      input.value = parsed.hex
+    } else {
+      value = nextValue
     }
-    dispatch('change', value)
+    onchange?.(value)
   }
 
-  function handleColorInput(event: Event) {
-    updateValueFromPicker((event.currentTarget as HTMLInputElement).value)
+  function handleAreaKeydown(event: KeyboardEvent) {
+    const step = event.shiftKey ? 10 : 2
+    if (event.key === 'ArrowLeft') setSaturationBrightness(saturation - step, brightness)
+    else if (event.key === 'ArrowRight') setSaturationBrightness(saturation + step, brightness)
+    else if (event.key === 'ArrowUp') setSaturationBrightness(saturation, brightness + step)
+    else if (event.key === 'ArrowDown') setSaturationBrightness(saturation, brightness - step)
+    else return
+    event.preventDefault()
   }
 
-  function handleAlphaInput(event: Event) {
-    updateValueFromPicker(pickerHex, Number((event.currentTarget as HTMLInputElement).value))
+  function handleHueKeydown(event: KeyboardEvent) {
+    const step = event.shiftKey ? 15 : 3
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') setHue(hue - step)
+    else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') setHue(hue + step)
+    else return
+    event.preventDefault()
+  }
+
+  function handleAlphaKeydown(event: KeyboardEvent) {
+    const step = event.shiftKey ? 0.1 : 0.02
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') setAlpha(effectiveAlpha - step)
+    else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') setAlpha(effectiveAlpha + step)
+    else return
+    event.preventDefault()
+  }
+
+  function handlePointerCancel() {
+    clearDrag()
   }
 
   function togglePicker() {
@@ -76,19 +232,27 @@
   }
 
   function closePicker() {
+    clearDrag()
     pickerOpen = false
   }
 
+  function handleWindowPointerDown(event: PointerEvent) {
+    if (!pickerOpen || dragging) return
+    if (shellEl && !shellEl.contains(event.target as Node)) {
+      closePicker()
+    }
+  }
+
   function handleKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape') {
+    if (event.key === 'Escape' && pickerOpen) {
       closePicker()
     }
   }
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} onpointerdown={handleWindowPointerDown} />
 
-<div class="color-input-shell">
+<div class="color-input-shell" bind:this={shellEl}>
   <div class="color-picker-row">
     <input
       value={value}
@@ -96,30 +260,88 @@
       {placeholder}
       maxlength="40"
       aria-label={inputLabel}
-      on:input={handleTextInput}
+      oninput={handleTextInput}
     />
     <button
       type="button"
       class="color-swatch"
-      style="--swatch-color: {value};"
+      style="--swatch-color: {previewColor};"
       title={swatchTitle}
       aria-label={swatchTitle}
       aria-expanded={pickerOpen}
-      on:click={togglePicker}
+      onclick={togglePicker}
     ></button>
   </div>
 
   {#if pickerOpen}
     <div class="picker-popover">
-      <label class="picker-field">
-        <span>颜色</span>
-        <input value={pickerHex} type="color" on:input={handleColorInput} />
-      </label>
+      <div
+        class="color-area"
+        role="slider"
+        tabindex="0"
+        aria-label="饱和度与明度"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow={Math.round(saturation)}
+        aria-valuetext="饱和度 {Math.round(saturation)}% 明度 {Math.round(brightness)}%"
+        style="background-color: {areaBackground};"
+        onpointerdown={(event) => handlePointerDown('area', event)}
+        onpointermove={(event) => handlePointerMove('area', event)}
+        onpointerup={handlePointerUp}
+        onpointercancel={handlePointerCancel}
+        onlostpointercapture={handlePointerCancel}
+        onkeydown={handleAreaKeydown}
+      >
+        <div class="color-white-grad"></div>
+        <div class="color-black-grad"></div>
+        <div class="color-pointer" style="left: {pointerLeft}%; top: {pointerTop}%;"></div>
+      </div>
 
-      <label class="picker-field">
-        <span>{alphaText} <em>{formatAlpha(effectiveAlpha)}</em></span>
-        <input value={effectiveAlpha} type="range" min="0" max="1" step="0.01" on:input={handleAlphaInput} />
-      </label>
+      <div class="sliders-container">
+        <div class="slider-row">
+          <span>{hueText}</span>
+          <div
+            class="slider-track hue-track"
+            role="slider"
+            tabindex="0"
+            aria-label={hueText}
+            aria-valuemin="0"
+            aria-valuemax="360"
+            aria-valuenow={Math.round(hue)}
+            onpointerdown={(event) => handlePointerDown('hue', event)}
+            onpointermove={(event) => handlePointerMove('hue', event)}
+            onpointerup={handlePointerUp}
+            onpointercancel={handlePointerCancel}
+            onlostpointercapture={handlePointerCancel}
+            onkeydown={handleHueKeydown}
+          >
+            <div class="slider-thumb" style="left: {hueLeft}%;"></div>
+          </div>
+        </div>
+
+        <div class="slider-row">
+          <span>{alphaText} <em>{formatAlpha(effectiveAlpha)}</em></span>
+          <div
+            class="slider-track alpha-track"
+            role="slider"
+            tabindex="0"
+            aria-label={alphaText}
+            aria-valuemin="0"
+            aria-valuemax="1"
+            aria-valuenow={Number(effectiveAlpha.toFixed(2))}
+            onpointerdown={(event) => handlePointerDown('alpha', event)}
+            onpointermove={(event) => handlePointerMove('alpha', event)}
+            onpointerup={handlePointerUp}
+            onpointercancel={handlePointerCancel}
+            onlostpointercapture={handlePointerCancel}
+            onkeydown={handleAlphaKeydown}
+          >
+            <div class="alpha-checkerboard"></div>
+            <div class="alpha-fill" style="background-image: {alphaFill};"></div>
+            <div class="slider-thumb" style="left: {alphaLeft}%;"></div>
+          </div>
+        </div>
+      </div>
     </div>
   {/if}
 </div>
@@ -195,7 +417,7 @@
     top: calc(100% + 8px);
     right: 0;
     z-index: 20;
-    width: min(280px, 80vw);
+    width: min(240px, 86vw);
     box-sizing: border-box;
     display: grid;
     gap: 12px;
@@ -206,35 +428,127 @@
     padding: 14px;
   }
 
-  .picker-field {
-    display: grid;
-    gap: 8px;
+  .color-area {
+    position: relative;
+    height: 130px;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: crosshair;
+    touch-action: none;
   }
 
-  .picker-field span {
+  .color-area:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--focus-ring);
+  }
+
+  .color-white-grad {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to right, #ffffff, rgba(255, 255, 255, 0));
+  }
+
+  .color-black-grad {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, #000000, rgba(0, 0, 0, 0));
+  }
+
+  .color-pointer {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 0 2px rgba(0, 0, 0, 0.6);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+
+  .sliders-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
     color: #334155;
-    font-size: 13px;
     font-weight: 600;
   }
 
-  .picker-field span em {
+  .slider-row > span {
+    flex: 0 0 44px;
+  }
+
+  .slider-row span em {
     color: #2563eb;
     font-style: normal;
+    font-variant-numeric: tabular-nums;
   }
 
-  .picker-field input[type='color'] {
-    width: 100%;
-    height: 42px;
-    border: 1px solid #cbd5e1;
-    border-radius: 10px;
-    background: #ffffff;
-    padding: 4px;
+  .slider-track {
+    flex: 1;
+    height: 12px;
+    border-radius: 6px;
+    position: relative;
     cursor: pointer;
+    touch-action: none;
   }
 
-  .picker-field input[type='range'] {
-    width: 100%;
-    padding: 0;
-    accent-color: #2563eb;
+  .slider-track:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--focus-ring);
+  }
+
+  .hue-track {
+    background: linear-gradient(
+      to right,
+      #ff0000,
+      #ffff00,
+      #00ff00,
+      #00ffff,
+      #0000ff,
+      #ff00ff,
+      #ff0000
+    );
+  }
+
+  .alpha-track {
+    overflow: hidden;
+  }
+
+  .alpha-checkerboard {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(45deg, #e2e8f0 25%, transparent 25%),
+      linear-gradient(-45deg, #e2e8f0 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #e2e8f0 75%),
+      linear-gradient(-45deg, transparent 75%, #e2e8f0 75%);
+    background-color: #ffffff;
+    background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+    background-size: 8px 8px;
+  }
+
+  .alpha-fill {
+    position: absolute;
+    inset: 0;
+  }
+
+  .slider-thumb {
+    position: absolute;
+    top: 50%;
+    width: 14px;
+    height: 14px;
+    background: #ffffff;
+    border: 1px solid #94a3b8;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    pointer-events: none;
   }
 </style>

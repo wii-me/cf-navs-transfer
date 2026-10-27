@@ -1,12 +1,26 @@
 // 书签 CRUD、批量排序、图标数据读取与 icon_blob 写入
 
 import { type Bookmark, type BookmarkBatchMoveReq, type BookmarkUpsertReq } from '../../../shared/types'
-import { BOOKMARK_LIST_SQL } from './sql'
+import { BOOKMARK_AGGREGATE_LIST_SQL, BOOKMARK_LIST_SQL } from './sql'
 import { withSchemaRetry } from './schema'
 import { decodeVersionedIcon, iconContentRevision } from '../iconRevision'
 import { buildColumnUpdateChunks, runUpdateChunks, sortRowsByIds, type RowUpdateEntry } from './sort'
+import { Mutation, chunkIds, placeholders, type MutationReceipt } from './mutation'
 
+// 列表口径与聚合一致：icon_blob 恒为 null，以 icon_cached 表示 D1 中是否已有正文，
+// 不把每个书签的 base64 图标正文读进 Worker 再下发（GET /api/bookmarks）。
 export async function listBookmarks(db: D1Database): Promise<Bookmark[]> {
+ return await withSchemaRetry(db, async () => {
+  const { results } = await db
+   .prepare(BOOKMARK_AGGREGATE_LIST_SQL)
+   .all<Bookmark>()
+  return results ?? []
+ })
+}
+
+// 合并导入要用 importData 重建整张表，现有书签的 icon_blob 必须原样带过去，
+// 否则一次合并导入会清空全部已缓存图标——只有这条路径需要读正文。
+export async function listBookmarksWithIconBlobs(db: D1Database): Promise<Bookmark[]> {
  return await withSchemaRetry(db, async () => {
   const { results } = await db
    .prepare(BOOKMARK_LIST_SQL)
@@ -85,13 +99,17 @@ export async function isBookmarkIconAnonymouslyVisibleById(db: D1Database, id: n
  })
 }
 
-export async function createBookmark(db: D1Database, req: BookmarkUpsertReq): Promise<Bookmark | null> {
+export async function createBookmark(
+ db: D1Database,
+ req: BookmarkUpsertReq,
+ receipt?: MutationReceipt,
+): Promise<Bookmark | null> {
  const now = Date.now()
  const inline = req.icon ? decodeVersionedIcon(req.icon) : null
  const inlineRevision = inline ? await iconContentRevision(inline) : null
  const open_method: 1 | 2 | 3 = req.open_method === 2 ? 2 : req.open_method === 3 ? 3 : 1
- return await withSchemaRetry(db, async () => (
-  await db
+ return await withSchemaRetry(db, async () => {
+  const insert = db
    .prepare(
     `INSERT INTO bookmarks (
            category_id, title, url, icon, icon_source, icon_background_color, icon_revision,
@@ -117,14 +135,20 @@ export async function createBookmark(db: D1Database, req: BookmarkUpsertReq): Pr
     now,
     req.category_id,
    )
-   .first<Bookmark>()
- ))
+  // 分类不存在时 INSERT 命中 0 行，同一守卫让版本也不提升。
+  const [result] = await new Mutation(db)
+   .add(insert)
+   .bump({ sql: 'EXISTS (SELECT 1 FROM categories WHERE id = ?)', params: [req.category_id] })
+   .commit(receipt)
+  return (result?.results?.[0] as Bookmark | undefined) ?? null
+ })
 }
 
 export async function updateBookmark(
  db: D1Database,
  id: number,
  req: BookmarkUpsertReq,
+ receipt?: MutationReceipt,
 ): Promise<Bookmark | null> {
  const nextIcon = req.icon ?? null
  const nextIconSource = req.icon_source ?? null
@@ -133,8 +157,8 @@ export async function updateBookmark(
  const openMethod: 1 | 2 | 3 | null =
   req.open_method === 2 ? 2 : req.open_method === 3 ? 3 : req.open_method === 1 ? 1 : null
  const hasDescriptionMode = Object.prototype.hasOwnProperty.call(req, 'description_mode')
- return await withSchemaRetry(db, async () => (
-  await db
+ return await withSchemaRetry(db, async () => {
+  const update = db
    .prepare(
     `UPDATE bookmarks
          SET icon_revision = CASE WHEN icon IS ? AND icon_source IS ? THEN COALESCE(icon_revision, ?) ELSE ? END,
@@ -178,29 +202,52 @@ export async function updateBookmark(
     id,
     req.category_id,
    )
-   .first<Bookmark>()
- ))
+  // 版本写入放在 UPDATE 之后：改图标会触发 bookmark_icon_publish 写入随机版本，
+  // 末尾这条会覆盖它，保证响应里的 data_version 就是库中的值，且对外只变一次。
+  const [result] = await new Mutation(db)
+   .add(update)
+   .bump({
+    sql: 'EXISTS (SELECT 1 FROM bookmarks WHERE id = ?) AND EXISTS (SELECT 1 FROM categories WHERE id = ?)',
+    params: [id, req.category_id],
+   })
+   .commit(receipt)
+  return (result?.results?.[0] as Bookmark | undefined) ?? null
+ })
 }
 
-export async function deleteBookmark(db: D1Database, id: number): Promise<boolean> {
- const res = await db.prepare('DELETE FROM bookmarks WHERE id = ?').bind(id).run()
- return (res.meta.changes ?? 0) > 0
+export async function deleteBookmark(db: D1Database, id: number, receipt?: MutationReceipt): Promise<boolean> {
+ // DELETE 不触发图标触发器，守卫放在删除之前：「删除前记录存在」才提升版本。
+ const [res] = await new Mutation(db)
+  .bump({ sql: 'EXISTS (SELECT 1 FROM bookmarks WHERE id = ?)', params: [id] })
+  .add(db.prepare('DELETE FROM bookmarks WHERE id = ?').bind(id))
+  .commit(receipt)
+ return (res?.meta?.changes ?? 0) > 0
 }
 
-export async function batchDeleteBookmarks(db: D1Database, ids: number[]): Promise<number> {
- if (ids.length === 0) return 0
- const results = await db.batch(ids.map((id) => db.prepare('DELETE FROM bookmarks WHERE id = ?').bind(id)))
- return results.reduce((sum, result) => sum + (result.meta.changes ?? 0), 0)
+export async function batchDeleteBookmarks(db: D1Database, ids: number[], receipt?: MutationReceipt): Promise<number> {
+ const unique = [...new Set(ids)]
+ if (unique.length === 0) return 0
+ // 按 D1 参数上限分块 `WHERE id IN (...)`：500 个 id 是 6 条语句而不是 500 条。
+ // 每块前放一条同版本值的守卫写入，任意一块有记录即提升版本，全部不存在则不提升。
+ const mutation = new Mutation(db)
+ for (const chunk of chunkIds(unique)) {
+  mutation
+   .bump({ sql: `EXISTS (SELECT 1 FROM bookmarks WHERE id IN (${placeholders(chunk.length)}))`, params: chunk })
+   .add(db.prepare(`DELETE FROM bookmarks WHERE id IN (${placeholders(chunk.length)})`).bind(...chunk))
+ }
+ const results = await mutation.commit(receipt)
+ return results.reduce((sum, result) => sum + (result?.meta?.changes ?? 0), 0)
 }
 
-export async function sortBookmarks(db: D1Database, ids: number[]): Promise<void> {
- await sortRowsByIds(db, 'bookmarks', ids)
+export async function sortBookmarks(db: D1Database, ids: number[], receipt?: MutationReceipt): Promise<void> {
+ await sortRowsByIds(db, 'bookmarks', ids, receipt)
 }
 export class BookmarkReorganizeError extends Error { }
 
 export async function reorganizeBookmarks(
  db: D1Database,
  categoryOrders: Array<{ category_id: number; ids: number[] }>,
+ receipt?: MutationReceipt,
 ): Promise<void> {
  const categoryIds = new Set<number>()
  const bookmarkToCategory = new Map<number, number>()
@@ -249,9 +296,13 @@ export async function reorganizeBookmarks(
  await runUpdateChunks(db, [
   ...buildColumnUpdateChunks('bookmarks', 'category_id', categoryEntries),
   ...buildColumnUpdateChunks('bookmarks', 'sort', sortEntries),
- ])
+ ], receipt)
 }
-export async function batchMoveBookmarks(db: D1Database, req: BookmarkBatchMoveReq): Promise<number> {
+export async function batchMoveBookmarks(
+ db: D1Database,
+ req: BookmarkBatchMoveReq,
+ receipt?: MutationReceipt,
+): Promise<number> {
  if (req.ids.length === 0 || req.position !== 'start' && req.position !== 'end') {
   throw new BookmarkReorganizeError('invalid bookmark batch move payload')
  }
@@ -308,26 +359,47 @@ export async function batchMoveBookmarks(db: D1Database, req: BookmarkBatchMoveR
  await runUpdateChunks(db, [
   ...buildColumnUpdateChunks('bookmarks', 'category_id', ids.map((id) => [id, req.category_id] as const)),
   ...buildColumnUpdateChunks('bookmarks', 'sort', orderedIds.map((id, index) => [id, index] as const)),
- ])
+ ], receipt)
  return ids.length
 }
 
-/** Commit only to the exact object/source generation read before the asynchronous work. */
+/**
+ * Commit only to the exact object/source generation read before the asynchronous work.
+ *
+ * `publish` 只给管理员显式刷新使用：内容版本确实变化（含「未知摘要 → 已知摘要」）时，
+ * 在同一 batch 里提升 data_version 并写入收据。匿名图标代理与可信副本协议不传它，
+ * 保持「仅补充未知摘要不逐图触发全量刷新」的既有契约（已知摘要变化仍由
+ * bookmark_icon_publish 触发器发布）。
+ */
 export async function setIconBlob(
- db: D1Database, id: number, blob: string | null, expected: BookmarkIconData,
+ db: D1Database, id: number, blob: string | null, expected: BookmarkIconData, publish?: MutationReceipt,
 ): Promise<boolean> {
  const icon = blob === null ? null : decodeVersionedIcon(blob)
  if (blob !== null && !icon) return false
  const revision = icon ? await iconContentRevision(icon) : null
- const result = await db.prepare(`UPDATE bookmarks SET icon_blob = ?, icon_revision = ?,
+ const update = db.prepare(`UPDATE bookmarks SET icon_blob = ?, icon_revision = ?,
     icon_write_epoch = icon_write_epoch + CASE WHEN icon_blob IS NOT ? AND icon_revision IS ? THEN 1 ELSE 0 END
   WHERE id = ? AND icon_write_epoch = ? AND icon IS ? AND icon_source IS ?
     AND icon_blob IS ? AND icon_revision IS ?
     AND (SELECT json_extract(value, '$') FROM settings WHERE key = 'icon_dataset_epoch') = ?`)
   .bind(blob, revision, blob, revision, id, expected.icon_write_epoch, expected.icon, expected.icon_source,
    expected.icon_blob, expected.icon_revision, expected.dataset_epoch)
-  .run()
- return (result.meta.changes ?? 0) > 0
+ // 聚合数据里可观察的只有 icon_revision 与 icon_cached（是否有正文）；两者都不变时
+ // （例如同一字节的不同编码）无需发布。
+ const observableChange = revision !== expected.icon_revision || Boolean(blob) !== Boolean(expected.icon_blob)
+ if (!publish || !observableChange) {
+  const result = await update.run()
+  return (result.meta.changes ?? 0) > 0
+ }
+ // 守卫在 UPDATE 之后求值：条件写入落地（行上已是本次的正文与摘要）才提升版本。
+ const [result] = await new Mutation(db)
+  .add(update)
+  .bump({
+   sql: 'EXISTS (SELECT 1 FROM bookmarks WHERE id = ? AND icon_blob IS ? AND icon_revision IS ?)',
+   params: [id, blob, revision],
+  })
+  .commit(publish)
+ return (result?.meta?.changes ?? 0) > 0
 }
 
 export async function incrementBookmarkClick(db: D1Database, id: number): Promise<boolean> {

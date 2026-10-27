@@ -6,17 +6,18 @@ import { getSortToolbarInset } from '../../src/lib/homeSortToolbar'
 import type { PublicBookmark, PublicCategory } from '../../shared/types'
 
 const categories: PublicCategory[] = [{ id: 1, parent_id: null, title: 'Tools', icon: null, sort: 0 }]
-const bookmarks: PublicBookmark[] = [{ id: 1, category_id: 1, title: 'Example', url: 'https://example.test', icon: 'E', icon_source: 'custom', icon_background_color: null, description: null, open_method: 1, sort: 0 }]
+const bookmarks: PublicBookmark[] = [{ id: 1, category_id: 1, title: 'Example', url: 'https://example.test', icon: 'E', icon_source: 'custom', icon_background_color: null, icon_blob: null, description: null, open_method: 1, sort: 0 }]
 let toolbarTop = 700
 let notify: (() => void) | undefined
 let disconnected = vi.fn()
 beforeEach(() => {
+  localStorage.setItem('cf-navs:guide-seen', '1')
   toolbarTop = 700
   notify = undefined
   disconnected = vi.fn()
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
   vi.stubGlobal('ResizeObserver', class { constructor(callback: () => void) { notify = callback } observe() {} disconnect() { disconnected() } })
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
     return this.classList.contains('home-sort-bar') ? { top: toolbarTop, bottom: 788, height: 788 - toolbarTop, left: 0, right: 300, width: 300 } as DOMRect : { top: 0, bottom: 0, height: 0, left: 0, right: 0, width: 0 } as DOMRect
   })
   Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 })
@@ -79,8 +80,8 @@ describe('sort toolbar geometry', () => {
 })
 
 it('publishes actual top-navigation bounds and removes the inset in left mode',async()=>{
-  vi.mocked(HTMLElement.prototype.getBoundingClientRect).mockImplementation(function(){
-    return (this as HTMLElement).classList.contains('top-navigation')?{top:12,bottom:64,height:52,left:0,right:1000,width:1000} as DOMRect:{top:0,bottom:0,height:0,left:0,right:0,width:0} as DOMRect
+  vi.mocked(HTMLElement.prototype.getBoundingClientRect).mockImplementation(function(this: HTMLElement){
+    return this.classList.contains('top-navigation')?{top:12,bottom:64,height:52,left:0,right:1000,width:1000} as DOMRect:{top:0,bottom:0,height:0,left:0,right:0,width:0} as DOMRect
   })
   const {container,rerender}=render(Home,{props:{categories,bookmarks,isAuthenticated:true,settings:{navigation:{position:'top',always_expanded:false}} as any}})
   const shell=container.querySelector('.home-shell') as HTMLElement

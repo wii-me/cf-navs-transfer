@@ -120,9 +120,14 @@ export function deriveBookmarkCardIconBase(input: BookmarkCardIconBaseInput): Bo
   const canRecoverHttpIcon = canUseRawHttpIconFallback && Number.isInteger(bookmark.id) && bookmark.id > 0
   // Projected snapshots omit source bytes. Content-only edits must still change
   // the edge-cache version; a known revision stays stable across write fences.
+  // Embedded data: URIs are dropped from local snapshots, so they must not enter the
+  // version either: network rows and snapshot rows have to yield the same URL, or the
+  // local-first icon store would refetch every embedded icon after each reload.
+  // Content edits still change it through icon_revision / icon_write_epoch.
+  const versionIcon = /^data:/i.test(rawIcon) ? '' : rawIcon
   const proxiedHttpIconUrl = shouldUseIconProxy || canRecoverHttpIcon
     ? withIconAccessKey(
-      `/api/icon/${encodeURIComponent(String(bookmark.id))}?v=${createIconVersion(`${bookmark.id}:${rawIcon}:${bookmark.title}:${bookmark.url}:${bookmark.icon_revision ?? bookmark.icon_write_epoch ?? 0}`)}&cv=${ICON_CACHE_URL_VERSION}`,
+      `/api/icon/${encodeURIComponent(String(bookmark.id))}?v=${createIconVersion(`${bookmark.id}:${versionIcon}:${bookmark.title}:${bookmark.url}:${bookmark.icon_revision ?? bookmark.icon_write_epoch ?? 0}`)}&cv=${ICON_CACHE_URL_VERSION}`,
       iconAccessKey,
     )
     : ''

@@ -79,7 +79,9 @@ describe('runAdminMutation', () => {
         run: async () => {
           throw failure
         },
-        onSuccess: () => events.push('success'),
+        onSuccess: () => {
+          events.push('success')
+        },
         successMessage: () => 'unused',
         onError: (message) => events.push(`error:${message}`),
         onSettled: () => events.push('settled'),

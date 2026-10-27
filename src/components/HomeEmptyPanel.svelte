@@ -1,5 +1,11 @@
+<svelte:options runes />
+
 <script lang="ts">
-  export let hasSearchQuery = false
+  interface Props {
+    hasSearchQuery?: boolean
+  }
+
+  let { hasSearchQuery = false }: Props = $props()
 </script>
 
 <section class="empty-panel">

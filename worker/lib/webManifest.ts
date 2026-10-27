@@ -1,4 +1,4 @@
-import { extractAttribute, resolveHttpUrl } from './pageMetadata'
+import { extractAttribute, fetchFollowingSafeRedirects, resolveHttpUrl } from './pageMetadata'
 
 export type ManifestIconCandidate = {
   url: string
@@ -31,9 +31,9 @@ export async function fetchManifestJson(
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const response = await fetch(url, {
+    // 重定向手动跟随并逐跳过滤（SSRF）；被拒绝时抛错，下面的 catch 返回 null。
+    const { response } = await fetchFollowingSafeRedirects(url, {
       method: 'GET',
-      redirect: 'follow',
       headers: { Accept: MANIFEST_ACCEPT },
       signal: controller.signal,
     })

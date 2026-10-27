@@ -74,12 +74,21 @@ describe('install recheck after a data load failure', () => {
 
 describe('app boot wiring', () => {
   it('gates the install probe and keeps the recheck fallback', () => {
-    const source = readFileSync('src/App.svelte', 'utf8')
+    // 启动流程已抽到 appBootController（代码审查三轮第 12 项，行为见 appBootController.test.ts），
+    // 这里守两条接线：控制器真的调用这两个判定函数，App 真的经由控制器启动。
+    const source = readFileSync('src/lib/appBootController.ts', 'utf8')
+    const app = readFileSync('src/App.svelte', 'utf8')
 
     expect(source).toContain('shouldProbeInstallStatus(')
     expect(source).toContain('shouldRecheckInstallAfterDataError(')
     // 跳过探测的代价是本地标记可能过期，兜底路径不能被顺手删掉
     expect(source).toContain('recheckInstallAfterDataError')
+    expect(app).toContain('createAppBootController(')
+    expect(app).toContain('boot.recordDataError(error)')
+    expect(app).toContain('if (!boot.start()) return')
+    // 第 13 项：「重新检查」按钮不能把 MouseEvent 传进 initializeApp(installStatusKnown)。
+    expect(app).toContain('onRetryStatus={boot.retryInstallStatus}')
+    expect(app).not.toContain('onRetryStatus={boot.initializeApp}')
   })
 })
 

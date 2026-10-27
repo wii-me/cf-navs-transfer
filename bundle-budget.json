@@ -1,0 +1,5 @@
+{
+  "_note": "首屏（dist/index.html 引用的入口与 modulepreload）体积预算，单位字节。由 scripts/check-bundle-size.mjs 在 CI 校验；有意增大首屏时同一提交调高并在 CHANGELOG 写明原因。基线 2026-10-17：JS 277281 / gzip 95258，CSS 82136 / gzip 13924。",
+  "js": { "raw": 283000, "gzip": 97500 },
+  "css": { "raw": 84000, "gzip": 14500 }
+}

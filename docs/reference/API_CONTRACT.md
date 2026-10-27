@@ -6,22 +6,57 @@
 
 - 所有接口前缀为 `/api`。
 - 常规响应使用统一包络：`{ code, msg, data }`。
-- 业务错误通常仍返回 HTTP 200，用 `code` 区分；认证中间件拦截返回 HTTP 401 且 `code=1001`。
+- 业务错误通常仍返回 HTTP 200，用 `code` 区分；认证中间件拦截返回 HTTP 401 且 `code=1001`。完整口径见下方「错误码与 HTTP 状态约定」。
 - 受保护的写操作使用 `Authorization: Bearer <token>` 鉴权；安装接口使用一次性的 `X-Setup-Token`，公开点击计数接口不要求登录。
 - 时间戳使用毫秒数，即 `Date.now()`。
+- **写响应的 `data_version`（附加字段）**：改变聚合数据的受保护写接口（分类/书签增删改、批量删除/移动、排序、整理、设置保存、导入、浏览器同步、显式图标刷新）成功且确实提升了数据版本时，包络额外携带 `data_version: string`，值即本次提交后的 `/api/data/version` 版本号：`{ code: 0, msg, data, data_version }`。业务写入与版本提升在**同一个 D1 batch（同一事务）**中提交（`worker/lib/db/mutation.ts` 的 `Mutation` / `commitMutation`），不会出现「数据已变、版本未变」或对外先后变化两次。未写入任何数据（404、批量集合全部不存在、空设置补丁）时不提升版本、不失效缓存，也不带该字段。该字段只在包络层出现，`data` 形状不变；旧客户端忽略即可，客户端也不应依赖它一定存在。
+
+## 错误码与 HTTP 状态约定
+
+`code` 取值见 `shared/types.ts` 的 `ErrCode`：`0` 成功、`1001` 未认证、`1002` 参数错误、`1003` 不存在、`1004` 限流、`1005` 禁止访问、`1006` 状态冲突、`1500` 服务端错误。
+
+**默认规则：业务错误走包络，HTTP 200。** 判错一律看 `code !== 0`，而不是 HTTP 状态。前端 `src/lib/api.ts` 的 `request()` 对两种形态都抛 `ApiError`：HTTP 非 2xx 时 `status` 为真实状态、`code` 取包络的 `code`（无包络时退回 HTTP 状态）；HTTP 200 且 `code !== 0` 时 `status=200`、`code` 为包络值。会话失效判定（`isUnauthorizedError`）同时认 `status === 401` 与 `code === 1001`。浏览器扩展（`browser-extension/background.js`）同样以 `code !== 0` 判错，另对 HTTP 401 单独处理。因此**不要把现有 HTTP 200 的业务错误改成 4xx**，也不要把下表的真实状态端点改回 200——`objectIconLoader` 依赖图标副本的 401/403/404/409 真实状态，浏览器扩展依赖 401。
+
+| helper / 位置 | HTTP 状态 | `code` | 何时使用 |
+| --- | --- | --- | --- |
+| `ok(data)`（`worker/lib/response.ts`） | 200 | `0` | 成功 |
+| `badRequest(c, msg)`（`worker/lib/routeHelpers.ts`） | 200 | `1002` | 请求体 / 参数 / id 校验失败、非法 URL、出网目标被拒、导入超限等业务校验失败 |
+| `c.json(fail(ErrCode.NOT_FOUND, …))` | 200 | `1003` | 受保护接口的目标资源不存在；未知 `/api/*` 路径（登录后） |
+| `c.json(fail(ErrCode.CONFLICT, …))` | 200 | `1006` | 资源状态不允许该操作（整理 / 批量移动集合过期、浏览器同步已关闭、分类仍有子分类） |
+| `c.json(fail(ErrCode.RATE_LIMITED, …))` | 200 | `1004` | 登录、安装、找回限流 |
+| `c.json(fail(ErrCode.FORBIDDEN, …))` | 200 | `1005` | 公开模式关闭时匿名访问 `/api/public/data`、`/api/data/version` |
+| `c.json(fail(ErrCode.UNAUTHORIZED, 'invalid credentials'))` | 200 | `1001` | `POST /api/login` 用户名或密码错误（不是会话失效，前端登录请求不带 Bearer，不会误清登录态） |
+| `serverError(c, msg, error)` | 200 | `1500` | 路由 catch 的非预期失败；原始错误只写 Workers 日志 |
+| `app.onError`（`worker/index.ts`） | 200（`/api/*`）/ 500 文本（其它路径） | `1500` | 未被路由捕获的异常 |
+| `authRequired` 中间件 | **401** | `1001` | 缺少 / 无效 / 已撤销的 Bearer token；未登录访问未知 `/api/*` 路径 |
+| `/api/public/data`、`/api/data/version` 带无效 Bearer | **401** | `1001` | 带了 token 但会话无效，不能退回匿名结果 |
+| `POST /api/install`、`POST /api/recover` | **401** / **403** | `1001` / `1005` | `X-Setup-Token` 错误或未配置 / 跨域请求；其余失败（参数、已安装 / 未安装、限流、服务端错误）走 HTTP 200 包络 |
+| `serverError(c, msg, error, 500)` | **500** | `1500` | 仅 `POST /api/public/bookmarks/:id/click` 的 catch |
+| `POST /api/public/bookmarks/:id/click` | **400** / **404** | `1002` / `1003` | 非法 id / 书签不存在或为私密 |
+| `POST /api/error-report` | **400** / **413** / **429** | `1002` / `1002` / `1004` | 无效 payload / 请求体超限 / 限流 |
+| `GET /api/iconify-search` | **400** / **502** | `1002` / `1500` | 查询词非法 / 上游 Iconify 搜索失败 |
+
+新增端点默认用前半张表的 helper（HTTP 200 + `code`）。只有调用方必须靠 HTTP 语义区分结果（鉴权、跨域、`sendBeacon` 式上报、带协议的图标副本、上游代理失败）时才返回真实状态，并同步本表与 `tests/unit/errorConvention.test.ts` 的非 200 快照——该测试扫描 `worker/` 中全部 `c.json(fail(ErrCode.X, …), <status>)`，并钉住 `badRequest` / `serverError` / `authRequired` / `onError` 的状态与 `code`。
 
 ## 鉴权规则
 
 - `authRequired`：读取 Bearer token，用 `settings.jwt_secret` 校验 HS256 签名和 `exp`，再查 KV 撤销名单。签名、过期或撤销不通过返回 401；KV 读取故障可能由全局错误处理返回服务端错误。**缺少 `SESSION` 绑定时不再跳过撤销检查，而是直接拒绝会话**（见下方口径）。
+- **路由鉴权按构造保证**：`worker/index.ts` 把 API 拆成公开子应用 `publicApi`（唯一的公开清单，见下方「公开接口」「安装接口」与 `/login`、`/recover`、图标代理）和受保护子应用 `protectedApi`（`use('*', authRequired)`，在全部公开处理器之后挂载）。新增接口默认受保护；未登录访问未知的 `/api/*` 路径或公开路径的未定义方法时返回 401 / `code=1001`（此前为 `code=1003` not found），登录后仍返回 not found。`tests/unit/routeAuth.test.ts` 枚举受保护子应用的全部路由断言无 token / 伪造 token 均为 401，并对公开路由清单做快照。
 - 会话是无状态 JWT，payload 为 `{ username, exp, jti }`。`jti` 保证同一毫秒内的两次登录也会签出不同 token，否则「退出这台设备」会连带撤销另一台。
 - `POST /api/logout` 把当前 token 的 SHA-256 摘要写入 KV `revoked:<sha256>`，TTL 为 `max(60 秒, token 剩余寿命)`，以满足 KV `expirationTtl` 的下限。用摘要而不是 token 本身做 key，避免 KV 被 dump 时泄露仍在有效期内的 token。其它 isolate 上最多 15 秒后才感知到撤销，这是内存缓存换来的固定窗口。撤销名单是「退出登录」的**全部实质**，写不进去就等于没退，因此该接口用 `LogoutResp` 把结果显式告知调用方，不再一律返回纯成功——三种结果见「认证接口」小节。
-- 修改密码和凭据重置走 `rotateJwtSecret`，一次性作废全部会话。
-- KV `SESSION` 绑定当前只用于登录限流（`rl:login:*`）、点击计数限流（`rl:click:*`）和会话撤销名单（`revoked:*`），不再存储会话本身。
+- 修改密码和凭据重置走 `rotateJwtSecret`，一次性作废全部会话；新密码哈希与新的 JWT 签名密钥写在**同一条** settings upsert 里（`POST /api/password`、`POST /api/recover`），不会出现「密码已改、旧 token 仍有效」的中间态。
+- KV `SESSION` 绑定当前只用于登录限流（`rl:login:*`）和会话撤销名单（`revoked:*`），不再存储会话本身。点击计数限流已改用 D1 表 `click_rate_limits`（见下文点击计数说明），不再读写 KV。
 - **缺 `SESSION` 绑定时的行为按「正确性是否依赖它」分两类**（判定统一在 `worker/lib/sessionStore.ts` 的 `hasSessionBinding`，要求 `get`/`put`/`delete` 三个方法都存在）：
   - **鉴权与登录 fail-closed**：`validateSession` 拒绝会话（受保护端点因此 401 / `code=1001`），`POST /api/login` 返回 `code=1500` + `required SESSION binding is unavailable`。撤销名单不可用时不能静默放行——那等于「撤销名单不存在」而调用方无从得知。缺绑定是确定性的配置错误，`/install` 本来就以 `bindings_missing` 拒绝安装。
-  - **best-effort 降级继续**：`POST /api/public/bookmarks/:id/click` 的点击计数限流在缺绑定或 KV 抛错时跳过限流但**仍然计数**。限流失效只是计数偏高，拒绝匿名点击会让公开首页的正常功能坏掉。
-- `/api/public/data`：匿名请求默认可查公开数据 edge cache；缓存未命中时先复用 `/api/config` edge cache，仍未命中才读取轻量 `site_title/public_mode`，公开模式关闭则要求有效 token，否则返回 `code=1005`，该轻量 1005 响应也会短时写入 edge cache。请求带 `Cache-Control: no-cache`、`Cache-Control: no-store`、`Cache-Control: max-age=0` 或 `Pragma: no-cache` 时，服务端必须绕过公开数据和站点配置 edge cache。
-- `/api/data/version`：用一次 `settings` 查询读取 `site_title`、`public_mode`、内部 `data_version` 与图标数据集代次。带 Bearer 时始终校验会话（包括公开模式），成功才返回 `auth_receipt`；无效会话返回 401，不能退回匿名成功。无 Bearer 的公开访问不产生认证回执，私有站点仍返回 `code=1005`。单次版本元数据查询是热路径契约；既有会话验证的 D1/KV 成本单独计量。
+  - `POST /api/public/bookmarks/:id/click` 不依赖 `SESSION` 绑定：其限流存于 D1，限流语句失败时仍按 best-effort 跳过限流**继续计数**（限流失效只是计数偏高，拒绝匿名点击会让公开首页的正常功能坏掉）。
+- `/api/public/data`：**匿名请求一律先查公开数据 edge cache，且忽略客户端的 `Cache-Control: no-cache / no-store / max-age=0` 与 `Pragma: no-cache`**——否则任何人用一个请求头就能强制读 D1。新鲜度改由版本化 URL 保证：
+  - `GET /api/public/data?v=<data_version>`（`v` 取自 `/api/data/version`，格式 `[A-Za-z0-9_-]{1,64}`，不合格式视为未带版本）。缓存键为路径 + 规范化的 `v`，与版本一一对应；版本前进即换键，旧键自然不可达，不依赖 Cache API 只作用于当前 colo 的 `delete`。
+  - 带版本未命中时，服务端先用一条轻量 settings 查询（与 `/api/data/version` 同一条）确认 `v` 是否仍是当前版本：是则读一次聚合 batch 并缓存到该键；否（过期或伪造的 `v`）则优先用**当前版本**键的缓存副本回应，响应改为 `Cache-Control: no-store`，正文是当前版本的数据（`data.version` 为当前版本），不重定向、也不把内容写进过期键；当前版本键也未命中时才读聚合 batch。因此过期或随机 `v` 最多只引发这条单行查询。
+  - 聚合 batch 读出的内容总是写进它真实版本的键；只有 `v` 等于读出的版本（或未带版本）时，返回给客户端的响应才是可缓存的公开头。
+  - 未带 `v` 的旧客户端请求继续可用：使用无版本键（写操作失效的就是这一个），未命中时同时写入无版本键与版本键。跨 colo 场景下无版本键最多滞后一个 edge TTL（120 秒）；响应自带 `version`，前端下一次版本确认即自愈。
+  - 缓存未命中且未带版本时，先复用 `/api/config` edge cache，仍未命中才读取轻量 `site_title/public_mode`；公开模式关闭时匿名请求返回 `code=1005`，该轻量 1005 响应短时写入本次请求的缓存键（过期 `v` 不写）。
+  - 带 Bearer 的请求从不读写共享缓存：先校验会话，无效返回 401，有效则返回包含私密书签的数据（`no-store`）。
+- `/api/data/version`：用一次 `settings` 查询读取 `site_title`、`public_mode`、内部 `data_version`、图标数据集代次 `dataset_epoch` 与全局图标标志位 `icon_epoch`。带 Bearer 时始终校验会话（包括公开模式）；无效会话返回 401，不能退回匿名成功。私有站点的匿名访问仍返回 `code=1005`。单次版本元数据查询是热路径契约；既有会话验证的 D1/KV 成本单独计量。
 
 ## 公开接口
 
@@ -34,11 +69,11 @@
 | POST | `/api/public/bookmarks/:id/click` | 无 | `null` |
 | POST | `/api/error-report` | 无 | `{ received: number }` |
 
-`/api/config` 使用短 TTL Cloudflare edge cache，设置保存或数据导入后会主动失效，主要作为兼容和兜底轻量配置接口。前端普通启动路径优先使用本地快照加 `/api/data/version` 做远端确认；本地无可用快照或版本变化时，才请求 `/api/public/data` 或 `/api/admin/data` 派生站点配置。公开模式关闭时，匿名 `/api/public/data` 的 1005 响应会在 `data` 中携带 `{ site_title, public_mode: false }`，登录页无需再额外请求 `/api/config`。该 1005 响应使用浏览器 `max-age=0` 和短 edge TTL，避免本地浏览器缓存卡住公开模式切换，同时减少私有站点匿名访问对 D1 的重复读取。`/api/public/data` 只查询并返回首页渲染需要的公开设置、分类和书签字段，书签公开字段携带用于轻量判断图标缓存的 `icon_cached`，`icon_blob` 恒为 `null`，但不包含 `admin_username`、`admin_password` 等内部字段，也不包含分类/书签的 `created_at`。**注意 `custom_css` 与 `custom_js` 属于公开设置**（见 `shared/settings.ts` 的 `PUBLIC_SETTINGS_KEYS`）：它们会随公开数据下发给每个匿名访客并在其浏览器中生效，这是「自定义 CSS/JS」这个功能的预期行为；未携带 no-cache 指令的匿名公开访问会先查短 TTL edge cache，命中时直接返回而不读取 D1。前端拉取完整聚合数据时默认带 `Cache-Control: no-cache`、`Pragma: no-cache` 和 fetch `cache: "no-store"`；服务端收到 no-cache 指令或带登录态请求时会绕过匿名缓存。缓存未命中时，服务端先复用或预热 `/api/config` 的轻量 edge cache 来判断是否公开，公开时再通过一次 D1 batch 聚合读取公开 settings、分类和书签；该 batch 同时读取 `site_title/public_mode`、数据版本和图标数据集代次，避免把先前配置与新数据版本拼接成不一致的权限快照。
+`/api/config` 使用短 TTL Cloudflare edge cache，设置保存或数据导入后会主动失效，主要作为兼容和兜底轻量配置接口。注意：与 `/api/public/data` 不同，匿名请求若携带 `Cache-Control: no-cache` / `max-age=0`，`/api/config` 仍会绕过 edge cache 直接读取 D1（仅 2 行轻量设置）。前端普通启动路径优先使用本地快照加 `/api/data/version` 做远端确认；本地无可用快照或版本变化时，才请求 `/api/public/data` 或 `/api/admin/data` 派生站点配置。公开模式关闭时，匿名 `/api/public/data` 的 1005 响应会在 `data` 中携带 `{ site_title, public_mode: false }`，登录页无需再额外请求 `/api/config`。该 1005 响应使用浏览器 `max-age=0` 和短 edge TTL，避免本地浏览器缓存卡住公开模式切换，同时减少私有站点匿名访问对 D1 的重复读取。`/api/public/data` 只查询并返回首页渲染需要的公开设置、分类和书签字段，书签公开字段携带用于轻量判断图标缓存的 `icon_cached`，`icon_blob` 恒为 `null`，但不包含 `admin_username`、`admin_password` 等内部字段，也不包含分类/书签的 `created_at`。**注意 `custom_css` 与 `custom_js` 属于公开设置**（见 `shared/settings.ts` 的 `PUBLIC_SETTINGS_KEYS`）：它们会随公开数据下发给每个匿名访客并在其浏览器中生效，这是「自定义 CSS/JS」这个功能的预期行为；匿名公开访问会先查短 TTL edge cache，命中时直接返回而不读取 D1。前端匿名拉取完整聚合数据时，若刚通过 `/api/data/version` 确认了远端版本，就请求 `/api/public/data?v=<version>`（冷启动没有本地快照时不为此额外请求版本，直接请求无版本地址），只保留 fetch `cache: "no-store"`、不再发送 no-cache 请求头；带登录态请求始终绕过匿名缓存。缓存未命中时，服务端先复用或预热 `/api/config` 的轻量 edge cache 来判断是否公开，公开时再通过一次 D1 batch 聚合读取公开 settings、分类和书签；该 batch 同时读取 `site_title/public_mode`、数据版本和图标数据集代次，避免把先前配置与新数据版本拼接成不一致的权限快照。
 
 `/api/error-report` 接收前端运行时错误上报，payload 为 `{ errors: ErrorReportEntry[] }` 或单个 `ErrorReportEntry`。该接口不要求登录，但限制请求体为 16 KB、单批最多 10 条，并对消息、分类、URL 和行列字段做类型与长度归一化；有效请求通过 D1 原子计数按来源 IP 限制为每分钟 12 次，已封禁来源可由当前 Worker isolate 内存快速拒绝。超大请求返回 HTTP 413，高频请求返回 HTTP 429，无效 JSON 或无有效条目返回 HTTP 400。Worker 只把有限字段写入 `console.error`，响应中的 `received` 表示实际接收条数；前端会对同一错误做 60 秒去重，且上报失败不得影响页面主流程。
 
-`POST /api/public/bookmarks/:id/click` 由首页在打开书签时调用，成功后将对应 `click_count` 加一。每个 IP 与书签 ID 组合在 10 分钟内最多计数 3 次，超过后仍返回成功但不重复增加计数；点击计数不会提升 `data_version`，后台访问分析打开时会强制刷新后台聚合数据。
+`POST /api/public/bookmarks/:id/click` 由首页在打开书签时调用，成功后将对应 `click_count` 加一。每个 IP 与书签 ID 组合在 10 分钟内最多计数 3 次，超过后仍返回成功但不重复增加计数；书签不存在或为私密书签返回 HTTP 404。点击计数不会提升 `data_version`，后台访问分析打开时会强制刷新后台聚合数据。限流计数存于 D1 表 `click_rate_limits`（`schema.sql` 安装时创建，旧库由版本化迁移第 3 步补建，缺表时经 schema 重试自动迁移），与计数更新放在**同一个 D1 batch**：只为存在且公开的书签建计数行；计数在上限 +1 处饱和，超限后的重复点击不再产生写入；过期行在每次 batch 开头按 `reset_at` 索引清理。限流 batch 因其它原因失败时退回为不限流的单条计数。
 
 ## 安装接口
 
@@ -85,7 +120,7 @@
 | --- | --- | --- | --- |
 | GET | `/api/admin/data` | `AdminData` | 后台初始化聚合数据，一次返回分类、书签和完整 `Settings`，用于替代进入后台时分别请求公开数据和设置 |
 
-`AdminData` 和 `PublicData` 响应可携带可选 `version` 字段，前端只用于快照校验，不参与页面渲染。前端会按当前登录态把 `AdminData` 写入浏览器本地快照（优先 localStorage，超出限制时仍可用 Cache Storage）；匿名公开数据也会写入同源本地快照。页面刷新时可以先用快照恢复界面，随后请求 `/api/data/version`：版本相同则不拉完整数据，版本不同才请求 `/api/admin/data` 或 `/api/public/data`。完整聚合请求默认带 no-cache 指令，服务端收到后会绕过 Worker isolate 内的短 TTL 运行时聚合缓存。退出登录会清除本地后台快照。
+`AdminData` 和 `PublicData` 响应可携带可选 `version` 字段，前端只用于快照校验，不参与页面渲染。前端会按当前登录态把 `AdminData` 写入浏览器本地快照（优先 localStorage，超出限制时仍可用 Cache Storage）；匿名公开数据也会写入同源本地快照。页面刷新时可以先用快照恢复界面，随后请求 `/api/data/version`：版本相同则不拉完整数据，版本不同才请求 `/api/admin/data` 或 `/api/public/data`。`/api/admin/data` 每次直读一次 D1 batch（原 Worker isolate 内 3 秒运行时聚合缓存已删除：前端请求总带 no-cache 绕过它，它从未被命中，却要求每个写路由记得失效）。退出登录会清除本地后台快照。
 
 ## 分类接口
 
@@ -125,11 +160,11 @@
 
 `POST /api/bookmarks/:id/icon-cache/refresh` 在当前源/写入代次下显式刷新成功图标，支持 data URI 及 HTTP(S)（含 Iconify），失败不覆盖最近成功正文。响应保留 `icon_blob`，并附 `icon_descriptor` 与 `icon_update`（updated/unchanged/cleared/unavailable）；并发保存获胜时返回重新读取的当前结果，不能返回旧源抓取结果。相同字节保持内容版本不变。响应为 `private, no-store`。浏览器能否保存仍须通过可信设备、当前会话与统一存储策略，不能因接口返回了 data URI 自动认领权限。
 
-批量删除请求最多包含 500 个正整数 ID；排序请求的 `ids` 最多 5000 个；服务端会去重并忽略已不存在的记录。书签 `url` 必须是 `http(s)` 地址，其它协议返回 `code=1002`；后台表单会先把缺协议的写法（`example.com`）补成 `https://` 再提交，补不了的原样送出由服务端拒绝。书签写入可携带 `description_mode: "always" | "hover" | "hidden" | null`；更新时省略该字段会保留原覆盖值，显式 `null` 会恢复跟随全局设置。
+`GET /api/bookmarks` 的列表口径与聚合一致：`icon_blob` 恒为 `null`，以 `icon_cached` 表示 D1 中是否已有图标正文，不再把每个书签的 base64 正文读进 Worker 再下发（当前前端不调用该接口；需要正文的合并导入在服务端内部单独读取）。批量删除按 D1 参数上限分块执行 `DELETE ... WHERE id IN (...)`。批量删除请求最多包含 500 个正整数 ID；排序请求的 `ids` 最多 5000 个；服务端会去重并忽略已不存在的记录。书签 `url` 必须是 `http(s)` 地址，其它协议返回 `code=1002`；后台表单会先把缺协议的写法（`example.com`）补成 `https://` 再提交，补不了的原样送出由服务端拒绝。书签写入可携带 `description_mode: "always" | "hover" | "hidden" | null`；更新时省略该字段会保留原覆盖值，显式 `null` 会恢复跟随全局设置。
 `POST /api/bookmarks/batch-move` 用于管理员批量移动书签，不改变 `/api/bookmarks/reorganize` 的完整排序契约。请求为 `{ ids: number[], category_id: number, position: 'end' | 'start', expected: { id: number, category_id: number, sort: number }[] }`；`ids` 最多 500 个且不得重复，`expected` 必须与 `ids` 一一对应，用于拒绝过期集合。`position='end'` 追加到目标分类现有书签末尾，`position='start'` 插入目标分类开头；默认由前端传 `end`。服务端必须在一次原子操作中更新选中书签的 `category_id` 和受影响书签的全局 `sort`，校验失败不得部分成功。选中集合、快照、目标分类或权限不一致返回 `code=1006`（`ErrCode.CONFLICT`）；其它服务端故障返回 `code=1500`。成功返回 `{ moved, category_id, position }`。
 `POST /api/bookmarks/reorganize` 是首页跨分类整理会话的保存通道。请求为 `{ category_orders: Array<{ category_id: number, ids: number[] }> }`，`category_id` 与全部 `ids` 必须是正整数，否则返回 `code=1002`。服务端按分类提交的完整顺序一次性重写受影响书签的 `category_id` 与全局 `sort`（单个 `db.batch`，不拆多批）。**payload 必须覆盖库中每一个书签**：数量不符或有书签未出现在任何 `category_orders` 里都会失败；同一 `category_id` 重复出现、同一书签 id 出现在多个分类里、`category_id` 指向不存在的分类，同样失败。以上都归为状态冲突。请求集合与库中状态不一致（分类被删、书签集合过期）时返回 `code=1006`（`ErrCode.CONFLICT`），前端据此提示「数据已变化，请刷新后重试」并重新拉取；其它故障返回 `code=1500`。`batch-move` 沿用同一 `BookmarkReorganizeError` → `CONFLICT` 判定。
 
-`POST /api/bookmarks/check-health` 最多检查请求中的前 20 个书签，Worker 先用 HEAD 请求目标地址，遇到 405、403 或 400 时回退 GET，单个目标超时为 3 秒，返回 HTTP 状态码、`ok`、`timeout` 或 `error`。
+`POST /api/bookmarks/check-health` 最多检查请求中的前 20 个书签，Worker 先用 HEAD 请求目标地址，遇到 405、403 或 400 时回退 GET，单个目标超时为 3 秒，返回 HTTP 状态码、`ok`、`timeout`、`error` 或 `blocked`。重定向手动跟随并逐跳过滤（与下文出网目标过滤同一口径，最多 5 跳）；书签地址或任一跳指向内部地址时不发出该请求，返回 `status: "blocked"`。
 
 ## 站点信息接口
 
@@ -149,7 +184,7 @@
 
 解析成功的结果会写入 Cloudflare edge cache（6 小时，按目标地址建合成缓存键，不含 `Authorization`），重复解析同一地址直接命中缓存。**域名兜底的结果不写缓存**，避免一次抓取失败或被拦截后，用户重试时长时间拿到同一个坏结果。
 
-出网目标过滤：`/api/fetch-site-meta` 与 `/api/fetch-favicon` 共用 `parseTargetUrl`，拒绝指向环回、私有、链路本地（含云元数据 `169.254.169.254`）、运营商级 NAT、组播保留段的 IPv4/IPv6 字面量，以及 `localhost`、`*.local`、`*.internal`、`metadata.google.internal` 等内部主机名，被拒绝时返回 `code=1002`。`favicon` 解析出的 `<link rel="icon">` 候选来自第三方页面，同样经过该过滤，避免恶意页面绕过入口检查。该防线只检查地址字面量：`new URL()` 会先把 `2130706433`、`0x7f.0.0.1` 一类写法归一成点分形式，因此常见进制绕过已被拉平，但它**挡不住 DNS 重绑定**（合法域名解析到内网），Workers 没有可插手的解析钩子。
+出网目标过滤：`/api/fetch-site-meta` 与 `/api/fetch-favicon` 共用 `parseTargetUrl`，拒绝指向环回、私有、链路本地（含云元数据 `169.254.169.254`）、运营商级 NAT、组播保留段的 IPv4/IPv6 字面量，以及 `localhost`、`*.local`、`*.internal`、`metadata.google.internal` 等内部主机名，被拒绝时返回 `code=1002`。`favicon` 解析出的 `<link rel="icon">` 候选来自第三方页面，同样经过该过滤，避免恶意页面绕过入口检查。图标抓取（`/api/icon/:id`、`/api/category-icon/:id` 的 cache miss、显式图标刷新、可信副本、Iconify 代理共用的 `fetchIcon`）同样经过该过滤：入口地址被拒绝时不发请求；重定向改为手动跟随（`redirect: 'manual'`），**每一跳**的 `Location` 都重新过滤，最多 5 跳，超出或命中内部地址按永久失败（`missing`）处理。`fetch-site-meta` / `fetch-favicon` 的页面抓取、manifest 抓取、图标候选与 `/favicon.ico` 探测以及链接健康检查共用同一个手动跟随助手（`worker/lib/pageMetadata.ts` 的 `fetchFollowingSafeRedirects`），不再有自动跟随重定向的出网请求：页面重定向到内部地址时按抓取失败处理（站点名称回退域名、图标回退 favicon.im）。该防线只检查地址字面量：`new URL()` 会先把 `2130706433`、`0x7f.0.0.1` 一类写法归一成点分形式，因此常见进制绕过已被拉平，但它**挡不住 DNS 重绑定**（合法域名解析到内网），Workers 没有可插手的解析钩子。
 
 前端只在**新增**书签、书签标题为空、且网址输入框失焦时调用该接口；返回后会再次确认标题仍为空才写入，请求在途期间用户已输入标题则丢弃结果。写入表单前按字素簇截断到 20 个字符（复用 `src/lib/truncateUnicodeText.ts`，与后台列表一致），超长时以 `…` 结尾，避免标题输入框内容超出可视范围不便修改；接口本身仍返回最长 80 个字符的完整结果。
 
@@ -203,7 +238,9 @@
 
 HTTP(S) 图标抓取成功后，代理会直接返回图片字节并写入 Cloudflare edge cache；只有书签图标需要写入 `bookmarks.icon_blob` 时才生成 base64 data URI，避免 Iconify 预览和分类图标在 Worker 内部做不必要的 base64 编解码。
 
-公开聚合、后台聚合、书签列表和图标详情等读取路径默认直接执行查询，避免每个 Worker isolate 冷启动都先跑 `PRAGMA table_info`。如果遇到旧库缺列错误，后端会执行一次兼容 schema 检查/迁移并重试当前查询。
+公开聚合、后台聚合、书签列表和图标详情等读取路径默认直接执行查询，冷启动不额外读库。如果遇到旧库缺列错误，后端会以修复模式幂等重跑全部迁移步骤并重试当前查询。
+
+**Schema 版本。** 库内版本号存于 `settings` 表的内部键 `schema_version`（JSON 整数，不属于 `SETTINGS_KEYS`，不出现在设置读写与导入导出中；与安装标记 `installation_schema_version` 无关）。迁移是 `worker/lib/db/schema.ts` 中有序、幂等的 `SCHEMA_STEPS`，`ensureSchema` 每个 isolate 只运行一次：先读一行版本号，已是最新则不执行任何 DDL；否则按序执行缺失步骤，每步的 DDL 与版本写入同在一个 D1 batch，失败整步回滚、版本不前进。版本写入只升不降，并发迁移撞上「列已存在」时重算该步重试。没有版本行的旧库（含 v0.8.3）按版本 0 自动升级，无需手动操作；`/install` 建表后立即记录最新版本，手动执行 `schema.sql` 的库在首个写请求时记录。
 
 普通书签/分类代理的 `v` 必须包含聚合数据已有的 `icon_revision`，未知时回退至 `icon_write_epoch`。快照可能省略图片来源和正文，仅用来源、标题或网址不能区分“只换图”的新内容。已知 revision 不变时不因写入代次单独变化更换版本；版本计算在前端完成，不增加服务端查询或改变权限、no-store 与 SW 边界。
 
@@ -307,17 +344,15 @@ HTTP(S) 图标抓取成功后，代理会直接返回图片字节并写入 Cloud
 
 导入在写入前验证分类深度、父级引用和书签分类引用。覆盖和合并都会先建立旧分类 ID 到新分类 ID 的映射，按一级分类、二级分类、书签的顺序重建，并同时重写二级分类 `parent_id` 与书签 `category_id`。设置仅在覆盖导入中写入受支持的公开配置 key，不触碰管理员账号字段。`ImportResp` 包含导入数量和导入后的 `AdminData`，前端使用该响应更新本地数据并显式同步导入状态。
 
-## 可信设备图标数据协议
+## 图标版本元数据
 
-共享类型见 `shared/iconLocalCopy.ts`。本节描述服务端数据协议，不代表任意浏览器已开启可信持久化。
+共享类型见 `shared/iconDescriptor.ts`。
 
-- `POST /api/icon-local-copy` 必须通过 Bearer 会话鉴权；一期只接受 `object_type=bookmark`。请求为 `IconCopyRequest`：protocol=1、对象类型/ID、dataset_epoch、expected_write_epoch、expected_content_revision（未知为 null）。请求体最多 4 KiB，同源 Origin 检查，不接受图标 key 或摘要代替会话。
-- 成功为统一包络内的 `IconCopyResult`，携带 protocol=1、persistence=session-scoped、当前描述及 image（MIME、byte_length、base64）；empty/text 返回 image=null。图片上限 512 KiB，版本是规范 MIME 与实际字节的 SHA-256，不是 URL 或应用构建号。
-- 401 为未通过认证；未知对象 404；描述冲突 409 且只返回当前描述；无效/不支持请求 400；暂时无法取得真实成功图片 503。正文中 reason 可区分 conflict/unavailable/unsupported。所有结果均禁止共享及不可控 HTTP 缓存。
-- 传输使用 private/no-store、CDN no-store；只有已知协议的成功应用数据可在本机许可内物化，不克隆原 HTTP 响应。普通对象代理 no-store 拒收与 SW 不接管策略不变。
-- 聚合和版本响应在迁移完成后附 dataset_epoch 与 icon_local_copy_protocol=1。已鉴权响应的 auth_receipt 含 cache_scope、checked_at、expires_at（毫秒）；cache_scope 是非凭据会话标识，不能独立授权。图片下载不续租，图标 key 不续租；回执遵循原有会话撤销缓存窗口。
+- 公开聚合、后台聚合与 `/api/data/version` 都附 `dataset_epoch`（数据集身份，导入 / 恢复时更换）与 `icon_epoch`（整数，全局图标标志位）。`icon_epoch` 由 D1 触发器维护：书签 / 分类的新增、删除，图标来源、正文、`icon_revision` 变化，`is_private`、书签所属分类、分类父级变化，以及参与图标 URL 版本的标题 / 链接变化都会递增；排序与点击计数不递增。旧库在 schema 第 4 步迁移时补齐计数与触发器。
+- 客户端用 `dataset_epoch:icon_epoch:视角` 判断是否需要对照数据清理本地图标；单个图标是否重下由其代理 URL 的 `v=` 版本决定。
 - 书签轻量字段 icon_revision/icon_write_epoch 与聚合数据的 version、dataset_epoch 同批读取。内部数据集代次不进入用户 Settings 或可信备份输入；导入重建表时原子更换代次，返回带新身份的聚合数据。当前 merge 也通过重建/重映射实现，因此同样更换代次。
-- setIconBlob 条件提交保护数据集、源、代次和预期正文/版本；legacy SQL 改正文时摘要失效，改源时同时清旧正文。已发布内容变化与 data_version 在同一数据库更新边界发布；仅补充未知摘要不逐图触发全量刷新。
+- setIconBlob 条件提交保护数据集、源、代次和预期正文/版本；legacy SQL 改正文时摘要失效，改源时同时清旧正文。已发布内容变化与 data_version 在同一数据库更新边界发布；匿名图标代理仅补充未知摘要时不逐图触发全量刷新。管理员显式调用 `POST /api/bookmarks/:id/icon-cache/refresh` 时，只要可观察的图标身份（`icon_revision` 或是否有正文 `icon_cached`）发生变化（包括「未知摘要 → 已知摘要」），就在同一 batch 里提升 data_version 并随响应返回 `data_version`；同一字节的不同编码不提升。
+- 已移除：`POST /api/icon-local-copy` 与 `auth_receipt`（可信设备协议）。
 
 ## HTML 入口响应策略
 

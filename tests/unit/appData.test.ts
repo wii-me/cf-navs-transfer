@@ -7,6 +7,7 @@ import {
   getDataVersion,
   mergeAdminData,
   mergePublicData,
+  resolveThemeAccentColor,
   stripAdminDataVersion,
   stripPublicDataVersion,
   toAdminBookmarks,
@@ -71,6 +72,7 @@ const settings: Settings = {
   site_title_color: '#ffffff',
   site_title_font_size: 32,
   public_mode: true,
+  browser_sync_enabled: false,
   theme: 'auto',
   background_preset_id: 'custom',
   custom_accent_color: '#112233',
@@ -231,12 +233,23 @@ describe('app data adapters', () => {
     expect(cssVars).not.toContain('#123456')
   })
 
+  it('resolves the active theme accent for guide appearance', () => {
+    expect(resolveThemeAccentColor(toPublicSettings(settings), 'light')).toBe('#112233')
+    expect(resolveThemeAccentColor(toPublicSettings(settings), 'dark')).toBe('#ddeeff')
+
+    const presetSettings = toPublicSettings({ ...settings, background_preset_id: 'paper-indigo' })
+    expect(resolveThemeAccentColor(presetSettings, 'light')).toBe('#5f769b')
+    expect(resolveThemeAccentColor(presetSettings, 'dark')).toBe('#9eb2d0')
+    expect(resolveThemeAccentColor(null, 'light')).toBe('#2563eb')
+  })
+
   it('returns the editable settings form subset', () => {
     expect(toSettingsForm(settings)).toEqual({
       site_title: settings.site_title,
       site_title_color: settings.site_title_color,
       site_title_font_size: settings.site_title_font_size,
       public_mode: settings.public_mode,
+      browser_sync_enabled: settings.browser_sync_enabled,
       theme: settings.theme,
       background_preset_id: settings.background_preset_id,
       custom_accent_color: settings.custom_accent_color,

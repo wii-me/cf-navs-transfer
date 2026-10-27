@@ -32,6 +32,55 @@ export function createConfirmDialogState(input: ConfirmDialogInput): ConfirmDial
   }
 }
 
+export type ConfirmController = {
+  /** 打开确认框；返回的 promise 在确认时为 true，取消、关闭或被新请求顶替时为 false。 */
+  request(input: ConfirmDialogInput): Promise<boolean>
+  /** 关闭当前确认框并以 confirmed 兑现其 promise；没有待决请求时只清空状态。 */
+  close(confirmed: boolean): void
+  /** 当前确认框状态，未打开时为 null。 */
+  getState(): ConfirmDialogState | null
+}
+
+/**
+ * 确认对话框控制器（代码审查三轮第 10 项，从 App.svelte 抽出）。单 resolver 语义，与原实现一致：
+ * - request 先以 false 兑现上一个仍待决的请求（被顶替），再登记新的 resolver 并同步推送新状态；
+ *   两个状态之间不会推送 null，上一个请求的后续代码（微任务）执行时新确认框已经打开。
+ * - close 先摘下 resolver、推送 null，再兑现 promise，因此 await 之后读到的状态已关闭；
+ *   重复 close 不会重复兑现。
+ * onChange 在每次状态赋值时调用（close 即使原本就是 null 也会调用一次，与原先的无条件赋值一致）。
+ */
+export function createConfirmController(
+  onChange: (state: ConfirmDialogState | null) => void,
+): ConfirmController {
+  let state: ConfirmDialogState | null = null
+  let resolver: ((confirmed: boolean) => void) | null = null
+
+  function setState(next: ConfirmDialogState | null): void {
+    state = next
+    onChange(next)
+  }
+
+  return {
+    request(input) {
+      resolver?.(false)
+
+      return new Promise<boolean>((resolve) => {
+        resolver = resolve
+        setState(createConfirmDialogState(input))
+      })
+    },
+    close(confirmed) {
+      const current = resolver
+      resolver = null
+      setState(null)
+      current?.(confirmed)
+    },
+    getState() {
+      return state
+    },
+  }
+}
+
 export function createDeleteCategoryConfirmation(
   categoryTitle: string,
   directBookmarkCount = 0,

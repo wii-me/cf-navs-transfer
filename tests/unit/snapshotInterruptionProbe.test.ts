@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { pageInstallSnapshotInterruption, pageReadSnapshotScopes } from '../../scripts/lib/snapshotInterruptionProbe.mjs'
 
 const title = 'Browser edited abcdef12'
 const payload = JSON.stringify({ data: { bookmarks: [{ id: 1, title }, { id: 2, title: 'Private fixture' }] } })
 const oldKey = 'cf-navs.admin-data.old'
 let bodies: Map<string, string>
-let nativePut: ReturnType<typeof vi.fn>
+let nativePut: Mock<(request: Request, response: Response) => Promise<void>>
 class TestCache {
   async put(request: Request, response: Response) { await nativePut(request, response) }
   async keys() { return [...bodies.keys()].map(url => new Request(url)) }

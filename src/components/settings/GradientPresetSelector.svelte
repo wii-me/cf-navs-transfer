@@ -1,22 +1,27 @@
+<svelte:options runes />
+
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte'
   import { gradientPresets, type ThemeGradientPreset } from '../../lib/themePresets'
 
-  export let activeGradientPresetId = 'custom'
+  interface Props {
+    activeGradientPresetId?: string
+    // 选中内置方案：参数是预设对象本身（原 select 事件的 e.detail）
+    onselect?: (preset: ThemeGradientPreset) => void
+    // 选中「自定义背景」（原 custom 事件，无载荷）
+    oncustom?: () => void
+  }
 
-  const dispatch = createEventDispatcher<{
-    custom: void
-    select: ThemeGradientPreset
-  }>()
+  let { activeGradientPresetId = 'custom', onselect, oncustom }: Props = $props()
 
-  $: glassPresets = gradientPresets.filter((preset) => preset.surface === 'glass')
-  $: flatPresets = gradientPresets.filter((preset) => preset.surface === 'flat')
-  $: presetGroups = [
+  // 预设是模块常量，分组只需算一次（原 `$:` 无可追踪依赖，本就只执行一次）。
+  const glassPresets = gradientPresets.filter((preset) => preset.surface === 'glass')
+  const flatPresets = gradientPresets.filter((preset) => preset.surface === 'flat')
+  const presetGroups = [
     { label: '毛玻璃', hint: '渐变背景、半透明卡片与柔和光晕', items: glassPresets },
     { label: '护眼纯色', hint: '低饱和纯色背景与不透明卡片', items: flatPresets },
   ]
 
-  let presetsExpanded = false
+  let presetsExpanded = $state(false)
 </script>
 
 <div class="gradient-preset-panel">
@@ -45,7 +50,7 @@
           type="radio"
           name="gradient-preset"
           checked={activeGradientPresetId === preset.id}
-          on:change={() => dispatch('select', preset)}
+          onchange={() => onselect?.(preset)}
         />
         <span class="preset-preview" aria-hidden="true">
           <span class="preset-swatch light"></span>
@@ -67,7 +72,7 @@
     aria-expanded={presetsExpanded}
     aria-controls="builtin-preset-groups"
     data-testid="gradient-preset-toggle"
-    on:click={() => presetsExpanded = !presetsExpanded}
+    onclick={() => presetsExpanded = !presetsExpanded}
   >
     <span>{presetsExpanded ? '收起其他方案' : '查看更多方案'}</span>
     <span aria-hidden="true">{presetsExpanded ? '⌃' : '⌄'}</span>
@@ -80,7 +85,7 @@
         type="radio"
         name="gradient-preset"
         checked={activeGradientPresetId === 'custom'}
-        on:change={() => dispatch('custom')}
+        onchange={() => oncustom?.()}
       />
       <span class="preset-preview custom-preview" aria-hidden="true">
         <span></span>

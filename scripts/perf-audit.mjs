@@ -22,6 +22,7 @@ import { join as pathJoin } from 'node:path'
 import { CdpSession } from './lib/cdpSession.mjs'
 import { requireAdminCredentials } from './lib/verifyCredentials.mjs'
 import { resolveBaseUrl, resolveChromeProfileRoot, resolveSetting } from './lib/verifyTarget.mjs'
+import { loginInPage } from './lib/browserLogin.mjs'
 
 const BASE_URL = resolveBaseUrl()
 const CHROME_DEBUG_PORT = resolveSetting('CHROME_DEBUG_PORT', 'chromeDebugPort', '9223')
@@ -198,21 +199,11 @@ async function waitForNetworkIdle(idleMs = 1500, maxMs = 35000) {
 }
 
 async function login() {
-  return evaluate(
-    `(${async function loginInPage(baseUrl, username, password) {
-      const response = await fetch(`${baseUrl}/api/login`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      })
-      const body = await response.json()
-      if (!response.ok || body.code !== 0) {
-        throw new Error(`login failed: ${JSON.stringify(body)}`)
-      }
-      localStorage.setItem('cf-navs.auth', JSON.stringify(body.data))
-      return { username: body.data.username, expires_at: body.data.expires_at }
-    }.toString()})(${JSON.stringify(TARGET_ORIGIN)}, ${JSON.stringify(ADMIN_USER)}, ${JSON.stringify(ADMIN_PASS)})`,
+  const result = await evaluate(
+    `(${loginInPage.toString()})(${JSON.stringify(TARGET_ORIGIN)}, ${JSON.stringify(ADMIN_USER)}, ${JSON.stringify(ADMIN_PASS)})`,
   )
+  if (!result?.ok) throw new Error(`login failed: ${JSON.stringify(result?.body ?? result)}`)
+  return { username: result.username, expires_at: result.expires_at }
 }
 
 async function navigateHome() {

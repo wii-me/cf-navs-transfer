@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 
-// 这里留下的是**编排顺序与去重护栏**，不迁移到组件层（PROB-18）：断言对象是 `App.svelte` 里
-// `handleDeleteCategory` 的函数体是否走共享确认流、是否残留原生 `window.confirm`，以及
+// 这里留下的是**编排顺序与去重护栏**，不迁移到组件层（PROB-18）：断言对象是分类删除用例
+// （原 `App.svelte` 的 `handleDeleteCategory`，现为 `appCategoryController.ts` 的 `deleteCategory`）的函数体是否走共享确认流、是否残留原生 `window.confirm`，以及
 // `src/lib/appImportExport.ts` 里「先确认覆盖、再进入 importing、最后调导入接口」的语句先后顺序。
 // 顺序与「不存在某种写法」这两类事实在挂载后的 DOM 上没有对应表现；要用真 DOM 证明前者还得先挂载
 // 约 1100 行的 `App.svelte`（属 PROB-24 的编排拆分前置）。
@@ -36,7 +36,11 @@ describe('destructive action confirmation flow', () => {
   })
 
   it('uses the shared ConfirmDialog flow for category deletion', () => {
-    const body = extractFunctionBody(appSource, 'handleDeleteCategory')
+    // 分类用例已抽到 appCategoryController.ts（代码审查三轮第 14 项，行为见 appCategoryController.test.ts）。
+    const controllerSource = readFileSync(new URL('../../src/lib/appCategoryController.ts', import.meta.url), 'utf8')
+    const body = extractFunctionBody(controllerSource, 'deleteCategory')
+    expect(appSource).toContain('onDeleteCategory={categoryController.remove}')
+    expect(controllerSource).not.toContain('window.confirm')
 
     expect(body).toContain('requestConfirmation(createDeleteCategoryConfirmation(')
     expect(body).toContain('childCategoryCount')

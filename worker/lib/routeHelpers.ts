@@ -16,8 +16,22 @@ export type AppContext = Context<HonoEnv>
 // 放行只会把 Worker CPU 和 D1 语句配额打光。
 export const MAX_BATCH_IDS = 500
 
+/**
+ * 参数 / 业务校验失败：**HTTP 200** + `code=1002`。刻意不用 HTTP 400——项目约定业务错误
+ * 走包络 `code`（前端 `request()` 与浏览器扩展都按 `code !== 0` 判错），真实 HTTP 状态只留给
+ * 鉴权 401、跨域 403 与少数需要 HTTP 语义的端点（错误上报、点击计数、图标副本、Iconify 搜索）。完整约定表见 API_CONTRACT「错误码与 HTTP 状态约定」。
+ */
 export function badRequest(c: AppContext, msg: string) {
   return c.json(fail(ErrCode.BAD_REQUEST, msg))
+}
+
+/**
+ * 路由 catch 的统一收尾（默认 HTTP 200 + `code=1500`；只有显式传 `500` 时返回真实 500）：客户端只拿到通用的 `code=1500` + msg，原始错误写进 Workers 日志
+ * （`[api] <msg>: <error>`），避免「接口报 1500、日志里什么都没有」。
+ */
+export function serverError(c: AppContext, msg: string, error: unknown, status?: 500) {
+  console.error(`[api] ${msg}:`, error)
+  return status ? c.json(fail(ErrCode.SERVER_ERROR, msg), status) : c.json(fail(ErrCode.SERVER_ERROR, msg))
 }
 
 export async function readJson<T>(c: AppContext): Promise<T | null> {

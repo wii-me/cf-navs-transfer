@@ -1,5 +1,7 @@
+<svelte:options runes />
+
 <script lang="ts">
-  import { afterUpdate, onDestroy, onMount, tick } from 'svelte'
+  import { onDestroy, onMount, tick } from 'svelte'
   import {
     findCategoryTreeOption,
     getCategoryTreeExpandedRootIds,
@@ -7,34 +9,52 @@
     type CategoryTreeOption,
   } from '../lib/categorySelect'
 
-  export let value: string | number | null | undefined = undefined
-  export let items: CategoryTreeOption[] = []
-  export let rootOptionLabel = ''
-  export let placeholder = '请选择分类'
-  export let emptyLabel = '暂无分类可选'
-  export let ariaLabel = '选择分类'
-  export let disabled = false
-  export let compact = false
-  export let testId = ''
-  // In a constrained parent menu, participate in its layout instead of escaping
-  // it as an absolute overlay. Other form controls retain the default overlay.
-  export let inlineMenu = false
-  export let onLayoutChange: (() => void) | undefined = undefined
+  interface Props {
+    /** BookmarkBaseFields / BookmarkContextMenu / CategoryEditModal / admin/BookmarkListPanel 以 `bind:value` 传入。 */
+    value?: string | number | null
+    items?: CategoryTreeOption[]
+    rootOptionLabel?: string
+    placeholder?: string
+    emptyLabel?: string
+    ariaLabel?: string
+    disabled?: boolean
+    compact?: boolean
+    testId?: string
+    // In a constrained parent menu, participate in its layout instead of escaping
+    // it as an absolute overlay. Other form controls retain the default overlay.
+    inlineMenu?: boolean
+    onLayoutChange?: () => void
+  }
+
+  let {
+    value = $bindable(undefined),
+    items = [],
+    rootOptionLabel = '',
+    placeholder = '请选择分类',
+    emptyLabel = '暂无分类可选',
+    ariaLabel = '选择分类',
+    disabled = false,
+    compact = false,
+    testId = '',
+    inlineMenu = false,
+    onLayoutChange,
+  }: Props = $props()
 
   let root: HTMLElement | null = null
-  let open = false
+  let open = $state(false)
   let trigger: HTMLButtonElement | null = null
-  let treeMenu: HTMLDivElement | null = null
-  let expandedRootIds = new Set<string>()
+  let treeMenu: HTMLDivElement | null = $state(null)
+  // 每次整体替换，不需要深层代理。
+  let expandedRootIds = $state.raw(new Set<string>())
 
-  $: selectedOptionLabel = getCategoryTreeOptionLabel(items, value)
-  $: currentCategoryUnavailable = value != null && value !== '' && !findCategoryTreeOption(items, value)
-  $: selectedLabel = currentCategoryUnavailable
+  const selectedOptionLabel = $derived(getCategoryTreeOptionLabel(items, value))
+  const currentCategoryUnavailable = $derived(value != null && value !== '' && !findCategoryTreeOption(items, value))
+  const selectedLabel = $derived(currentCategoryUnavailable
     ? '当前分类不可用'
     : value == null && rootOptionLabel
       ? rootOptionLabel
-      : selectedOptionLabel ?? placeholder
-  $: hasOptions = Boolean(rootOptionLabel) || items.length > 0
+      : selectedOptionLabel ?? placeholder)
+  const hasOptions = $derived(Boolean(rootOptionLabel) || items.length > 0)
 
   function closeMenu(focusTrigger = false): void {
     open = false
@@ -172,7 +192,12 @@
     if (open && root && !root.contains(event.target as Node)) closeMenu()
   }
 
-  afterUpdate(() => { if (inlineMenu) onLayoutChange?.() })
+  // 原先用 legacy 的「每次更新后」生命周期：挂载后及每次组件更新后（DOM 已更新）通知父菜单重新测量。runes 下没有它，
+  // 改为显式读取模板依赖的全部 props 与状态的 $effect（同为 DOM 更新之后执行）。
+  $effect(() => {
+    void [value, items, rootOptionLabel, placeholder, emptyLabel, ariaLabel, disabled, compact, testId, open, expandedRootIds, treeMenu]
+    if (inlineMenu) onLayoutChange?.()
+  })
 
   onMount(() => {
     document.addEventListener('pointerdown', handleDocumentPointerDown)
@@ -195,15 +220,15 @@
     aria-haspopup="tree"
     aria-expanded={open}
     {disabled}
-    on:click={() => void toggleMenu()}
-    on:keydown={handleTriggerKeyDown}
+    onclick={() => void toggleMenu()}
+    onkeydown={handleTriggerKeyDown}
   >
     <span>{hasOptions ? selectedLabel : emptyLabel}</span>
     <span class="select-chevron" class:open aria-hidden="true"></span>
   </button>
 
   {#if open}
-    <div class="category-tree-menu" role="tree" aria-label="分类目录" tabindex="-1" bind:this={treeMenu} on:keydown={handleTreeKeyDown}>
+    <div class="category-tree-menu" role="tree" aria-label="分类目录" tabindex="-1" bind:this={treeMenu} onkeydown={handleTreeKeyDown}>
       {#if currentCategoryUnavailable}
         <p id={`${testId || 'category-tree-select'}-unavailable`} class="category-unavailable" role="status">当前分类不可用，请重新选择有效分类。</p>
       {/if}
@@ -214,7 +239,7 @@
           class:selected={value == null}
           role="treeitem"
           aria-selected={value == null}
-          on:click={() => selectValue(null)}
+          onclick={() => selectValue(null)}
         >
           <span class="root-choice-mark" aria-hidden="true"></span>
           <span>{rootOptionLabel}</span>
@@ -233,7 +258,7 @@
                 aria-controls={`category-tree-children-${item.id}`}
                 title={`${expandedRootIds.has(String(item.id)) ? '收起' : '展开'} ${item.title} 的子分类`}
                 tabindex="-1"
-                on:click={(event) => toggleRootExpansion(item.id, event)}
+                onclick={(event) => toggleRootExpansion(item.id, event)}
               >
                 <span class="tree-node-chevron" class:open={expandedRootIds.has(String(item.id))} aria-hidden="true"></span>
               </button>
@@ -252,7 +277,7 @@
               aria-expanded={item.children.length > 0 ? expandedRootIds.has(String(item.id)) : undefined}
               aria-selected={String(value) === String(item.id)}
               aria-describedby={item.notice ? `category-tree-notice-${item.id}` : undefined}
-              on:click={() => selectValue(item.id)}
+              onclick={() => selectValue(item.id)}
             >
               <span class="tree-folder-mark" aria-hidden="true"></span>
               <span class="tree-option-label">{item.title}</span>
@@ -276,7 +301,7 @@
                   aria-level="2"
                   aria-selected={String(value) === String(child.id)}
                   aria-describedby={child.notice ? `category-tree-notice-${child.id}` : undefined}
-                  on:click={() => selectValue(child.id)}
+                  onclick={() => selectValue(child.id)}
                 >
                   <span class="tree-branch-mark" aria-hidden="true"></span>
                   <span class="tree-option-label">{child.title}</span>

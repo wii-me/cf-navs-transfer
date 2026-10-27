@@ -61,7 +61,7 @@ function loadServiceWorker(
 
   const context = createContext({
     self: {
-      addEventListener(type: string, listener: (event: FetchEventLike | MessageEventLike) => void) {
+      addEventListener(type: string, listener: (event: FetchEventLike | MessageEventLike | LifecycleEventLike) => void) {
         listeners[type] = listener
       },
       location: new URL(`${ORIGIN}/sw.js`),
@@ -104,7 +104,7 @@ function loadServiceWorker(
     async dispatchFetch(url: string, navigate = false) {
       const request = new Request(url)
       if (navigate) Object.defineProperty(request, 'mode', { value: 'navigate' })
-      let response: Response | Promise<Response> | null = null
+      let response = null as Response | Promise<Response> | null
       const pending: Promise<unknown>[] = []
       listeners.fetch?.({
         request,

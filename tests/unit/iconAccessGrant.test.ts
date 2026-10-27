@@ -88,6 +88,10 @@ function createDb(rows: {
           }
           return { results: [] }
         },
+        // schema_version 读取：无版本行。
+        async first() {
+          return null
+        },
         async run() {
           return { success: true, meta: { changes: 1 } }
         },

@@ -50,7 +50,8 @@ describe('worker db sort helpers', () => {
     await runUpdateChunks(db as unknown as D1Database, chunks)
 
     expect(batchCalls).toBe(1)
-    expect(batchSize).toBe(51)
+    // 51 update chunks + the data_version bump in the same atomic batch.
+    expect(batchSize).toBe(52)
   })
 
   it('keeps global sort indexes across multiple chunks', () => {

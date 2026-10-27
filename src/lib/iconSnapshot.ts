@@ -24,6 +24,6 @@ export function projectBookmarkIconSnapshot<T extends AdminData | PublicData>(da
     return { ...bookmark, icon: embedded ? null : bookmark.icon, icon_blob: null, icon_display: 'image' as const }
   })
   if (!changed) return data
-  const { auth_receipt: _receipt, ...metadata } = data
+  const { auth_receipt: _receipt, ...metadata } = data as T & { auth_receipt?: unknown }
   return { ...metadata, categories, bookmarks } as T
 }

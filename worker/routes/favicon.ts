@@ -22,9 +22,8 @@ const SITE_META_CACHE_SECONDS = 6 * 60 * 60
 
 async function canFetchIcon(url: string): Promise<boolean> {
   try {
-    const headResponse = await fetchWithTimeout(url, {
+    const { response: headResponse } = await fetchWithTimeout(url, {
       method: 'HEAD',
-      redirect: 'follow',
       headers: {
         Accept: ICON_ACCEPT,
       },
@@ -36,9 +35,8 @@ async function canFetchIcon(url: string): Promise<boolean> {
   }
 
   try {
-    const getResponse = await fetchWithTimeout(url, {
+    const { response: getResponse } = await fetchWithTimeout(url, {
       method: 'GET',
-      redirect: 'follow',
       headers: {
         Accept: ICON_ACCEPT,
         Range: 'bytes=0-0',

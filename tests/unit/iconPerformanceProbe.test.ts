@@ -14,6 +14,7 @@ describe('native storage audit acceptance', () => {
     for(const patch of [{bodyBytes:10485761,declaredBodyBytes:10485761},{entries:1001,bodies:1001,declaredEntries:1001},{indexBytes:524289,declaredIndexBytes:524289}])expect(assessIconStorageAudit({...valid,...patch})).toMatchObject({passed:false,errors:['budget-exceeded']})
   })
   it('separates metadata/background traffic and does not turn unmeasured transfers into zero-byte successes', () => {
+    // 分组对象在 JS 里由 `const groups = {}` 动态填充，推断为 {}；按实际的按类别索引形状收窄。
     const result=summarizeIconPerformanceRequests([
       {kind:'api',path:'/api/data/version',finishedTime:2,encodedDataLength:100},
       {kind:'icon-copy',path:'/api/icon-local-copy'},
@@ -21,7 +22,7 @@ describe('native storage audit acceptance', () => {
       {kind:'resource',path:'/app.js',finishedTime:2,encodedDataLength:0,disk:true},
       {kind:'external-image',path:'[external]',resourceRole:'site-background',finishedTime:2,encodedDataLength:500},
       {kind:'external-image',path:'[external]',terminalKind:'redirect',encodedDataLength:25},
-    ])
+    ]) as Record<string, unknown>
     expect(result.version).toMatchObject({requests:1,knownEncodedBytes:100})
     expect(result['icon-copy']).toMatchObject({requests:2,pending:1,failed:1,completed:0,unknownTransferRequests:2})
     expect(result.resource).toMatchObject({cached:1,knownEncodedBytes:0,unknownTransferRequests:0})

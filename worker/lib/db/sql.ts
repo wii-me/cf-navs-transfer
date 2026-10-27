@@ -2,10 +2,6 @@
 
 import { PUBLIC_DATA_SETTINGS_KEYS } from '../../../shared/settings'
 
-const PUBLIC_DATA_SETTINGS_WITHOUT_SITE_CONFIG_KEYS = PUBLIC_DATA_SETTINGS_KEYS.filter(
-  (key) => key !== 'site_title' && key !== 'public_mode',
-)
-
 export const CATEGORY_LIST_SQL =
   "SELECT id, parent_id, title, icon, NULL AS icon_blob, CASE WHEN icon_blob IS NULL OR icon_blob = '' THEN 0 ELSE 1 END AS icon_cached, CASE WHEN icon_blob IS NOT NULL OR icon LIKE 'data:image/%' THEN 'image' END AS icon_display, icon_revision, icon_write_epoch, is_private, sort, created_at FROM categories ORDER BY parent_id IS NOT NULL, parent_id ASC, sort ASC, id ASC"
 export const BOOKMARK_LIST_SQL =
@@ -19,10 +15,7 @@ export const PUBLIC_BOOKMARK_LIST_SQL =
 export const PRIVATE_BOOKMARK_LIST_SQL =
   'SELECT id, category_id, title, url, icon, icon_source, icon_background_color, NULL AS icon_blob, CASE WHEN icon_blob IS NULL OR icon_blob = \'\' THEN 0 ELSE 1 END AS icon_cached, icon_revision, icon_write_epoch, description, description_mode, open_method, is_private, sort, click_count FROM bookmarks ORDER BY click_count DESC, sort ASC, id ASC'
 export const SETTINGS_LIST_SQL = 'SELECT key, value FROM settings'
-export const PUBLIC_DATA_SETTINGS_LIST_SQL = `SELECT key, value FROM settings WHERE key IN (${[...PUBLIC_DATA_SETTINGS_KEYS, 'data_version', 'icon_dataset_epoch']
-  .map((key) => `'${key}'`)
-  .join(',')})`
-export const PUBLIC_DATA_SETTINGS_WITHOUT_SITE_CONFIG_LIST_SQL = `SELECT key, value FROM settings WHERE key IN (${[...PUBLIC_DATA_SETTINGS_WITHOUT_SITE_CONFIG_KEYS, 'data_version', 'icon_dataset_epoch']
+export const PUBLIC_DATA_SETTINGS_LIST_SQL = `SELECT key, value FROM settings WHERE key IN (${[...PUBLIC_DATA_SETTINGS_KEYS, 'data_version', 'icon_dataset_epoch', 'icon_epoch']
   .map((key) => `'${key}'`)
   .join(',')})`
 

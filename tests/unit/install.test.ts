@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
 import type { ApiResponse, InstallStatusResp, LoginResp } from '../../shared/types'
 import { verifyPassword } from '../../worker/lib/crypto'
 import { resetJwtSecretCache } from '../../worker/lib/jwt'
@@ -79,7 +79,8 @@ class FakeDb {
 
   async batch(statements: D1PreparedStatement[]): Promise<D1Result[]> {
     const bound = statements as unknown as BoundStatement[]
-    const isSchemaBatch = bound.some(({ sql }) => sql.includes('CREATE TABLE settings'))
+    // 安装建表 batch 与随后写 schema_version 的迁移步骤 batch 都算 schema batch。
+    const isSchemaBatch = bound.some(({ sql }) => sql.includes('CREATE TABLE settings') || sql.includes("'schema_version'"))
     this.executedSql.push(...bound.map(({ sql }) => sql))
     if (isSchemaBatch && this.failSchemaBatch) throw new Error('schema failed')
     if (!isSchemaBatch && this.failCredentialBatchOnce) {
@@ -360,5 +361,51 @@ describe('installer routes', () => {
     expect(JSON.parse(db.settings.get('admin_username') ?? 'null')).toBe('admin')
     expect(db.settings.get('admin_password')).toBe(storedPassword)
     expect(db.executedSql.filter((sql) => sql.includes('CREATE TABLE settings'))).toHaveLength(1)
+  })
+})
+
+describe('installer catch logging', () => {
+  beforeEach(() => resetJwtSecretCache())
+  afterEach(() => vi.restoreAllMocks())
+
+  function loggedText(spy: { mock: { calls: unknown[][] } }): string {
+    return spy.mock.calls.map((args) => args.map((arg) => (arg instanceof Error ? arg.message : String(arg))).join(' ')).join('\n')
+  }
+
+  it('logs an unreachable database probe without changing the status response', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const db = new FakeDb(); db.failProbe = true
+    const result = await request(createEnv(db), '/install/status')
+    expect(result.body).toEqual({ code: 0, msg: 'ok', data: { state: 'unavailable', reason: 'database_unreachable' } })
+    expect(errorSpy).toHaveBeenCalledWith('[install] database probe failed:', expect.objectContaining({ message: 'D1 unavailable' }))
+  })
+
+  it('logs an installation failure without leaking the password or changing the response', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const db = new FakeDb(); db.failSchemaBatch = true
+    const result = await request(createEnv(db), '/install', postBody('admin', 'secure-password'))
+    expect(result.body).toEqual({ code: 1500, msg: 'installation failed', data: null })
+    expect(errorSpy).toHaveBeenCalledWith('[install] installation failed:', expect.objectContaining({ message: 'schema failed' }))
+    expect(loggedText(errorSpy)).not.toContain('secure-password')
+    expect(loggedText(errorSpy)).not.toContain('setup-secret')
+  })
+
+  it('logs a post-install session creation failure with the response unchanged', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const db = new FakeDb(); db.failSettingsWrite = true
+    const result = await request(createEnv(db), '/install', postBody())
+    expect(result.body).toEqual({ code: 1500, msg: 'installation completed but session creation failed', data: null })
+    expect(errorSpy).toHaveBeenCalledWith('[install] session creation after install failed:', expect.objectContaining({ message: 'D1 write failed' }))
+  })
+
+  it('does not log expected branches (wrong token, invalid body, already installed)', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const wrongToken = await request(createEnv(new FakeDb()), '/install', { ...postBody(), headers: { 'X-Setup-Token': 'nope' } })
+    expect(wrongToken.response.status).toBe(401)
+    const invalid = await request(createEnv(new FakeDb()), '/install', { method: 'POST', headers: setupHeaders, body: '{' })
+    expect(invalid.body).toEqual({ code: 1002, msg: 'invalid request body', data: null })
+    const installed = await request(createEnv(new FakeDb({ admin_username: 'admin', admin_password: 'salt:hash', installation_schema_version: 1 })), '/install', postBody())
+    expect(installed.body).toEqual({ code: 1002, msg: 'already installed', data: null })
+    expect(errorSpy).not.toHaveBeenCalled()
   })
 })

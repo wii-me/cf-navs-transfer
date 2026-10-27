@@ -3,7 +3,7 @@ import type { LoginResp } from '../../shared/types'
 import { DEFAULT_SETTINGS } from '../../worker/lib/settingsData'
 
 const auth = vi.hoisted(() => ({ session: null as LoginResp | null }))
-vi.mock('../../src/lib/api', () => ({ getStoredAuthSession: () => auth.session }))
+vi.mock('../../src/lib/authSession', () => ({ getStoredAuthSession: () => auth.session }))
 
 function deferred<T>() {
   let resolve!: (value: T) => void

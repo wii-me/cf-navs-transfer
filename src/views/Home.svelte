@@ -1,5 +1,7 @@
+<svelte:options runes />
+
 <script lang="ts">
-  import { onDestroy, onMount, tick } from 'svelte'
+  import { onDestroy, onMount, tick, untrack } from 'svelte'
   import { observeSortToolbar } from '../lib/homeSortToolbar'
   import { observeSearchBoxVisibility } from '../lib/searchBoxVisibility'
   import Sidebar from '../components/Sidebar.svelte'
@@ -10,6 +12,7 @@
   import HomeEmptyPanel from '../components/HomeEmptyPanel.svelte'
   import HomeFloatingActions from '../components/HomeFloatingActions.svelte'
   import HomeHeroSearch from '../components/HomeHeroSearch.svelte'
+  import GuideOverlay from '../components/GuideOverlay.svelte'
   import type { BookmarkReorganizeReq, NavigationSetting, PublicBookmark, PublicCategory, PublicSettings, ThemeMode } from '../../shared/types'
   import {
     bookmarkMatchesSearch,
@@ -31,6 +34,7 @@
     resolveHomeActiveSectionId,
     resolveHomeCategorySelection,
   } from '../lib/homeData'
+  import { resolveThemeAccentColor } from '../lib/appData'
   import { CARD_SIZE_DEFAULTS, CATEGORY_DISPLAY_DEFAULTS } from '../../shared/settings'
   import { buildCategoryTreeOptions } from '../lib/categorySelect'
   import { getPublicCategoryIds } from '../lib/adminListState'
@@ -53,110 +57,153 @@
   }
   const homeData = createHomeDataMemo()
 
-  export let categories: PublicCategory[] = []
-  export let bookmarks: PublicBookmark[] = []
-  export let settings: PublicSettings | null = null
-  export let title = ''
-  export let isAuthenticated = false
-  export let authLoading = false
-  export let onOpenCreateBookmark: ((categoryId?: string | number) => AsyncVoid) | undefined = undefined
-  export let onEditBookmark: ((bookmark: PublicBookmark) => AsyncVoid) | undefined = undefined
-  export let onReorganizeBookmarks: ((categoryOrders: BookmarkReorganizeReq['category_orders']) => AsyncVoid) | undefined = undefined
-  export let onOpenCreateCategory: ((parentId?: string | number | null) => AsyncVoid) | undefined = undefined
-  export let focusCategoryId: number | null = null
-  export let onSwitchToAdmin: (() => AsyncVoid) | undefined = undefined
-  export let onOpenCreateRootCategory: (() => AsyncVoid) | undefined = undefined
-  export let onLogout: (() => AsyncVoid) | undefined = undefined
-  export let onOpenLogin: (() => AsyncVoid) | undefined = undefined
-  export let activeTheme: 'light' | 'dark' = 'light'
-  export let activeThemeMode: ThemeMode = 'auto'
-  export let onToggleTheme: (() => AsyncVoid) | undefined = undefined
-  export let onOpenSearch: (() => AsyncVoid) | undefined = undefined
+  interface Props {
+    categories?: PublicCategory[]
+    bookmarks?: PublicBookmark[]
+    settings?: PublicSettings | null
+    title?: string
+    isAuthenticated?: boolean
+    authLoading?: boolean
+    onOpenCreateBookmark?: (categoryId?: string | number) => AsyncVoid
+    onEditBookmark?: (bookmark: PublicBookmark) => AsyncVoid
+    onReorganizeBookmarks?: (categoryOrders: BookmarkReorganizeReq['category_orders']) => AsyncVoid
+    onOpenCreateCategory?: (parentId?: string | number | null) => AsyncVoid
+    focusCategoryId?: number | null
+    onSwitchToAdmin?: () => AsyncVoid
+    onOpenCreateRootCategory?: () => AsyncVoid
+    onLogout?: () => AsyncVoid
+    onOpenLogin?: () => AsyncVoid
+    activeTheme?: 'light' | 'dark'
+    activeThemeMode?: ThemeMode
+    onToggleTheme?: () => AsyncVoid
+    onOpenSearch?: () => AsyncVoid
+  }
 
-  let searchQuery = ''
-  let deferredSearchQuery = ''
+  let {
+    categories = [],
+    bookmarks = [],
+    settings = null,
+    title = '',
+    isAuthenticated = false,
+    authLoading = false,
+    onOpenCreateBookmark = undefined,
+    onEditBookmark = undefined,
+    onReorganizeBookmarks = undefined,
+    onOpenCreateCategory = undefined,
+    focusCategoryId = null,
+    onSwitchToAdmin = undefined,
+    onOpenCreateRootCategory = undefined,
+    onLogout = undefined,
+    onOpenLogin = undefined,
+    activeTheme = 'light',
+    activeThemeMode = 'auto',
+    onToggleTheme = undefined,
+    onOpenSearch = undefined,
+  }: Props = $props()
+
+  // HomeHeroSearch 以 `bind:query` 写回。
+  let searchQuery = $state('')
+  let deferredSearchQuery = $state('')
   let searchFilterTimer: ReturnType<typeof setTimeout> | null = null
-  let searchBoxVisible = true
+  let searchBoxVisible = $state(true)
   let stopSearchBoxObserver: (() => void) | null = null
-  $: searchBoxShow = settings?.search_box_show ?? true
-  let activeId = ''
-  let selectedCategoryIds = new Map<number, number>()
-  let persistentLeftExpanded = true
-  let contentAnchor: HTMLElement | null = null
+  const searchBoxShow = $derived(settings?.search_box_show ?? true)
+  let activeId = $state('')
+  // 每次整体替换（setSelectedCategory）；不做深层代理。
+  let selectedCategoryIds = $state.raw(new Map<number, number>())
+  let persistentLeftExpanded = $state(true)
+  let contentAnchor: HTMLElement | null = $state(null)
   let rootSectionNodes = new Map<number, HTMLElement>()
   let scrollFrame: number | null = null
   let scrollSpySuppressedUntil = 0
-  let homeSortMode = false
-  let homeSortSaving = false
-  let homeSortDraft: PublicBookmark[] = []
-  let homeSortError = ''
-  let homeSortBottomInset = 0
+  let homeSortMode = $state(false)
+  let homeSortSaving = $state(false)
+  // 每次整体替换；不做深层代理。
+  let homeSortDraft: PublicBookmark[] = $state.raw([])
+  let homeSortError = $state('')
+  let homeSortBottomInset = $state(0)
+  let guideOpen = $state(false)
   function setSortToolbarInset(inset: number): void { homeSortBottomInset = inset }
+  // 只在下面的副作用里比较，不进模板。
   let lastFocusedCategoryId: number | null = null
 
-  $: sortedCategories = homeData.getSortedCategories(categories)
-  $: categoryForest = homeData.getCategoryForest(categories)
-  $: sortedBookmarks = homeData.getSortedBookmarks(bookmarks)
-  $: allCategoryBookmarks = groupBookmarksByCategory(sortedBookmarks)
-  $: displayCategoryBookmarks = homeSortMode ? groupBookmarksByCategory(homeSortDraft) : allCategoryBookmarks
-  $: navigationSections = getHomeSections(categoryForest, allCategoryBookmarks)
-  $: categoryGroups = getHomeCategoryGroups(categoryForest, selectedCategoryIds, allCategoryBookmarks)
-  $: activeId = resolveHomeActiveSectionId(navigationSections, activeId)
-  $: if (
-    focusCategoryId != null &&
-    focusCategoryId !== lastFocusedCategoryId &&
-    sortedCategories.some((category) => category.id === focusCategoryId)
-  ) {
-    lastFocusedCategoryId = focusCategoryId
-    void focusCategory(focusCategoryId)
-  }
+  const sortedCategories = $derived(homeData.getSortedCategories(categories))
+  const categoryForest = $derived(homeData.getCategoryForest(categories))
+  const sortedBookmarks = $derived(homeData.getSortedBookmarks(bookmarks))
+  const allCategoryBookmarks = $derived(groupBookmarksByCategory(sortedBookmarks))
+  const displayCategoryBookmarks = $derived(homeSortMode ? groupBookmarksByCategory(homeSortDraft) : allCategoryBookmarks)
+  const navigationSections = $derived(getHomeSections(categoryForest, allCategoryBookmarks))
+  const categoryGroups = $derived(getHomeCategoryGroups(categoryForest, selectedCategoryIds, allCategoryBookmarks))
+  // 原 `$:` 以 navigationSections 与 activeId 自身为依赖；只在解析结果不同时写回。
+  $effect.pre(() => {
+    const next = resolveHomeActiveSectionId(navigationSections, activeId)
+    if (next !== activeId) untrack(() => { activeId = next })
+  })
+  // 原语句的依赖：focusCategoryId 与 sortedCategories（lastFocusedCategoryId 是比较用的普通变量）。
+  $effect.pre(() => {
+    const id = focusCategoryId
+    const categoriesNow = sortedCategories
+    untrack(() => {
+      if (
+        id != null &&
+        id !== lastFocusedCategoryId &&
+        categoriesNow.some((category) => category.id === id)
+      ) {
+        lastFocusedCategoryId = id
+        void focusCategory(id)
+      }
+    })
+  })
 
-  $: if (searchQuery !== deferredSearchQuery) scheduleSearchFilterUpdate(searchQuery)
-  $: normalizedSearchQuery = normalizeSearchQuery(deferredSearchQuery)
-  $: hasSearchQuery = normalizedSearchQuery.length > 0
-  $: categoryTitleById = homeData.getCategoryTitleMap(sortedCategories)
-  $: categoryLeafTitleById = new Map(sortedCategories.map((category) => [category.id, category.title]))
-  $: searchTextByBookmarkId = homeData.getSearchIndex(sortedBookmarks, sortedCategories, categoryTitleById)
-  $: visibleBookmarks = hasSearchQuery
+  $effect.pre(() => {
+    const query = searchQuery
+    if (query !== deferredSearchQuery) untrack(() => scheduleSearchFilterUpdate(query))
+  })
+  const normalizedSearchQuery = $derived(normalizeSearchQuery(deferredSearchQuery))
+  const hasSearchQuery = $derived(normalizedSearchQuery.length > 0)
+  const categoryTitleById = $derived(homeData.getCategoryTitleMap(sortedCategories))
+  const categoryLeafTitleById = $derived(new Map(sortedCategories.map((category) => [category.id, category.title])))
+  const searchTextByBookmarkId = $derived(homeData.getSearchIndex(sortedBookmarks, sortedCategories, categoryTitleById))
+  const visibleBookmarks = $derived(hasSearchQuery
     ? sortedBookmarks.filter((bookmark) => bookmarkMatchesSearch(bookmark, normalizedSearchQuery, searchTextByBookmarkId))
-    : sortedBookmarks
-  $: visibleCategoryIds = hasSearchQuery ? getVisibleCategoryIds(visibleBookmarks) : null
-  $: visibleCategoryForest = getVisibleCategoryForest(categoryForest, visibleCategoryIds)
-  $: visibleCategories = visibleCategoryForest.flatMap((category) => [category, ...category.children])
-  $: visibleCategoryBookmarks = groupBookmarksByCategory(visibleBookmarks)
-  $: categoryTreeOptions = buildCategoryTreeOptions(sortedCategories)
+    : sortedBookmarks)
+  const visibleCategoryIds = $derived(hasSearchQuery ? getVisibleCategoryIds(visibleBookmarks) : null)
+  const visibleCategoryForest = $derived(getVisibleCategoryForest(categoryForest, visibleCategoryIds))
+  const visibleCategories = $derived(visibleCategoryForest.flatMap((category) => [category, ...category.children]))
+  const visibleCategoryBookmarks = $derived(groupBookmarksByCategory(visibleBookmarks))
+  const categoryTreeOptions = $derived(buildCategoryTreeOptions(sortedCategories))
   // 登录态下首页会渲染私密书签，其图标必须带授权 key 才拿得到真实图片（Issue #28）。
   // 用「对匿名可见的分类集合」判定：不在其中的分类（私密树，或已被删除）都需要授权 key；
   // 公开分类下的公开书签留空以保留共享缓存。
-  $: publicCategoryIds = getPublicCategoryIds(sortedCategories)
-  $: visibleIconAccessKey = isAuthenticated ? $iconAccessKey : ''
-  $: mostVisitedBookmarks = hasSearchQuery
+  const publicCategoryIds = $derived(getPublicCategoryIds(sortedCategories))
+  const visibleIconAccessKey = $derived(isAuthenticated ? $iconAccessKey : '')
+  const mostVisitedBookmarks = $derived(hasSearchQuery
     ? []
-    : getMostVisitedBookmarks(sortedBookmarks, settings?.most_visited_count ?? 8)
+    : getMostVisitedBookmarks(sortedBookmarks, settings?.most_visited_count ?? 8))
 
-  $: totalBookmarks = sortedBookmarks.length
-  $: visibleBookmarkCount = visibleBookmarks.length
-  $: pageTitle = title || settings?.site_title || '导航首页'
-  $: siteTitleColor = settings?.site_title_color?.trim() || 'inherit'
-  $: siteTitleFontSize = clampTitleFontSize(settings?.site_title_font_size)
-  $: contentLayout = settings?.content_layout ?? {
+  const totalBookmarks = $derived(sortedBookmarks.length)
+  const visibleBookmarkCount = $derived(visibleBookmarks.length)
+  const pageTitle = $derived(title || settings?.site_title || '导航首页')
+  const siteTitleColor = $derived(settings?.site_title_color?.trim() || 'inherit')
+  const siteTitleFontSize = $derived(clampTitleFontSize(settings?.site_title_font_size))
+  const contentLayout = $derived(settings?.content_layout ?? {
     max_width: 1200,
     max_width_unit: 'px',
     margin_x: 0,
     margin_top: 0,
     margin_bottom: 0,
-  }
-  $: contentMaxWidth = `${contentLayout.max_width}${contentLayout.max_width_unit}`
-  $: navigation = settings?.navigation ?? { position: 'left', always_expanded: false, top_layout: 'scroll' } satisfies NavigationSetting
-  $: isTopNavigation = navigation.position === 'top'
-  $: navigationScrollOffset = isTopNavigation ? TOP_NAV_SCROLL_TOP_OFFSET : LEFT_NAV_SCROLL_TOP_OFFSET
-  $: categoryDisplay = settings?.category_display ?? CATEGORY_DISPLAY_DEFAULTS
-  $: cardTextColor = settings?.card_text_color?.trim() ?? ''
-  let topNavHeight = 0
-  let topNavBottom = 0
+  })
+  const contentMaxWidth = $derived(`${contentLayout.max_width}${contentLayout.max_width_unit}`)
+  const navigation = $derived(settings?.navigation ?? { position: 'left', always_expanded: false, top_layout: 'scroll' } satisfies NavigationSetting)
+  const isTopNavigation = $derived(navigation.position === 'top')
+  const navigationScrollOffset = $derived(isTopNavigation ? TOP_NAV_SCROLL_TOP_OFFSET : LEFT_NAV_SCROLL_TOP_OFFSET)
+  const categoryDisplay = $derived(settings?.category_display ?? CATEGORY_DISPLAY_DEFAULTS)
+  const cardTextColor = $derived(settings?.card_text_color?.trim() ?? '')
+  let topNavHeight = $state(0)
+  let topNavBottom = $state(0)
   // 顶部分行导航高度增长时，用实测高度驱动首页顶部留白（+ 12px 顶距 + 12px 余量）。
-  $: topNavPadding = isTopNavigation && topNavHeight > 0 ? `${Math.round(topNavHeight + 24)}px` : ''
-  $: homeShellStyle = [
+  const topNavPadding = $derived(isTopNavigation && topNavHeight > 0 ? `${Math.round(topNavHeight + 24)}px` : '')
+  const homeShellStyle = $derived([
     `--content-max-width: ${contentMaxWidth}`,
     `--content-margin-x: ${contentLayout.margin_x}px`,
     `--content-margin-top: ${contentLayout.margin_top}%`,
@@ -171,10 +218,10 @@
     categoryDisplay.child_title_color ? `--category-child-title-color: ${categoryDisplay.child_title_color}` : '',
     cardTextColor ? `--card-text-color: ${cardTextColor}` : '',
     topNavPadding ? `--top-nav-padding: ${topNavPadding}` : '',
-  ].filter(Boolean).join('; ')
-  $: pageDescription = totalBookmarks > 0
+  ].filter(Boolean).join('; '))
+  const pageDescription = $derived(totalBookmarks > 0
     ? `已整理 ${sortedCategories.length} 个分类，收录 ${totalBookmarks} 个站点。`
-    : '一个简洁的公开导航首页。'
+    : '一个简洁的公开导航首页。')
 
   function replaceCategoryOrder(
     draft: PublicBookmark[],
@@ -404,7 +451,22 @@
     scrollSpySuppressedUntil = performance.now() + 600
   }
 
+  function openGuide(): void {
+    guideOpen = true
+  }
+
+  function handleGuideClose(): void {
+    guideOpen = false
+    void tick().then(() => document.querySelector<HTMLButtonElement>('[data-testid="home-actions-menu-trigger"]')?.focus())
+  }
+
   onMount(() => {
+    try {
+      if (localStorage.getItem('cf-navs:guide-seen') !== '1') openGuide()
+    } catch {
+      openGuide()
+    }
+
     window.addEventListener('scroll', scheduleActiveRootUpdate, { passive: true })
     scheduleActiveRootUpdate()
 
@@ -438,6 +500,7 @@
 
 <div
   class="home-shell"
+  inert={guideOpen}
   class:top-navigation-layout={isTopNavigation}
   class:persistent-left-navigation={navigation.position === 'left' && navigation.always_expanded && persistentLeftExpanded}
   style={homeShellStyle}
@@ -457,6 +520,7 @@
     {searchBoxVisible}
     {searchBoxShow}
     {onOpenSearch}
+    onOpenGuide={openGuide}
   />
 
   <HomeHeroSearch
@@ -500,7 +564,7 @@
                     {#if category.icon || category.icon_display === 'image'}
                       <CategoryIcon category={category} size="var(--category-root-icon-size, 38px)" className="search-category-icon" iconAccessKey={publicCategoryIds.has(Number(category.id)) ? '' : visibleIconAccessKey} />
                     {/if}
-                    <h2 id={`search-category-${category.id}`} style={`font-size: var(--category-root-font-size, 1.28rem)`}>{category.title}</h2>
+                    <h2 id={`search-category-${category.id}`} style="font-size: var(--category-root-font-size, 1.28rem)">{category.title}</h2>
                   </div>
                   <span>{getCategoryTreeBookmarkCount(category, visibleCategoryBookmarks)} 个匹配站点</span>
                 </header>
@@ -719,14 +783,14 @@
   </div>
 
   {#if homeSortMode || homeSortError}
-    <div class="home-sort-bar" use:observeSortToolbar={setSortToolbarInset} class:error-state={Boolean(homeSortError)} role="toolbar" aria-label="跨分类排序操作">
+    <div class="home-sort-bar" use:observeSortToolbar={setSortToolbarInset} class:error-state={Boolean(homeSortError)} role="toolbar" aria-label="跨分类排序操作" inert={guideOpen}>
       {#if homeSortError}
         <span class="home-sort-message home-sort-error" role="alert">保存排序失败：{homeSortError}</span>
-        <button type="button" class="home-sort-cancel" on:click={cancelHomeSort}>关闭</button>
+        <button type="button" class="home-sort-cancel" onclick={cancelHomeSort}>关闭</button>
       {:else}
         <span class="home-sort-message">正在排序：可将书签拖到其他分类，完成后保存。</span>
-        <button type="button" class="home-sort-cancel" on:click={cancelHomeSort} disabled={homeSortSaving}>取消</button>
-        <button type="button" class="home-sort-save" on:click={saveHomeSort} disabled={homeSortSaving}>
+        <button type="button" class="home-sort-cancel" onclick={cancelHomeSort} disabled={homeSortSaving}>取消</button>
+        <button type="button" class="home-sort-save" onclick={saveHomeSort} disabled={homeSortSaving}>
           {homeSortSaving ? '保存中…' : '保存排序'}
         </button>
       {/if}
@@ -734,11 +798,21 @@
   {/if}
 
   {#if settings?.footer_html}
-    <footer class="home-footer">
+    <footer class="home-footer" inert={guideOpen}>
+      <!-- 页脚 HTML 由管理员在后台设置中填写，按设计原样渲染（可信输入）。 -->
+      <!-- eslint-disable-next-line svelte/no-at-html-tags -->
       {@html settings.footer_html}
     </footer>
   {/if}
 </div>
+
+<GuideOverlay
+  open={guideOpen}
+  activeTheme={activeTheme}
+  accentColor={resolveThemeAccentColor(settings, activeTheme)}
+  cardStyle={settings?.card_style ?? 'info'}
+  onClose={handleGuideClose}
+/>
 
 <style>
   .home-shell {

@@ -87,7 +87,7 @@ PROB-29、PROB-30 是 2026-09-03 轮实现 PROB-01 与 REQ-08 时新发现并登
 
 | 项 | 内容 |
 | --- | --- |
-| 来源映射 | `FR-B1`、`FR-B2`；`docs/plans/SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md`；`docs/plans/UI_UX_Plan.md` |
+| 来源映射 | `FR-B1`、`FR-B2`；`docs/plans/_archive/SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md`；`docs/plans/_archive/UI_UX_Plan.md` |
 | 实施前事实 | 配色选择器曾显示模块级「内置配色方案」长说明，分组名为「毛玻璃氛围」，两组 hint 以内联文字呈现。用户 2026-09-05 裁定采用方案 a。 |
 | 处理结果 | 删除模块级标题与长说明；分组名收敛为「毛玻璃」和「护眼纯色」；两组 hint 移入分组标题 `title`；保留右侧「自定义 / 已选方案」状态反馈。 |
 | 验证结果 | `tests/unit/gradientPresetSelectorBehavior.test.ts` 覆盖可观察 DOM 文案、分组 hover 语义和状态反馈；`npm run type-check` 通过，`npm test` 112 files / 819 passed，`npm run build` 成功，`git diff --check` 通过。 |
@@ -125,7 +125,7 @@ PROB-29、PROB-30 是 2026-09-03 轮实现 PROB-01 与 REQ-08 时新发现并登
 
 | 项 | 内容 |
 | --- | --- |
-| 来源映射 | `S1`；`docs/plans/PLATFORM_OPTIMIZATION_PLAN.md` 第八节「剩余的真机验收清单」的 S1 条与 S1 完成记录；`docs/plans/DEV_TASK_BREAKDOWN_UI_NAV_EXPORT.md` 的冒烟补跑记录 |
+| 来源映射 | `S1`；`docs/plans/_archive/PLATFORM_OPTIMIZATION_PLAN.md` 第八节「剩余的真机验收清单」的 S1 条与 S1 完成记录；`docs/plans/_archive/DEV_TASK_BREAKDOWN_UI_NAV_EXPORT.md` 的冒烟补跑记录 |
 | 冲突 | `PLATFORM_OPTIMIZATION_PLAN.md` 的 S1 验收条仍写「跑一次 `scripts/smoke-test.mjs`，确认第 347 行『登出后 token 失效 → 401』现在通过（这条断言自 `a296e74` 起一直是失败的）」；但 `DEV_TASK_BREAKDOWN_UI_NAV_EXPORT.md` 记录 2026-08-30 已补跑 `smoke-test.mjs` 并 **75/75 全绿** |
 | 源码事实 | 该断言在 `scripts/smoke-test.mjs` 的「登出」小节（紧跟 `登出 code=0`），**不在**文档引用的第 347 行；计划文档的裸行号引用已漂移，违反 `CONTRIBUTING.md` 第 3 节 |
 | 影响 | 一条安全相关的遗留验证同时被标为「未闭环」和「已全绿」，无法据文档判断真实状态 |
@@ -154,9 +154,9 @@ PROB-29、PROB-30 是 2026-09-03 轮实现 PROB-01 与 REQ-08 时新发现并登
 
 | 项 | 内容 |
 | --- | --- |
-| 来源映射 | `docs/plans/UI_UX_Plan.md:1-6`；`docs/README.md:58`、`:60-68`；`docs/plans/SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md:5` |
+| 来源映射 | `docs/plans/_archive/UI_UX_Plan.md:1-6`；`docs/README.md:58`、`:60-68`；`docs/plans/_archive/SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md:5` |
 | 冲突 | `docs/README.md:58` 声明「每份文档文首都标注了状态和对应的实现提交」，但 `UI_UX_Plan.md:1-6` 只有「核心设计原则」，无状态块；`docs/README.md` 的计划文档列表（现为 `:60-68`，共 9 条）也**不含**该文件 |
-| 已确认关系 | `SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md:5` 明确「来源：`docs/plans/UI_UX_Plan.md`…本文将该规范转化为可执行、可验收的需求」，即 `UI_UX_Plan.md` 是**已被取代的原始草案** |
+| 已确认关系 | `SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md:5` 明确「来源：`docs/plans/_archive/UI_UX_Plan.md`…本文将该规范转化为可执行、可验收的需求」，即 `UI_UX_Plan.md` 是**已被取代的原始草案** |
 | 影响 | 一份无状态、未索引的草案与已完成需求文档并存，后续开发可能把草案条目当待办重复实施（PROB-04 即由此产生） |
 | 处理动作 | 在 `UI_UX_Plan.md` 文首加状态块：「原始改造草案；已由 `SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md` 取代并落地，仅作历史来源保留，不作为待办」；并把它列入 `docs/README.md` 计划文档清单 |
 | 处理结果 | `UI_UX_Plan.md` 文首已加状态块：标明它是「原始改造草案，已被取代」，已由 `SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md` 转化落地、仅作历史来源保留、不作为待办，且 FR 编号冲突以后者为准，并指向 PROB-04。`docs/README.md` 计划清单已补该文件（注明已被取代）|
@@ -169,13 +169,13 @@ PROB-29、PROB-30 是 2026-09-03 轮实现 PROB-01 与 REQ-08 时新发现并登
 | 事实 | 该文件在 `:14` 的「确定任务类型后看对应执行计划」里被指名，但 `:60-68` 的「开发计划与决策记录」清单缺这一行 |
 | 影响 | 按目录索引查文档的人会漏掉 R-01~R-08 的执行台账 |
 | 处理动作 | 在 `:60-68` 补 `DEV_TASK_BREAKDOWN_GITHUB_ISSUES.md`，并按 PROB-09 补 `UI_UX_Plan.md`。本文两份新清单已在 `docs/README.md:70-75` 单列小节，无需重复添加 |
-| 处理结果 | `docs/README.md` 计划清单已补「开发任务规划（R-01～R-08 Issue 需求）」指向 `plans/DEV_TASK_BREAKDOWN_GITHUB_ISSUES.md`，并按 PROB-09 补入 `UI_UX_Plan.md`。两份新清单仍单列在「当前任务清单」小节，未重复添加 |
+| 处理结果 | `docs/README.md` 计划清单已补「开发任务规划（R-01～R-08 Issue 需求）」指向 `plans/_archive/DEV_TASK_BREAKDOWN_GITHUB_ISSUES.md`，并按 PROB-09 补入 `UI_UX_Plan.md`。两份新清单仍单列在「当前任务清单」小节，未重复添加 |
 
 ### PROB-11（P2，已完成）R-02 首页新建子分类的移动端交互形态与计划 T6 不同
 
 | 项 | 内容 |
 | --- | --- |
-| 来源映射 | `R-02`、`T6`；`docs/reference/GITHUB_ISSUES_REQUIREMENTS.md:85`、`:72`；`docs/plans/DEV_TASK_BREAKDOWN_GITHUB_ISSUES.md` T6 任务卡 |
+| 来源映射 | `R-02`、`T6`；`docs/reference/GITHUB_ISSUES_REQUIREMENTS.md:85`、`:72`；`docs/plans/_archive/DEV_TASK_BREAKDOWN_GITHUB_ISSUES.md` T6 任务卡 |
 | 差异 | 计划要求移动端把分类操作收进「更多操作」菜单（对应 `GITHUB_ISSUES_REQUIREMENTS.md:72` 的端侧规划）；源码 `src/components/HomeCategoryScope.svelte:74-85` 是直接渲染的 scope-action 按钮 |
 | 定性 | 功能入口存在且满足「不依赖 hover/右键」，属交互形态偏差，非功能缺失 |
 | 处理动作 | 裁定后二选一：a) 移动端收进更多操作菜单；b) 在 R-02 段与 T6 台账写明「已改为直显图标按钮」并说明理由 |
@@ -208,7 +208,7 @@ PROB-29、PROB-30 是 2026-09-03 轮实现 PROB-01 与 REQ-08 时新发现并登
 
 > 以下七组是 2026-09-03 核对时的范围，不是当前未完成数量。当前剩余项只看 [BACKLOG](../BACKLOG.md)；S3 后续执行与导入提示证据见 [变更记录](../../CHANGELOG.md#prob-13-自定义-js-与-csp-验收)，复验按 [部署后验收指南](../guides/PRODUCTION_ACCEPTANCE.md#51-自定义-js-与-csp-专项的复验步骤) 执行。保留当时证据，不将后续通过追记为当时已通过。
 
-- 来源映射：`L1`/`L3`/`L4`/`S3`/`S3 导入提示`/`S4`/`U1–U4`；`docs/plans/PLATFORM_OPTIMIZATION_PLAN.md:861-872`
+- 来源映射：`L1`/`L3`/`L4`/`S3`/`S3 导入提示`/`S4`/`U1–U4`；`docs/plans/_archive/PLATFORM_OPTIMIZATION_PLAN.md:861-872`
 - 文档明确「单元测试只能锁住纯函数、源码契约和路由行为」，以下必须部署后真实浏览器确认：
   - `L1`（`:865`）二访首页无 `/api/install/status`，清 localStorage 后首访仍出现一次。
   - `L3`（`:866`）首访后 Cache Storage `cf-navs-v15` 含 `index-*.js`/`index-*.css`；二访来源标记 ServiceWorker。
@@ -245,16 +245,16 @@ PROB-29、PROB-30 是 2026-09-03 轮实现 PROB-01 与 REQ-08 时新发现并登
 
 ### PROB-16（P2，已完成）设置页/导航/导出的关键交互数值未进可复跑回归套件
 
-- 来源映射：`docs/plans/DEV_TASK_BREAKDOWN_UI_NAV_EXPORT.md:333-344`、`:346-369`
+- 来源映射：`docs/plans/_archive/DEV_TASK_BREAKDOWN_UI_NAV_EXPORT.md:333-344`、`:346-369`
 - 已有可复跑闸门：`scripts/smoke-test.mjs`（75 项 API 端到端）、`scripts/chrome-regression.mjs`（25 项，覆盖首页渲染/搜索/主题、后台 shell、书签搜索、设置页与备份页渲染、右键编辑弹窗、登出与三项鉴权探针，见 `scripts/chrome-regression.mjs:1054-1079`）
 - 欠账：台账声称的具体数值型断点证据**不在**这两个套件内，属一次性人工 CDP 证据 —— `820px` 桌面分行 2 行/98px、箭头隐藏、子菜单在视口内（`:337`）；浮动按钮 `top=18`/`nav top=12`/`z-index=70`、移动 `top=14`/`nav top=8`（`:338`）；`721/768/799px` 中间断点复验（`:354`）；实际下载 3 分类/6 书签与 replace+merge `code=0`（`:335`）
 - 处理动作：把上述数值断言补入 `scripts/chrome-regression.mjs`，或在台账明确标为「一次性人工证据，不构成持续回归」
-- 处理结果：按第二个选项落地 —— 在 `docs/plans/DEV_TASK_BREAKDOWN_UI_NAV_EXPORT.md` §12 台账表后新增定性块，逐条点名 `820px` 分行 2 行/98px、浮动按钮 `top=18`/`nav top=12`/`z-index=70` 与移动 `top=14`/`nav top=8`、`721/768/799px` 中间断点、实际下载 3 分类/6 书签与 replace+merge `code=0`，明确标为「一次性人工 CDP 证据，不构成持续回归」，并写清两个可复跑套件实际只覆盖到「已渲染 / 控件存在」与 API 端到端。`scripts/chrome-regression.mjs` 未改动
+- 处理结果：按第二个选项落地 —— 在 `docs/plans/_archive/DEV_TASK_BREAKDOWN_UI_NAV_EXPORT.md` §12 台账表后新增定性块，逐条点名 `820px` 分行 2 行/98px、浮动按钮 `top=18`/`nav top=12`/`z-index=70` 与移动 `top=14`/`nav top=8`、`721/768/799px` 中间断点、实际下载 3 分类/6 书签与 replace+merge `code=0`，明确标为「一次性人工 CDP 证据，不构成持续回归」，并写清两个可复跑套件实际只覆盖到「已渲染 / 控件存在」与 API 端到端。`scripts/chrome-regression.mjs` 未改动
 - 不补断言的理由（已核实，非推断）：该脚本需要可达的 `BASE_URL`（环境变量或被忽略的 `verify.local.json`）与真实管理员凭据，且其安全场景会真实改写再还原管理员密码；脚本只启动/连接 Chrome，不启动应用。当前套件没有视口仿真、`getComputedStyle` 采样或下载/导入自动化能力，补数值断言还需引入确定性分类/书签 fixture。`AGENTS.md` 规定未经明确要求不启动本地服务、不部署，故这些断点只能并入 PROB-13 的部署后验收
 
 ### PROB-17（P2）后台移动端布局缺三档视觉截图
 
-- 来源映射：`docs/plans/ADMIN_MOBILE_LAYOUT_PLAN.md:206-214`
+- 来源映射：`docs/plans/_archive/ADMIN_MOBILE_LAYOUT_PLAN.md:206-214`
 - 欠账：实现后未补备份/导入页移动截图，以及 `430x932`、`768x1024`、桌面补充截图；文档明确契约测试不能替代真机视觉
 - 处理动作：按既有截图流程（`bringToFront` → `fonts.ready` → 布局读取 → 重绘）补齐；截图落 `docs/screenshots/` 需先确认是否属于发布资产
 
@@ -347,7 +347,7 @@ PROB-29、PROB-30 是 2026-09-03 轮实现 PROB-01 与 REQ-08 时新发现并登
 
 ### PROB-19（P1，已完成 a/b，c 未开工）跨 isolate 登出撤销存在生效延迟与失败静默
 
-- 来源映射：`S1`；`docs/plans/PLATFORM_OPTIMIZATION_PLAN.md` 的 S1 小节；`docs/guides/TROUBLESHOOTING.md` 的会话与登录小节
+- 来源映射：`S1`；`docs/plans/_archive/PLATFORM_OPTIMIZATION_PLAN.md` 的 S1 小节；`docs/guides/TROUBLESHOOTING.md` 的会话与登录小节
 - 源码事实：`worker/routes/auth.ts` 的 `authRoutes.post('/logout')` 写 KV 撤销；`worker/middleware/auth.ts` 的 `validateSession` 只在内存缓存未命中时查撤销名单；`worker/lib/bootstrap.ts` 的 `ensureAdminBootstrap` 不要求 `SESSION` 绑定
 - 残余语义：撤销最长约 15 秒才在其他 isolate 生效；KV 写失败时登出**仍返回成功**；JWT 在 `exp` 之前仍可验签
 - 处理动作：a) KV 写失败时不再返回纯成功，向调用方暴露可辨识状态；b) 在 `API_CONTRACT.md` 写明登出的最终一致语义与生效窗口；c) 缩短 token 有效期或引入版本号校验属架构决策，需单独评估
@@ -384,7 +384,7 @@ PROB-29、PROB-30 是 2026-09-03 轮实现 PROB-01 与 REQ-08 时新发现并登
 
 ### PROB-20（P1，已完成方案 1）图标代理匿名可枚举，私密对象存在信息泄漏面
 
-- 来源映射：`S2`；`docs/plans/PR7_MERGE_REVIEW_PLAN.md:167-173`、`:209-214`
+- 来源映射：`S2`；`docs/plans/_archive/PR7_MERGE_REVIEW_PLAN.md:167-173`、`:209-214`
 - 源码事实：`worker/routes/icon.ts` 图标端点匿名可访问并按 ID 取用；`worker/lib/iconResponses.ts` 走公共缓存；`public/sw.js:1-8` 明确图标代理不入 Cache Storage
 - 风险：书签/分类图标可被按 ID 枚举，私密书签与私密分类的图标不在鉴权边界内
 - 处理动作：三条候选（签名 URL、HttpOnly 会话校验、私密对象内联图标 + 缓存隔离）需先定架构，再实现。**改动会触及缓存契约与性能预算（`C-5` 图标请求 ≤ 260），不可顺手改**

@@ -1,3 +1,5 @@
+<svelte:options runes />
+
 <script lang="ts">
   import type { AdminBookmarkSummary, AdminCategorySummary } from '../../lib/appData'
   import {
@@ -16,26 +18,35 @@
   type AdminBookmark = AdminBookmarkSummary
   type AdminCategory = AdminCategorySummary
 
-  export let bookmarks: AdminBookmark[] = []
-  export let categories: AdminCategory[] = []
+  interface Props {
+    bookmarks?: AdminBookmark[]
+    categories?: AdminCategory[]
+  }
 
-  let zeroVisitPage = 1
+  let { bookmarks = [], categories = [] }: Props = $props()
 
-  $: sortedBookmarks = [...bookmarks]
-    .sort((a, b) => (b.click_count ?? 0) - (a.click_count ?? 0))
+  let zeroVisitPage = $state(1)
 
-  $: topBookmarks = sortedBookmarks.slice(0, 20).filter(b => (b.click_count ?? 0) > 0)
-  $: zeroVisitBookmarks = bookmarks.filter(b => (b.click_count ?? 0) === 0)
-  $: categoryTitleById = getAdminCategoryPathMap(categories)
-  $: hiddenCategoryIds = getHiddenCategoryIds(categories)
-  $: zeroVisitTotalPages = getAdminListTotalPages(zeroVisitBookmarks.length)
-  $: zeroVisitPage = clampAdminListPage(zeroVisitPage, zeroVisitTotalPages)
-  $: zeroVisitListPage = createAdminListPage(zeroVisitBookmarks, zeroVisitPage)
+  const sortedBookmarks = $derived([...bookmarks]
+    .sort((a, b) => (b.click_count ?? 0) - (a.click_count ?? 0)))
 
-  $: totalClicks = bookmarks.reduce((acc, curr) => acc + (curr.click_count ?? 0), 0)
-  $: clickedCount = bookmarks.filter(b => (b.click_count ?? 0) > 0).length
+  const topBookmarks = $derived(sortedBookmarks.slice(0, 20).filter(b => (b.click_count ?? 0) > 0))
+  const zeroVisitBookmarks = $derived(bookmarks.filter(b => (b.click_count ?? 0) === 0))
+  const categoryTitleById = $derived(getAdminCategoryPathMap(categories))
+  const hiddenCategoryIds = $derived(getHiddenCategoryIds(categories))
+  const zeroVisitTotalPages = $derived(getAdminListTotalPages(zeroVisitBookmarks.length))
+  // 原 `$: zeroVisitPage = clampAdminListPage(zeroVisitPage, zeroVisitTotalPages)`：页数变化或翻页后夹回范围，
+  // 与原语句一样先于 DOM 更新执行；只在值变化时写回，写回引起的重跑为空操作。
+  $effect.pre(() => {
+    const next = clampAdminListPage(zeroVisitPage, zeroVisitTotalPages)
+    if (next !== zeroVisitPage) zeroVisitPage = next
+  })
+  const zeroVisitListPage = $derived(createAdminListPage(zeroVisitBookmarks, zeroVisitPage))
 
-  $: maxClicks = topBookmarks[0]?.click_count ?? 1
+  const totalClicks = $derived(bookmarks.reduce((acc, curr) => acc + (curr.click_count ?? 0), 0))
+  const clickedCount = $derived(bookmarks.filter(b => (b.click_count ?? 0) > 0).length)
+
+  const maxClicks = $derived(topBookmarks[0]?.click_count ?? 1)
 
 </script>
 
@@ -173,9 +184,9 @@
           <div class="admin-pagination">
             <span>第 {zeroVisitListPage.start}-{zeroVisitListPage.end} 条 / 共 {zeroVisitListPage.total} 条</span>
             <div class="admin-pager-actions">
-              <button type="button" class="admin-ghost-button compact" on:click={() => zeroVisitPage -= 1} disabled={zeroVisitPage <= 1}>上一页</button>
+              <button type="button" class="admin-ghost-button compact" onclick={() => zeroVisitPage -= 1} disabled={zeroVisitPage <= 1}>上一页</button>
               <span>{zeroVisitPage} / {zeroVisitTotalPages}</span>
-              <button type="button" class="admin-ghost-button compact" on:click={() => zeroVisitPage += 1} disabled={zeroVisitPage >= zeroVisitTotalPages}>下一页</button>
+              <button type="button" class="admin-ghost-button compact" onclick={() => zeroVisitPage += 1} disabled={zeroVisitPage >= zeroVisitTotalPages}>下一页</button>
             </div>
           </div>
         </div>

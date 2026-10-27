@@ -7,7 +7,7 @@ import {
   INSTALL_MARKER_KEY,
 } from '../lib/bootstrap'
 import { hashPassword } from '../lib/crypto'
-import { getSettingValues, setSettingValue } from '../lib/db'
+import { getSettingValues } from '../lib/db'
 import { fail, ok } from '../lib/response'
 import { createSession } from '../lib/session'
 import { hasSessionBinding } from '../lib/sessionStore'
@@ -60,7 +60,8 @@ async function databaseIsReachable(db: D1Database): Promise<boolean> {
   try {
     await db.prepare('SELECT 1 AS ok').first()
     return true
-  } catch {
+  } catch (error) {
+    console.error('[recover] database probe failed:', error)
     return false
   }
 }
@@ -69,7 +70,8 @@ async function sessionStoreIsReachable(session: KVNamespace): Promise<boolean> {
   try {
     await session.get('__cf_navs_recover_probe__')
     return true
-  } catch {
+  } catch (error) {
+    console.error('[recover] session store probe failed:', error)
     return false
   }
 }
@@ -103,6 +105,7 @@ recoverRoutes.post('/recover', async (c) => {
     if (isMissingTableError(error)) {
       return noStore(c.json(fail(ErrCode.BAD_REQUEST, 'not installed')))
     }
+    console.error('[recover] reading installation state failed:', error)
     return noStore(c.json(fail(ErrCode.SERVER_ERROR, 'database is unavailable')))
   }
   const adminUsername = installed.get(ADMIN_USERNAME_KEY)
@@ -125,7 +128,8 @@ recoverRoutes.post('/recover', async (c) => {
     if (rateLimitState && rateLimitState.resetAt > Date.now() && rateLimitState.count >= RATE_LIMIT_MAX_ATTEMPTS) {
       return noStore(c.json(fail(ErrCode.RATE_LIMITED, 'too many recovery attempts')))
     }
-  } catch {
+  } catch (error) {
+    console.error('[recover] reading rate limit failed:', error)
     return noStore(c.json(fail(ErrCode.SERVER_ERROR, 'database is unavailable')))
   }
 
@@ -135,7 +139,8 @@ recoverRoutes.post('/recover', async (c) => {
       if (limited) {
         return noStore(c.json(fail(ErrCode.RATE_LIMITED, 'too many recovery attempts')))
       }
-    } catch {
+    } catch (error) {
+      console.error('[recover] recording failed attempt failed:', error)
       return noStore(c.json(fail(ErrCode.SERVER_ERROR, 'database is unavailable')))
     }
     return noStore(c.json(fail(ErrCode.UNAUTHORIZED, 'unauthorized'), 401))
@@ -145,6 +150,7 @@ recoverRoutes.post('/recover', async (c) => {
   try {
     body = await c.req.json<RecoverReq>()
   } catch {
+    // 请求体不是合法 JSON：客户端输入错误，属预期分支，不记日志（也避免把正文写进日志）。
     return noStore(c.json(fail(ErrCode.BAD_REQUEST, 'invalid request body')))
   }
 
@@ -158,18 +164,20 @@ recoverRoutes.post('/recover', async (c) => {
     // 它是「上次 INIT_ADMIN_* 应用值」的快照，ensureAdminBootstrap 用它对比 INIT 是否变化
     // （仅非 web-install 实例、!webInstalled 时）。若把它改成新哈希，会让它与未变的
     // INIT_ADMIN_PASSWORD 不再匹配，下次登录被判定为「INIT 变了」而回滚掉本次重置。
-    await setSettingValue(c.env.DB, ADMIN_PASSWORD_KEY, await hashPassword(body.password))
-  } catch {
+    // 与 JWT 密钥轮换同一条语句写入，密码生效与旧会话作废同生共死。
+    await clearAllSessions(c.env, [[ADMIN_PASSWORD_KEY, await hashPassword(body.password)]])
+  } catch (error) {
+    console.error('[recover] password reset write failed:', error)
     return noStore(c.json(fail(ErrCode.SERVER_ERROR, 'failed to reset password')))
   }
 
-  await clearAllSessions(c.env)
   clearAllCachedSessions()
   await clearInstallFailures(c.env.DB, getRateLimitKey(ip))
 
   try {
     return noStore(c.json(ok(await createSession(c.env, adminUsername))))
-  } catch {
+  } catch (error) {
+    console.error('[recover] session creation after reset failed:', error)
     return noStore(c.json(fail(ErrCode.SERVER_ERROR, 'password reset but session creation failed')))
   }
 })

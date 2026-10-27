@@ -1,6 +1,9 @@
 export const LEGACY_ICON_LOCAL_STORAGE_PREFIX = 'cf-navs.bookmark-icon.'
 export const LEGACY_ICON_CACHE_NAMES = ['cf-navs-bookmark-icons-v1'] as const
 export const CURRENT_EXTERNAL_ICON_CACHE_NAME = 'cf-navs-bookmark-icons-v2'
+// 已移除的「可信设备」图标副本：IndexedDB 库与设备记录。启动时删除一次即可。
+export const LEGACY_TRUSTED_ICON_DATABASE = 'cf-navs-object-icons-v1'
+export const LEGACY_TRUSTED_ICON_DEVICE_KEY = 'cf-navs.icon-device-v1'
 
 interface LegacyStorage {
   readonly length: number
@@ -43,7 +46,7 @@ export function createLegacyIconCopyMigrator(options: {
         if (storage) {
           for (let index = storage.length - 1; index >= 0; index -= 1) {
             const key = storage.key(index)
-            if (key?.startsWith(LEGACY_ICON_LOCAL_STORAGE_PREFIX)) {
+            if (key?.startsWith(LEGACY_ICON_LOCAL_STORAGE_PREFIX) || key === LEGACY_TRUSTED_ICON_DEVICE_KEY) {
               storage.removeItem(key)
               removedLocalStorageKeys += 1
             }
@@ -83,6 +86,21 @@ export function createLegacyIconCopyMigrator(options: {
       if (inFlight === operation) inFlight = null
     }
   }
+}
+
+/** 删除旧「可信设备」IndexedDB 库；失败或被阻塞时下次启动再试，不影响页面。 */
+export function deleteLegacyTrustedIconDatabase(factory: IDBFactory | undefined = typeof indexedDB === 'undefined' ? undefined : indexedDB): Promise<boolean> {
+  if (!factory) return Promise.resolve(true)
+  return new Promise((resolve) => {
+    try {
+      const request = factory.deleteDatabase(LEGACY_TRUSTED_ICON_DATABASE)
+      request.onsuccess = () => resolve(true)
+      request.onerror = () => resolve(false)
+      request.onblocked = () => resolve(false)
+    } catch {
+      resolve(false)
+    }
+  })
 }
 
 const browserMigrator = createLegacyIconCopyMigrator({

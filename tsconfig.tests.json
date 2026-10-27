@@ -1,0 +1,11 @@
+{
+  // tests/ 的类型检查：沿用主 tsconfig 的严格设置，额外加载 Node 类型（测试会用 node:fs、node:vm、
+  // node:sqlite 等）。被测试导入的 scripts/lib/*.mjs 只参与类型推断、不报告其自身错误（checkJs: false），
+  // 本配置只对 tests/ 负责；src/worker/shared 中被导入的文件仍会在 Node 类型下一并检查。
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "checkJs": false,
+    "types": ["@cloudflare/workers-types", "svelte", "node"]
+  },
+  "include": ["tests/**/*.ts", "src/vite-env.d.ts", "worker/sql.d.ts"]
+}

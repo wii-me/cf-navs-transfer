@@ -1,0 +1,392 @@
+{
+  "schema": 1,
+  "source": "README.md",
+  "lang": "en",
+  "output": "translations/en/README.md",
+  "items": [
+    {
+      "kind": "block",
+      "hash": "8ab6c1614047b1da"
+    },
+    {
+      "kind": "block",
+      "hash": "4a964030d1d3b068"
+    },
+    {
+      "kind": "block",
+      "hash": "7d1f7f7de9ab41c3"
+    },
+    {
+      "kind": "block",
+      "hash": "86a9ca4434d7767f"
+    },
+    {
+      "kind": "block",
+      "hash": "3065216667d00088"
+    },
+    {
+      "kind": "block",
+      "hash": "cb3f91d54eee30e5"
+    },
+    {
+      "kind": "block",
+      "hash": "a4526d8b86a8d211"
+    },
+    {
+      "kind": "block",
+      "hash": "ac4a815f60cb6b72"
+    },
+    {
+      "kind": "block",
+      "hash": "398fe705a04403d1"
+    },
+    {
+      "kind": "block",
+      "hash": "f7a45c13d80c4328"
+    },
+    {
+      "kind": "block",
+      "hash": "374fe26410047a43"
+    },
+    {
+      "kind": "block",
+      "hash": "3df6a0134a9ee596"
+    },
+    {
+      "kind": "block",
+      "hash": "6199addeae1359a0"
+    },
+    {
+      "kind": "block",
+      "hash": "a4f0971ab531f0ea"
+    },
+    {
+      "kind": "block",
+      "hash": "3ce762f2b7c5c907"
+    },
+    {
+      "kind": "block",
+      "hash": "a046753abf954127"
+    },
+    {
+      "kind": "block",
+      "hash": "4275858fd5c72ac9"
+    },
+    {
+      "kind": "block",
+      "hash": "f9e45ec70008b4b8"
+    },
+    {
+      "kind": "block",
+      "hash": "b4412ee176f18546"
+    },
+    {
+      "kind": "block",
+      "hash": "b6279c338e4e5053"
+    },
+    {
+      "kind": "block",
+      "hash": "b42259bcc063f91a"
+    },
+    {
+      "kind": "block",
+      "hash": "9833b4743cd850f0"
+    },
+    {
+      "kind": "block",
+      "hash": "f7b44ff0bf33b83e"
+    },
+    {
+      "kind": "block",
+      "hash": "b3efd1a2d6d1482b"
+    },
+    {
+      "kind": "block",
+      "hash": "86fe647c4afcb4c3"
+    },
+    {
+      "kind": "block",
+      "hash": "6df6979f647ceb93"
+    },
+    {
+      "kind": "block",
+      "hash": "bbead9a853bb98ab"
+    },
+    {
+      "kind": "block",
+      "hash": "0776f1f25f029883"
+    },
+    {
+      "kind": "block",
+      "hash": "ac736181731ee580"
+    },
+    {
+      "kind": "block",
+      "hash": "89029bdd0ac73ced"
+    },
+    {
+      "kind": "block",
+      "hash": "d286e7ba6d6695d7"
+    },
+    {
+      "kind": "block",
+      "hash": "925a20fdfc920b2c"
+    },
+    {
+      "kind": "block",
+      "hash": "ddca7e9a743597ac"
+    },
+    {
+      "kind": "block",
+      "hash": "817f9eec148fb173"
+    },
+    {
+      "kind": "block",
+      "hash": "7810211d91b12dbc"
+    },
+    {
+      "kind": "block",
+      "hash": "9cec30a191af7fc8"
+    },
+    {
+      "kind": "block",
+      "hash": "589dbdc5f7e18863"
+    },
+    {
+      "kind": "block",
+      "hash": "ae4bd33548e96016"
+    },
+    {
+      "kind": "block",
+      "hash": "fa8411cca3bd5d08"
+    },
+    {
+      "kind": "block",
+      "hash": "858ad10a84918040"
+    },
+    {
+      "kind": "block",
+      "hash": "4bd9b21dffef513b"
+    },
+    {
+      "kind": "block",
+      "hash": "41ddf911c1afe108"
+    },
+    {
+      "kind": "block",
+      "hash": "99292c23e1e50bdb"
+    },
+    {
+      "kind": "block",
+      "hash": "1b719fba16a5a59d"
+    },
+    {
+      "kind": "block",
+      "hash": "2895e7d7d3deafe2"
+    },
+    {
+      "kind": "block",
+      "hash": "6dc1a2d0834f5e3b"
+    },
+    {
+      "kind": "block",
+      "hash": "4b93b2b2ddd5dbfd"
+    },
+    {
+      "kind": "block",
+      "hash": "39aea92c37722bfe"
+    },
+    {
+      "kind": "fence",
+      "hash": "3e6c8d0bae6de4a6"
+    },
+    {
+      "kind": "block",
+      "hash": "9c660a723171ecdb"
+    },
+    {
+      "kind": "block",
+      "hash": "21ef93caba8c73e0"
+    },
+    {
+      "kind": "block",
+      "hash": "9bb01841d0151ad9"
+    },
+    {
+      "kind": "block",
+      "hash": "c9f86fc99076aed3"
+    },
+    {
+      "kind": "block",
+      "hash": "7a2c7d0032c1e1d2"
+    },
+    {
+      "kind": "block",
+      "hash": "5046a71a009179b7"
+    },
+    {
+      "kind": "block",
+      "hash": "bbea088923e8f64e"
+    },
+    {
+      "kind": "block",
+      "hash": "1119983a13e2adfa"
+    },
+    {
+      "kind": "block",
+      "hash": "faea9663fe3f1dc0"
+    },
+    {
+      "kind": "block",
+      "hash": "96081fa983554f05"
+    },
+    {
+      "kind": "block",
+      "hash": "27e87613168125d1"
+    },
+    {
+      "kind": "fence",
+      "hash": "eb5a50fc58daf736"
+    },
+    {
+      "kind": "block",
+      "hash": "c4e233fb2070f5e9"
+    },
+    {
+      "kind": "fence",
+      "hash": "307f4c3226bb8c8a"
+    },
+    {
+      "kind": "block",
+      "hash": "964b8cf8d88f7985"
+    },
+    {
+      "kind": "block",
+      "hash": "3c818a8eb8e39f77"
+    },
+    {
+      "kind": "fence",
+      "hash": "2ce12768772feff4"
+    },
+    {
+      "kind": "block",
+      "hash": "2ed68212f0fc1562"
+    },
+    {
+      "kind": "block",
+      "hash": "16cb0854ecae17c3"
+    },
+    {
+      "kind": "block",
+      "hash": "28d8bbe1e0b70584"
+    },
+    {
+      "kind": "fence",
+      "hash": "f791e42f68d990e1"
+    },
+    {
+      "kind": "block",
+      "hash": "c69747185f7a2142"
+    },
+    {
+      "kind": "block",
+      "hash": "5c5f5eb73112a4a4"
+    },
+    {
+      "kind": "block",
+      "hash": "96471111e6b8e2e0"
+    },
+    {
+      "kind": "block",
+      "hash": "2f7ce23b61b4f232"
+    },
+    {
+      "kind": "block",
+      "hash": "50c9d901f2d8d227"
+    },
+    {
+      "kind": "block",
+      "hash": "ddb884eeee51477b"
+    },
+    {
+      "kind": "block",
+      "hash": "d378c8e8b35f1f20"
+    },
+    {
+      "kind": "block",
+      "hash": "550c294df1720607"
+    },
+    {
+      "kind": "block",
+      "hash": "e06336a7e6c71f6d"
+    },
+    {
+      "kind": "block",
+      "hash": "2562a0248919705e"
+    },
+    {
+      "kind": "block",
+      "hash": "9f6d40696ccf5670"
+    },
+    {
+      "kind": "block",
+      "hash": "d1215604ca06369f"
+    },
+    {
+      "kind": "block",
+      "hash": "a3eb6ab07d5f08b9"
+    },
+    {
+      "kind": "block",
+      "hash": "11eba38439a95d5e"
+    },
+    {
+      "kind": "block",
+      "hash": "1cb9459083828412"
+    },
+    {
+      "kind": "block",
+      "hash": "c2c456ac3ede5b2d"
+    },
+    {
+      "kind": "block",
+      "hash": "97d9872613346e44"
+    },
+    {
+      "kind": "block",
+      "hash": "4b20e8dc6a5de3c6"
+    },
+    {
+      "kind": "block",
+      "hash": "dc850fe64347ad83"
+    },
+    {
+      "kind": "block",
+      "hash": "358c050bce510c13"
+    },
+    {
+      "kind": "block",
+      "hash": "cc761601545dc286"
+    },
+    {
+      "kind": "block",
+      "hash": "bf8801c1490e7ecf"
+    },
+    {
+      "kind": "block",
+      "hash": "51f5d62840691e4d"
+    },
+    {
+      "kind": "block",
+      "hash": "f783038c7258d592"
+    },
+    {
+      "kind": "block",
+      "hash": "ce897a23996dc50a"
+    },
+    {
+      "kind": "block",
+      "hash": "aac32651b10f567c"
+    }
+  ]
+}

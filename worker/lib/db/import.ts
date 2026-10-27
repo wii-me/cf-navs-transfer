@@ -5,6 +5,7 @@ import { ensureSchema } from './schema'
 import { REPLACE_ICON_DATASET_SQL } from './iconSchema'
 import { settingsPatchStatement } from './settings'
 import { chunkImportRows, remapImportRecords } from './importHelpers'
+import { commitMutation, type MutationReceipt } from './mutation'
 
 // D1 单条预处理语句最多绑定 100 个参数；分类导入每行绑定 7 个参数，
 // 因此最多 14 行（98 参数），为新增列保留上限内余量。
@@ -13,13 +14,12 @@ export const CATEGORY_IMPORT_CHUNK_SIZE = 14
 export async function importData(
   db: D1Database,
   data: { categories: Category[]; bookmarks: Bookmark[]; settings?: Partial<Settings> },
+  receipt?: MutationReceipt,
 ): Promise<{ categories: number; bookmarks: number; importedCategories: Category[]; importedBookmarks: Bookmark[] }> {
   await ensureSchema(db)
   const now = Date.now()
-  const stmts: D1PreparedStatement[] = [
-    db.prepare(REPLACE_ICON_DATASET_SQL),
-    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('data_version', json_quote(lower(hex(randomblob(16)))))"),
-  ]
+  // data_version 由 commitMutation 作为同一 batch 的最后一条语句写入，并回填收据。
+  const stmts: D1PreparedStatement[] = [db.prepare(REPLACE_ICON_DATASET_SQL)]
   const remapped = remapImportRecords(data.categories, data.bookmarks, now)
   const importedCategories = remapped.categories
   const importedBookmarks = remapped.bookmarks
@@ -44,7 +44,7 @@ export async function importData(
     if (settingsStmt) stmts.push(settingsStmt)
   }
 
-  await db.batch(stmts)
+  await commitMutation(db, stmts, receipt)
   importedCategories.sort((a, b) => Number(a.parent_id != null) - Number(b.parent_id != null) || (a.parent_id ?? 0) - (b.parent_id ?? 0) || a.sort - b.sort || a.id - b.id)
   importedBookmarks.sort((a, b) => a.sort - b.sort || a.id - b.id)
   return {

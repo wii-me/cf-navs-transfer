@@ -1,9 +1,15 @@
+<svelte:options runes />
+
 <script lang="ts">
   type AsyncVoid<T = void> = T | Promise<T>
 
-  export let title = ''
-  export let url = ''
-  export let onClose: (() => AsyncVoid) | undefined = undefined
+  interface Props {
+    title?: string
+    url?: string
+    onClose?: () => AsyncVoid
+  }
+
+  let { title = '', url = '', onClose }: Props = $props()
 
   function mountToBody(node: HTMLElement) {
     document.body.appendChild(node)
@@ -26,7 +32,7 @@
       <strong>{title}</strong>
       <div class="link-modal-actions">
         <a href={url} target="_blank" rel="noopener noreferrer">新窗口打开</a>
-        <button type="button" on:click={handleClose}>关闭</button>
+        <button type="button" onclick={handleClose}>关闭</button>
       </div>
     </div>
     <iframe src={url} title={title}></iframe>

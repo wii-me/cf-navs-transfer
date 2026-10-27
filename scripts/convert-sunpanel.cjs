@@ -8,7 +8,6 @@
  */
 
 const fs = require('fs');
-const path = require('path');
 
 // 获取命令行参数
 const args = process.argv.slice(2);
@@ -92,7 +91,7 @@ function convertSunPanelToCFNavs(sunPanelData) {
           try {
             const urlObj = new URL(item.url);
             icon = `https://favicon.im/${urlObj.hostname}?larger=true`;
-          } catch (e) {
+          } catch {
             icon = '';
           }
         }

@@ -16,7 +16,7 @@ export function installPublicDataFocusRefresh(
   let stopped = false
 
   const refreshAfterDebounce = (): void => {
-    clearTimeout(timer)
+    clearTimeout(timer ?? undefined)
     timer = setTimeout(() => {
       timer = null
       if (!stopped) void refresh()
@@ -34,7 +34,7 @@ export function installPublicDataFocusRefresh(
 
   return () => {
     stopped = true
-    clearTimeout(timer)
+    clearTimeout(timer ?? undefined)
     window.removeEventListener('focus', handleRefreshSignal)
     document.removeEventListener('visibilitychange', handleRefreshSignal)
   }

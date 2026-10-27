@@ -2,11 +2,11 @@
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest'
 import {cleanup,fireEvent,render} from '@testing-library/svelte'
 const state=vi.hoisted(()=>({active:true,url:'/api/category-icon/7?v=1',failed:vi.fn()}))
-vi.mock('../../src/lib/trustedIconView',()=>({emptyTrustedIcon:{active:false,url:'',pending:false},createTrustedIconView:(publish:any)=>({set:()=>publish({active:state.active,url:state.url,pending:false}),failed:state.failed,destroy:()=>{}})}))
+vi.mock('../../src/lib/localIconView',()=>({emptyLocalIcon:{active:false,url:'',pending:false},createLocalIconView:(publish:any)=>({set:()=>publish({active:state.active,url:state.url,pending:false}),failed:state.failed,destroy:()=>{}})}))
 import CategoryIcon from '../../src/components/CategoryIcon.svelte'
 let observers: Array<{callback:IntersectionObserverCallback,target?:Element}>
 const image=()=>document.querySelector('[data-category-icon] img') as HTMLImageElement|null
-function visible(img:HTMLImageElement){const observer=observers.find(o=>o.target===img);observer?.callback([{target:img,isIntersecting:true,intersectionRatio:1,boundingClientRect:{width:18,height:18}} as IntersectionObserverEntry],{} as IntersectionObserver)}
+function visible(img:HTMLImageElement){const observer=observers.find(o=>o.target===img);observer?.callback([{target:img,isIntersecting:true,intersectionRatio:1,boundingClientRect:{width:18,height:18}} as unknown as IntersectionObserverEntry],{} as IntersectionObserver)}
 beforeEach(()=>{vi.useFakeTimers();state.active=true;state.url='/api/category-icon/7?v=1';state.failed.mockReset();observers=[];vi.spyOn(document,'hidden','get').mockReturnValue(false);vi.spyOn(document,'visibilityState','get').mockReturnValue('visible');vi.spyOn(navigator,'onLine','get').mockReturnValue(true);vi.stubGlobal('IntersectionObserver',class{constructor(callback:IntersectionObserverCallback){observers.push({callback})}observe(target:Element){observers.at(-1)!.target=target}disconnect(){}})})
 afterEach(()=>{cleanup();vi.useRealTimers();vi.unstubAllGlobals();vi.restoreAllMocks()})
 describe('native category request recovery',()=>{
@@ -32,7 +32,7 @@ describe('native category request recovery',()=>{
   await fireEvent.load(recovered);await r.rerender({category:{id:7,title:'Changed title',icon_display:'image'}})
   expect(image()!.getAttribute('src')).toContain('retry=1')
  })
- it('leaves verified Blob failures to the trusted-copy owner',async()=>{
+ it('leaves verified Blob failures to the local-icon owner',async()=>{
   state.url='blob:https://example.test/verified';render(CategoryIcon,{category:{id:7,title:'Synthetic',icon_display:'image'}})
   await fireEvent.error(image()!);expect(state.failed).toHaveBeenCalledOnce()
   await vi.advanceTimersByTimeAsync(60000);expect(image()!.getAttribute('src')).toBe(state.url)

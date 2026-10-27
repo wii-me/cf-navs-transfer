@@ -8,7 +8,8 @@ import type { Env } from '../../worker/types'
 
 type AssetBinding = Pick<Env, 'ASSETS'>
 
-function request(pathname: string, assets: AssetBinding['ASSETS'], headers: HeadersInit = {}) {
+// 测试替身只实现 fetch；Fetcher 的 connect 在资源路由里用不到。
+function request(pathname: string, assets: Pick<AssetBinding['ASSETS'], 'fetch'>, headers: HeadersInit = {}) {
   return app.request(
     `https://example.com${pathname}`,
     { headers },

@@ -13,6 +13,7 @@ app.post('/error-report', async (c) => {
     return c.json(fail(ErrCode.BAD_REQUEST, 'error report payload too large'), 413)
   }
 
+  // 有意降级：读不出正文（客户端中断等）按空正文处理，随后的 JSON 校验返回 400，不进 onError。
   const rawBody = await c.req.text().catch(() => '')
   if (exceedsErrorReportBodyLimit(declaredLength, rawBody)) {
     return c.json(fail(ErrCode.BAD_REQUEST, 'error report payload too large'), 413)

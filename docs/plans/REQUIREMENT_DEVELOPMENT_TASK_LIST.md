@@ -56,7 +56,7 @@
 
 ### 2.2 设置页 UI/UX、顶部导航分行、部分导出
 
-`docs/plans/SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md:3`、`PARTIAL_EXPORT_AND_TOP_NAV_WRAP_REQUIREMENTS.md` 文首、`DEV_TASK_BREAKDOWN_UI_NAV_EXPORT.md:333-344` 台账均为「已完成，集成验收通过」，源码核对一致：
+`docs/plans/_archive/SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md:3`、`PARTIAL_EXPORT_AND_TOP_NAV_WRAP_REQUIREMENTS.md` 文首、`DEV_TASK_BREAKDOWN_UI_NAV_EXPORT.md:333-344` 台账均为「已完成，集成验收通过」，源码核对一致：
 
 - 4 个基础组件已建：`src/components/ui/Switch.svelte`、`Tooltip.svelte`、`InputGroup.svelte`、`Slider.svelte`，助手 `src/lib/sliderFormat.ts`、`src/lib/tooltipStore.ts`。
 - 顶部导航分行：`src/components/Sidebar.svelte:63-65`（`isWrap` 桌面门控）、`:333-334`（wrap 时禁拖拽）、`:424-496`（箭头/子菜单）、`:682-718`（wrap CSS）、`:1212-1242`（移动端强制单行 48px）；`src/views/Home.svelte:137-150,405-438`（实测高度驱动留白）。
@@ -86,11 +86,11 @@
 
 #### REQ-01（P1）离屏搜索按钮 + 居中 Spotlight 命令面板
 
-> 以下“现状事实”和子项描述的是早期核对基线。后续 Spotlight 已交付，见 `CHANGELOG.md` v0.6.0；最终设计取舍见 [开发记录](SPOTLIGHT_SEARCH_DEVELOPMENT.md) 的 D-a～D-g。不得按本节旧结论重新实现或恢复已被替代的前置。
+> 以下“现状事实”和子项描述的是早期核对基线。后续 Spotlight 已交付，见 `CHANGELOG.md` v0.6.0；最终设计取舍见 [开发记录](_archive/SPOTLIGHT_SEARCH_DEVELOPMENT.md) 的 D-a～D-g。不得按本节旧结论重新实现或恢复已被替代的前置。
 
 | 项 | 内容 |
 | --- | --- |
-| 来源映射 | `FR-1.1`~`FR-1.6`；`docs/plans/FRONTEND_EXPERIENCE_OPTIMIZATION_REQUIREMENTS.md` §2.2（约 `:118-214`）；**需求文档：`docs/plans/SPOTLIGHT_SEARCH_REQUIREMENTS.md`（2026-09-19，含验收清单与风险）**；**开发文档：`docs/plans/SPOTLIGHT_SEARCH_DEVELOPMENT.md`（2026-09-19，实现契约/改动清单/阶段门/测试计划）** |
+| 来源映射 | `FR-1.1`~`FR-1.6`；`docs/plans/FRONTEND_EXPERIENCE_OPTIMIZATION_REQUIREMENTS.md` §2.2（约 `:118-214`）；**需求文档：`docs/plans/_archive/SPOTLIGHT_SEARCH_REQUIREMENTS.md`（2026-09-19，含验收清单与风险）**；**开发文档：`docs/plans/_archive/SPOTLIGHT_SEARCH_DEVELOPMENT.md`（2026-09-19，实现契约/改动清单/阶段门/测试计划）** |
 | 现状事实 | **全部未实现**。`SearchBox.svelte` 是外部搜索引擎启动器而非书签过滤器（`src/components/SearchBox.svelte:61-71` 走 `window.open`）；本地过滤在 `Home.svelte`，经 `bind:query` 上传（`HomeHeroSearch.svelte:29` → `Home.svelte:429`）；唯一 `IntersectionObserver` 是图标懒加载单例（`src/lib/iconVisibility.ts:4-27`），可作写法先例 |
 | 子项 | `FR-1.1` 主搜索框离屏检测 action（目标 `src/lib/searchBoxVisibility.ts`，当前无该文件）<br>`FR-1.2` 离屏时右上角出现搜索按钮（接入 `src/components/HomeFloatingActions.svelte:67-124`，当前该行仅主题/后台/分类/登录登出）<br>`FR-1.3` 懒加载居中 Spotlight dialog（复用 `src/App.svelte:130-151` + `src/lib/appLazyComponent.ts:11-33` 的既有懒加载约定）<br>`FR-1.4` 唤起/关闭、快捷键、焦点陷阱、滚动锁与 Esc 层级（滚动锁当前内联在 `BookmarkEditModal.svelte:257-274,327-330`，需先抽出可共享实现）<br>`FR-1.5` 复用既有搜索索引，结果上限 50 条 + 键盘导航（索引在 `src/lib/homeData.ts:35-66,288-301`）<br>`FR-1.6` Spotlight 与页面过滤态相互独立（当前清空逻辑耦合于 `Home.svelte:251-258,329`） |
 | 早期前置（已被替代） | 原拟先抽共享 120ms 防抖常量；后续 D-a 裁定 Spotlight 即时过滤、不防抖，首页 120ms 保留本地，不再执行该抽取。保留此行仅用于追溯方案变化 |
@@ -242,7 +242,7 @@
 
 | 项 | 内容 |
 | --- | --- |
-| 来源映射 | [Issue #24](https://github.com/lbjxr/CF-Navs/issues/24)；需求 `docs/plans/ADMIN_RECOVERY_REQUIREMENTS.md`；开发契约 `docs/plans/ADMIN_RECOVERY_DEVELOPMENT.md`；高保真 `docs/plans/ADMIN_RECOVERY_MOCKUP_HIFI.html` |
+| 来源映射 | [Issue #24](https://github.com/lbjxr/CF-Navs/issues/24)；需求 `docs/plans/_archive/ADMIN_RECOVERY_REQUIREMENTS.md`；开发契约 `docs/plans/_archive/ADMIN_RECOVERY_DEVELOPMENT.md`；高保真 `docs/plans/_archive/ADMIN_RECOVERY_MOCKUP_HIFI.html` |
 | 维护者裁定 | 只重置密码不改用户名（D-2）；密码策略专用 8–12 位且 ≥2 类字符，不复用 install 的 12–256（D-4）；令牌复用 `SETUP_TOKEN`（D-5） |
 | 端点 | `POST /api/recover`（`worker/routes/recover.ts`），挂在 admin 守卫外的公开组（`worker/index.ts`）。同源 + `X-Setup-Token`（常量时间比较）+ `install_rate_limits` 表 `recover:<ip>` 独立限流；仅已安装实例可用，未安装返回 `code=1002 not installed`。成功只写 `settings.admin_password`（保留 `admin_bootstrap_password` 快照，避免下次登录被 `ensureAdminBootstrap` 回滚）、轮换 JWT secret、清限流、返回 `LoginResp` |
 | 抽取 | `worker/lib/setupToken.ts`（`authorizeSetup` + `isSameOriginRequest`）与 `worker/lib/installRateLimit.ts`（限流四函数 + 常量，`client_key` 参数化）从 `install.ts` 原样抽出，install 改引用；admin key 常量从 `worker/lib/bootstrap.ts` 导出复用 |

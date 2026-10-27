@@ -2,7 +2,7 @@ import { logoSurfIcon } from '../../src/lib/icons'
 import { decodeIconDataUri } from '../../shared/iconDataUri'
 import { describe, expect, it } from 'vitest'
 import { decodeVersionedIcon, iconContentRevision } from '../../worker/lib/iconRevision'
-import { isIconRevision, ICON_COPY_MAX_BYTES } from '../../shared/iconLocalCopy'
+import { isIconRevision, ICON_MAX_BYTES } from '../../shared/iconDescriptor'
 import { iconFixture } from '../helpers/iconFixture'
 
 describe('image content identity', () => {
@@ -25,7 +25,7 @@ describe('image content identity', () => {
     'data:image/svg+xml;charset=utf-8,%GG',
     'data:image/svg+xml;charset=utf-8;base64,%%%',
     'data:text/html;charset=utf-8,<svg/>',
-    'data:image/svg+xml;charset=utf-8,' + '<svg>' + ' '.repeat(ICON_COPY_MAX_BYTES) + '</svg>',
+    'data:image/svg+xml;charset=utf-8,' + '<svg>' + ' '.repeat(ICON_MAX_BYTES) + '</svg>',
   ])('rejects unsupported parameters or unsafe bodies %# in the shared parser', value => {
     expect(decodeIconDataUri(value)).toBeNull()
     expect(decodeVersionedIcon(value)).toBeNull()
@@ -44,7 +44,7 @@ describe('image content identity', () => {
     'data:image/png;base64,' + btoa('<html>not an image</html>'),
     'data:image/png;base64,' + btoa('arbitrary bytes'),
     'https://example.com/icon.png', 'data:text/html;base64,' + btoa('<svg/>'),
-    'data:image/svg+xml;base64,' + btoa('<svg>' + ' '.repeat(ICON_COPY_MAX_BYTES) + '</svg>'),
+    'data:image/svg+xml;base64,' + btoa('<svg>' + ' '.repeat(ICON_MAX_BYTES) + '</svg>'),
   ])('does not certify invalid or oversized input %#', (value) => {
     expect(decodeVersionedIcon(value)).toBeNull()
   })

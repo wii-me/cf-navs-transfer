@@ -1,6 +1,6 @@
 # Cloudflare 部署检查清单
 
-在部署到 Cloudflare Workers 之前，请按照此清单逐项检查。你可以选择 Wrangler CLI 部署，也可以在 Cloudflare 控制台导入 GitHub fork 在线部署。
+在部署到 Cloudflare Workers 之前，请按照此清单逐项检查。你可以选择 Wrangler CLI 部署、在 Cloudflare 控制台导入 GitHub fork 在线部署，或在 Workers Builds 不可用时使用 GitHub Actions 备选部署。
 
 ## 部署方式
 
@@ -32,7 +32,36 @@
 
 > `package.json` 的 Cloudflare Git 元数据声明 D1/KV/R2 资源，不声明 `SETUP_TOKEN` 或旧版恢复 Secret，因此 GitHub 导入不会自动生成或填充 Secret 参数。正常在线安装不需要 Cloudflare API Token、GitHub Actions 或手动 SQL。
 
+> 在线部署命令不要使用 `npm run deploy`：该命令读取本地生成的 `wrangler.local.toml`，适用于 Wrangler CLI 部署。Git 自动部署请使用 Build command `npm run build` 和 Deploy command `npx wrangler deploy`，然后通过 `/install` 完成初始化。
+
 首次资源创建请从生产分支 `main` 触发。资源创建完成前，建议关闭预览分支自动部署；预览分支可能使用 `wrangler versions upload`，不适合作为首次资源初始化流程。
+
+### 方式三：GitHub Actions（备选）
+
+仅当你的 Cloudflare 账号无法使用 **Workers Builds / Git 导入** 时使用。默认部署方式仍是 Cloudflare 账号关联的 Git 构建；不设置下面的仓库变量时，该 workflow 会被跳过，也不会请求任何 Cloudflare 凭据。
+
+此方式由仓库内的 [`.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml) 在推送后执行 `npm ci`、`npm run build`、`npm run setup:wrangler` 和 `wrangler deploy`，效果等价于在 CI 中运行 Wrangler CLI。它不替代 CI 的 lint、类型检查和单元测试，推送前仍需通过 L0。
+
+1. 在 GitHub 上 Fork 本仓库，并保留一个用于部署的分支（默认 `develop`；若你的 fork 以 `main` 为生产分支，见第 4 步）。
+2. 在目标 Cloudflare 账号创建资源（从已有 Workers Builds 部署迁移时可跳过，资源会被复用）：
+
+   ```bash
+   npx wrangler d1 create cf-navs-db
+   npx wrangler kv namespace create SESSION
+   ```
+
+3. 创建一个 Cloudflare API Token，至少具备 **Workers Scripts:Edit**、**D1:Edit**、**Workers KV Storage:Edit**，并记录 Account ID。不要使用 Global API Key。
+4. 在 fork 的 **Settings → Secrets and variables → Actions** 中配置：
+   - Secrets：`CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`
+   - Variables：`CF_NAVS_DEPLOY_PROVIDER` = `github-actions`
+   - 可选 Variable：`CF_NAVS_DEPLOY_BRANCH` = `develop`（默认）或 `main`
+5. 在 Cloudflare 后台断开该 Worker 的 Workers Builds / Git 集成。两种方式同时开启会对同一次推送重复部署。
+6. 推送到 `CF_NAVS_DEPLOY_BRANCH`，或在 **Actions → Deploy Worker (GitHub Actions fallback) → Run workflow** 手动触发。
+7. 首轮部署完成后，按「方式二」第 5–7 步设置生产环境 `SETUP_TOKEN`，再访问 `/install` 完成初始化。Secret 更新后需要重新触发一次部署。
+
+同步上游更新时，先把上游提交合入部署分支再推送；如果同步方式没有触发 workflow（例如使用 GitHub 网页的 **Sync fork**），到 Actions 页手动执行一次。
+
+> workflow 通过 `setup:wrangler` 按名称查找 `cf-navs-db` D1 与标题包含 `SESSION` 的 KV 命名空间；资源名不一致时会在部署前失败。真实资源 ID 只写入 runner 的临时 `wrangler.local.toml`，不进入仓库。Worker 名称由 `wrangler.toml` 的 `name` 决定（当前为 `cf-navs`）；如果你在 Cloudflare 后台改过 Worker 名称，请同步修改 fork 中的 `name`，否则会部署到另一个 Worker。
 
 ## 📋 Wrangler CLI 部署前准备
 

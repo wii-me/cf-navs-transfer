@@ -31,12 +31,15 @@ import {
   transientIconErrorResponse,
 } from '../lib/iconResponses'
 import { createIconAccessGrant, verifyIconAccessGrant } from '../lib/iconSignature'
-import { getJwtSecret } from '../lib/jwt'
+import { getJwtSecret, refreshJwtSecretAfterVerifyFailure } from '../lib/jwt'
 import { decodeVersionedIcon } from '../lib/iconRevision'
 import { fail, ok } from '../lib/response'
 import type { HonoEnv } from '../types'
 
+// 公开：图标代理（Iconify 预览、书签/分类对象图标，匿名可见性闸门在各自处理器内）。
 export const iconRoutes = new Hono<HonoEnv>()
+// 受保护：签发私密图标授权、Iconify 搜索。由 worker/index.ts 挂进受保护子应用。
+export const iconProtectedRoutes = new Hono<HonoEnv>()
 function normalizeCategoryIconUrl(value: string): string | null {
   const icon = value.trim()
   if (!icon) return null
@@ -49,8 +52,8 @@ function normalizeCategoryIconUrl(value: string): string | null {
 
 // 后台预览私密对象图标用的短期授权。签名密钥复用 settings.jwt_secret，因此改密码
 // （rotateJwtSecret）会顺带作废全部已签发授权。该端点在 worker/index.ts 上挂
-// authRequired，只有登录态能取到。
-iconRoutes.get('/icon-access', async (c) => {
+// 受保护子应用的 authRequired，只有登录态能取到。
+iconProtectedRoutes.get('/icon-access', async (c) => {
   const grant = await createIconAccessGrant(await getJwtSecret(c.env.DB))
   const data: IconAccessResp = { key: grant.grant, expires_at: grant.expires_at }
   const response = c.json(ok(data))
@@ -58,7 +61,7 @@ iconRoutes.get('/icon-access', async (c) => {
   return response
 })
 
-iconRoutes.get('/iconify-search', async (c) => {
+iconProtectedRoutes.get('/iconify-search', async (c) => {
   const query = normalizeIconifySearchQuery(c.req.query('query') ?? '')
   if (!query) {
     return c.json(fail(ErrCode.BAD_REQUEST, 'invalid iconify query'), 400)
@@ -137,7 +140,13 @@ async function resolveIconAccess(
   // 非法或过期的 key 一律退回匿名路径。缓存键归一化会丢掉 `key`，所以伪造的 key 既不会
   // 让缓存条目碎片化，也拿不到与匿名不同的响应。
   if (!key) return ANONYMOUS_ACCESS(c.req.raw)
-  if (!(await verifyIconAccessGrant(await getJwtSecret(c.env.DB), key))) return ANONYMOUS_ACCESS(c.req.raw)
+  let granted = await verifyIconAccessGrant(await getJwtSecret(c.env.DB), key)
+  if (!granted) {
+    // 与会话校验相同：另一 isolate 轮换密钥后本地缓存可能过期，按需重读一次。
+    const refreshed = await refreshJwtSecretAfterVerifyFailure(c.env.DB)
+    if (refreshed) granted = await verifyIconAccessGrant(refreshed, key)
+  }
+  if (!granted) return ANONYMOUS_ACCESS(c.req.raw)
 
   return {
     authorized: true,

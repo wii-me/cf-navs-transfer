@@ -6,7 +6,7 @@ import { corsHeaders, corsPreflight } from './lib/cors'
 import { fail, ok } from './lib/response'
 import { authRequired } from './middleware/auth'
 import adminRoutes from './routes/admin'
-import authRoutes from './routes/auth'
+import { authProtectedRoutes, authPublicRoutes } from './routes/auth'
 import bookmarksRoutes from './routes/bookmarks'
 import browserSyncRoutes from './routes/browserSync'
 import categoriesRoutes from './routes/categories'
@@ -15,66 +15,68 @@ import errorReportRoutes from './routes/errorReport'
 import faviconRoutes from './routes/favicon'
 import installRoutes from './routes/install'
 import recoverRoutes from './routes/recover'
-import { iconRoutes } from './routes/icon'
-import { iconLocalCopyRoutes } from './routes/iconLocalCopy'
+import { iconProtectedRoutes, iconRoutes } from './routes/icon'
 import publicRoutes from './routes/public'
 import settingsRoutes from './routes/settings'
 import { transfersRoutes } from './routes/transfers'
 import type { HonoEnv } from './types'
 
-const app = new Hono<HonoEnv>()
+// ---------------------------------------------------------------------------
+// 路由鉴权按构造保证（代码审查第 4 项）。
+//
+// 之前每个受保护前缀都要在这里手写 `app.use(精确路径)` + `app.use(通配路径)`，漏写一行
+// 接口就静默变成公开的。现在拆成两个子应用，都挂在 /api 下：
+//
+//   1. publicApi：唯一的公开清单。这里注册的处理器直接返回响应、不调用 next()，因此
+//      不会走到后面的鉴权中间件。这里只允许再放「调用 next() 的透传中间件」（CORS、
+//      no-store 头），它们随后由受保护子应用鉴权。
+//   2. protectedApi：`use('*', authRequired)`，挂载后等价于 `/api/*` 的鉴权中间件，
+//      注册顺序在全部公开处理器之后。Hono 按注册顺序组合同一请求命中的处理器，所以：
+//      公开路由先命中先返回；其它一切 /api 请求（包括新加的路由、方法不匹配、未知路径）
+//      都先过 authRequired。
+//
+// 新增接口默认受保护；要公开必须显式加进 publicApi（tests/unit/routeAuth.test.ts 的公开
+// 路由快照会因此变红，强制评审）。漏注册的方向是 fail-closed（401），不再是静默公开。
+// ---------------------------------------------------------------------------
 
-app.get('/api/health', (c) => c.json(ok({ status: 'ok' })))
+export const publicApi = new Hono<HonoEnv>()
+
+publicApi.get('/health', (c) => c.json(ok({ status: 'ok' })))
 
 // Chromium 扩展从 chrome-extension:// 来源调用登录和同步接口，需要预检响应。
-app.options('/api/login', () => corsPreflight())
-app.use('/api/login', corsHeaders)
-app.route('/api', authRoutes)
-app.route('/api', installRoutes)
-app.route('/api', recoverRoutes)
-app.route('/api', publicRoutes)
-app.route('/api', errorReportRoutes) // 公开错误上报，无需认证
+publicApi.options('/login', () => corsPreflight())
+publicApi.use('/login', corsHeaders)
+publicApi.route('/', authPublicRoutes)
+publicApi.route('/', installRoutes)
+publicApi.route('/', recoverRoutes)
+publicApi.route('/', publicRoutes)
+publicApi.route('/', errorReportRoutes) // 公开错误上报，无需认证
+// /api/icon/:id、/api/category-icon/:id 与 /api/iconify/* 公开，用于前台加载图标；
+// 私密对象的真实图标要靠受保护的 /api/icon-access 签出的短期 key。
+publicApi.route('/', iconRoutes)
 
-app.use('/api/admin', authRequired)
-app.use('/api/admin/*', authRequired)
-app.route('/api/admin', adminRoutes)
+// 透传中间件：先于受保护子应用执行，使 401 响应同样带上这些头。
+publicApi.options('/browser-sync/bookmarks', () => corsPreflight())
+publicApi.use('/browser-sync/*', corsHeaders)
 
-app.use('/api/categories', authRequired)
-app.use('/api/categories/*', authRequired)
-app.route('/api/categories', categoriesRoutes)
+export const protectedApi = new Hono<HonoEnv>()
 
-app.use('/api/bookmarks', authRequired)
-app.use('/api/bookmarks/*', authRequired)
-app.route('/api/bookmarks', bookmarksRoutes)
+protectedApi.use('*', authRequired)
+protectedApi.route('/', authProtectedRoutes) // /logout、/password、/me
+protectedApi.route('/admin', adminRoutes)
+protectedApi.route('/categories', categoriesRoutes)
+protectedApi.route('/bookmarks', bookmarksRoutes)
+protectedApi.route('/browser-sync', browserSyncRoutes)
+protectedApi.route('/', faviconRoutes) // /fetch-favicon、/fetch-site-meta
+protectedApi.route('/', iconProtectedRoutes) // /icon-access、/iconify-search
+protectedApi.route('/settings', settingsRoutes)
+protectedApi.route('/', dataRoutes) // /import
 
-app.options('/api/browser-sync/bookmarks', () => corsPreflight())
-// 扩展跨域调用：CORS 与鉴权都必须同时注册精确路径和通配路径。
-// Hono 的 use(path) 是精确匹配，只写 '/api/browser-sync' 时真实端点
-// '/api/browser-sync/bookmarks' 拿不到 CORS 头，浏览器会丢弃响应。
-app.use('/api/browser-sync', corsHeaders)
-app.use('/api/browser-sync/*', corsHeaders)
-app.use('/api/browser-sync', authRequired)
-app.use('/api/browser-sync/*', authRequired)
-app.route('/api/browser-sync', browserSyncRoutes)
+const app = new Hono<HonoEnv>()
 
-app.use('/api/fetch-favicon', authRequired)
-// 精确路径中间件，没有通配符：新增同文件路由时必须补一行，否则接口是公开的。
-app.use('/api/fetch-site-meta', authRequired)
-app.route('/api', faviconRoutes)
-
-// /api/icon/:id 与 /api/category-icon/:id 公开（不须认证），用于前台加载缓存图标；
-// 私密对象的真实图标要靠 /api/icon-access 签出的短期 key，该端点必须登录。
-app.use('/api/iconify-search', authRequired)
-app.use('/api/icon-access', authRequired)
-app.route('/api', iconRoutes)
-app.route('/api', iconLocalCopyRoutes)
-
-app.use('/api/settings', authRequired)
-app.use('/api/settings/*', authRequired)
-app.route('/api/settings', settingsRoutes)
-
-app.use('/api/import', authRequired)
-app.route('/api', dataRoutes)
+// 顺序即安全边界：公开子应用必须先于受保护子应用挂载。
+app.route('/api', publicApi)
+app.route('/api', protectedApi)
 
 app.use('/api/transfers', authRequired)
 app.use('/api/transfers/*', authRequired)

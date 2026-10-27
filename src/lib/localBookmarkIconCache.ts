@@ -194,6 +194,15 @@ async function fetchObjectIconPayload(url: string, externalSignal?: AbortSignal)
   }
 }
 
+/** 本地优先图标库的下载入口：与卡片的原生路径共享同一个有界调度器与在途合并。 */
+export async function fetchScheduledObjectIconPayload(url: string): Promise<IconPayload> {
+  try {
+    return await objectIconScheduler.reserve(url).promise
+  } catch {
+    return { blob: null, status: 'retryable' }
+  }
+}
+
 async function fetchObjectIcon(url: string, reuseCompleted = false): Promise<BookmarkIconFetchResult> {
   // Public completed blobs are still reused within the short in-memory window; otherwise the bounded
   // scheduler coalesces the full URL (one run, shared payload) and caps simultaneous network fetches.

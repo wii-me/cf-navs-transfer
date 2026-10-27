@@ -1,3 +1,5 @@
+<svelte:options runes />
+
 <script lang="ts">
   import {
     applyBackgroundPreset,
@@ -10,10 +12,15 @@
   import ColorAlphaInput from '../ColorAlphaInput.svelte'
   import GradientPresetSelector from './GradientPresetSelector.svelte'
 
-  export let form: SettingsFormModel
-  export let saving = false
+  interface Props {
+    /** SettingsPanel 以 `bind:form` 传入；写回字段或整体替换都经 bindable setter 通知父组件。 */
+    form: SettingsFormModel
+    saving?: boolean
+  }
 
-  $: activeGradientPresetId = getActiveGradientPresetId(form)
+  let { form = $bindable(), saving = false }: Props = $props()
+
+  const activeGradientPresetId = $derived(getActiveGradientPresetId(form))
 
   function selectCustomPreset(): void {
     form = markBackgroundPresetCustom(form)
@@ -24,12 +31,12 @@
   }
 </script>
 
-<fieldset id="settings-section-appearance" class="group group-wide group-background" disabled={saving} on:change={() => form = cloneSettingsForm(form)}>
+<fieldset id="settings-section-appearance" class="group group-wide group-background" disabled={saving} onchange={() => form = cloneSettingsForm(form)}>
   <legend>配色方案</legend>
   <GradientPresetSelector
     {activeGradientPresetId}
-    on:custom={selectCustomPreset}
-    on:select={(event) => selectPreset(event.detail)}
+    oncustom={selectCustomPreset}
+    onselect={selectPreset}
   />
   {#if activeGradientPresetId === 'custom'}
     <div class="custom-accent-fields settings-grid">

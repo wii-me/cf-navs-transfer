@@ -1,6 +1,6 @@
 import type { Env } from '../types'
 import { hashPassword, verifyPassword } from './crypto'
-import { getSettingValues, setSettingValue } from './db'
+import { getSettingValues, setSettingValues } from './db'
 
 export const ADMIN_USERNAME_KEY = 'admin_username'
 export const ADMIN_PASSWORD_KEY = 'admin_password'
@@ -64,18 +64,19 @@ export async function ensureAdminBootstrap(
     (resetRequested || initCredentialsChanged)
   ) {
     const nextPasswordHash = await hashPassword(initPassword)
-    const writes: Promise<unknown>[] = [
-      setSettingValue(env.DB, ADMIN_USERNAME_KEY, initUsername),
-      setSettingValue(env.DB, ADMIN_PASSWORD_KEY, nextPasswordHash),
-      setSettingValue(env.DB, BOOTSTRAP_USERNAME_KEY, initUsername),
-      setSettingValue(env.DB, BOOTSTRAP_PASSWORD_KEY, nextPasswordHash),
+    // 单条多行 upsert：账号、密码、引导快照与重置标记同时生效，不会只写进一半。
+    const writes: Array<[string, unknown]> = [
+      [ADMIN_USERNAME_KEY, initUsername],
+      [ADMIN_PASSWORD_KEY, nextPasswordHash],
+      [BOOTSTRAP_USERNAME_KEY, initUsername],
+      [BOOTSTRAP_PASSWORD_KEY, nextPasswordHash],
     ]
 
     if (resetMarker) {
-      writes.push(setSettingValue(env.DB, RESET_MARKER_KEY, resetMarker))
+      writes.push([RESET_MARKER_KEY, resetMarker])
     }
 
-    await Promise.all(writes)
+    await setSettingValues(env.DB, writes)
 
     return {
       username: initUsername,
@@ -89,9 +90,9 @@ export async function ensureAdminBootstrap(
     // their current credentials on the first request after the upgrade.
     if (!hasBootstrapMarker && hasInitCredentials) {
       const bootstrapPasswordHash = await hashPassword(initPassword)
-      await Promise.all([
-        setSettingValue(env.DB, BOOTSTRAP_USERNAME_KEY, initUsername),
-        setSettingValue(env.DB, BOOTSTRAP_PASSWORD_KEY, bootstrapPasswordHash),
+      await setSettingValues(env.DB, [
+        [BOOTSTRAP_USERNAME_KEY, initUsername],
+        [BOOTSTRAP_PASSWORD_KEY, bootstrapPasswordHash],
       ])
     }
 
@@ -107,22 +108,22 @@ export async function ensureAdminBootstrap(
 
   const initPasswordHash = await hashPassword(initPassword)
   const nextPasswordHash = typeof adminPassword === 'string' ? adminPassword : initPasswordHash
-  const writes: Promise<unknown>[] = []
+  const writes: Array<[string, unknown]> = []
 
   if (!adminUsername) {
-    writes.push(setSettingValue(env.DB, ADMIN_USERNAME_KEY, initUsername))
+    writes.push([ADMIN_USERNAME_KEY, initUsername])
   }
 
   if (!adminPassword) {
-    writes.push(setSettingValue(env.DB, ADMIN_PASSWORD_KEY, initPasswordHash))
+    writes.push([ADMIN_PASSWORD_KEY, initPasswordHash])
   }
 
   if (!bootstrapUsername || !bootstrapPassword) {
-    writes.push(setSettingValue(env.DB, BOOTSTRAP_USERNAME_KEY, initUsername))
-    writes.push(setSettingValue(env.DB, BOOTSTRAP_PASSWORD_KEY, initPasswordHash))
+    writes.push([BOOTSTRAP_USERNAME_KEY, initUsername])
+    writes.push([BOOTSTRAP_PASSWORD_KEY, initPasswordHash])
   }
 
-  await Promise.all(writes)
+  await setSettingValues(env.DB, writes)
 
   return {
     username: typeof adminUsername === 'string' ? adminUsername : initUsername,

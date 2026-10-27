@@ -6,10 +6,12 @@ import type { Env } from '../../worker/types'
 function createFakeDb(initial: Record<string, unknown> = {}): {
   db: D1Database
   values: Map<string, string>
+  readonly writeStatements: number
 } {
   const values = new Map<string, string>(
     Object.entries(initial).map(([key, value]) => [key, JSON.stringify(value)]),
   )
+  let writeStatements = 0
 
   const db = {
     prepare(sql: string) {
@@ -29,7 +31,9 @@ function createFakeDb(initial: Record<string, unknown> = {}): {
         },
         async run() {
           if (sql.includes('INSERT INTO settings')) {
-            values.set(String(bound[0]), String(bound[1]))
+            // setSettingValues writes several (key, value) pairs in one statement.
+            for (let index = 0; index < bound.length; index += 2) values.set(String(bound[index]), String(bound[index + 1]))
+            writeStatements += 1
           }
           return { success: true }
         },
@@ -38,7 +42,7 @@ function createFakeDb(initial: Record<string, unknown> = {}): {
     },
   } as unknown as D1Database
 
-  return { db, values }
+  return { db, values, get writeStatements() { return writeStatements } }
 }
 
 function createEnv(
@@ -174,5 +178,19 @@ describe('admin bootstrap', () => {
 
     expect(result.resetApplied).toBeUndefined()
     await expect(verifyPassword('current-password', result.passwordHash)).resolves.toBe(true)
+  })
+
+  it('writes all bootstrap keys in one atomic statement', async () => {
+    const fake = createFakeDb()
+    await ensureAdminBootstrap(createEnv(fake.db, 'admin', 'first-password'))
+    expect(fake.writeStatements).toBe(1)
+    expect([...fake.values.keys()].sort()).toEqual([
+      'admin_bootstrap_password', 'admin_bootstrap_username', 'admin_password', 'admin_username',
+    ])
+
+    const reset = createFakeDb({ admin_username: 'admin', admin_password: await hashPassword('old-password') })
+    await ensureAdminBootstrap(createEnv(reset.db, 'admin', 'new-password', 'reset-1'))
+    expect(reset.writeStatements).toBe(1)
+    expect(JSON.parse(reset.values.get('admin_reset_marker') ?? 'null')).toBe('reset-1')
   })
 })

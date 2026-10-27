@@ -1,3 +1,5 @@
+<svelte:options runes />
+
 <script lang="ts">
   import { tick } from 'svelte'
   import {
@@ -10,8 +12,13 @@
   import Tooltip from '../ui/Tooltip.svelte'
   import Slider from '../ui/Slider.svelte'
 
-  export let form: SettingsFormModel
-  export let saving = false
+  interface Props {
+    /** SettingsPanel 以 `bind:form` 传入；写回字段或整体替换都经 bindable setter 通知父组件。 */
+    form: SettingsFormModel
+    saving?: boolean
+  }
+
+  let { form = $bindable(), saving = false }: Props = $props()
 
   async function syncForm(): Promise<void> {
     await tick()
@@ -32,7 +39,7 @@
         placeholder="请输入站点标题"
         maxlength="80"
         required
-        on:input={() => void syncForm()}
+        oninput={() => void syncForm()}
       />
     </label>
 
@@ -40,7 +47,7 @@
       <span>首页标题颜色</span>
       <ColorAlphaInput
         bind:value={form.site_title_color}
-        on:change={() => void syncForm()}
+        onchange={() => void syncForm()}
         placeholder="留空跟随主题文字色"
         inputLabel="首页标题颜色值"
         swatchTitle="选择首页标题颜色"
@@ -56,7 +63,7 @@
         max={72}
         step={1}
         bind:value={form.site_title_font_size}
-        on:input={() => void syncForm()}
+        oninput={() => void syncForm()}
       />
     </div>
 
@@ -65,7 +72,7 @@
       <Switch
         checked={form.public_mode}
         ariaLabel="公开模式"
-        on:change={(event) => { form.public_mode = event.detail; void syncForm() }}
+        onchange={(checked) => { form.public_mode = checked; void syncForm() }}
       />
     </div>
 
@@ -74,7 +81,7 @@
       <Switch
         checked={form.browser_sync_enabled}
         ariaLabel="浏览器书签同步"
-        on:change={(event) => { form.browser_sync_enabled = event.detail; void syncForm() }}
+        onchange={(checked) => { form.browser_sync_enabled = checked; void syncForm() }}
       />
     </div>
 
@@ -87,7 +94,7 @@
               type="radio"
               bind:group={form.theme}
               value={option.value}
-              on:change={() => void syncForm()}
+              onchange={() => void syncForm()}
             />
             <span>{option.label}</span>
           </label>
@@ -105,7 +112,7 @@
         bind:value={form.image_host_url}
         type="url"
         placeholder="https://your-domain.com"
-        on:input={() => void syncForm()}
+        oninput={() => void syncForm()}
       />
     </label>
   </div>

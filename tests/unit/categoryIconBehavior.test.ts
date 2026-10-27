@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/svelte'
 import CategoryIcon from '../../src/components/CategoryIcon.svelte'
+vi.mock('../../src/lib/localIconView', () => import('../helpers/inactiveLocalIconView'))
 
 // 图标加载失败后的可观察契约：瞬时失败在退避后继续重试，图标或授权 key 变化时复位。
 

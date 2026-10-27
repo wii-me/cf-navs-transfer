@@ -58,17 +58,13 @@ import { createServer } from 'node:net'
 import { randomBytes, createHash } from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { buildTier, computeColdHomeMount, publicCategoryIdSet } from './lib/scaleFixturePlan.mjs'
 import { CdpSession, sleep } from './lib/cdpSession.mjs'
 import { pageInstallIconPerformanceProbe } from './lib/iconPerformanceProbe.mjs'
+import { resolveWranglerConfig, rootDir, runWranglerSync, wranglerBin } from './lib/wranglerLocal.mjs'
+import { loginInPage } from './lib/browserLogin.mjs'
 
-const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const wranglerBin = path.join(rootDir, 'node_modules', 'wrangler', 'bin', 'wrangler.js')
-const localConfig = path.join(rootDir, 'wrangler.local.toml')
-const publicConfig = path.join(rootDir, 'wrangler.toml')
-const configPath =
-  process.env.ICONCONC_WRANGLER_CONFIG || (existsSync(localConfig) ? localConfig : publicConfig)
+const configPath = resolveWranglerConfig(process.env.ICONCONC_WRANGLER_CONFIG)
 const persistParent = path.join(rootDir, '.wrangler')
 const persistTo = path.resolve(process.env.ICONCONC_PERSIST_TO || path.join(persistParent, 'state-iconconc-' + randomBytes(6).toString('hex')))
 const readyTimeoutMs = Number.parseInt(process.env.ICONCONC_READY_TIMEOUT || '120', 10) * 1000
@@ -398,17 +394,8 @@ window.__CF_NAVS_ICON_CONCURRENCY = ${JSON.stringify(concurrency)};
 // ---------------------------------------------------------------------------
 
 async function login(cdp) {
-  return cdp.call(async function doLogin(baseOrigin, username, password) {
-    const response = await fetch(`${baseOrigin}/api/login`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-    })
-    const body = await response.json()
-    if (!response.ok || body.code !== 0) return { ok: false, status: response.status }
-    localStorage.setItem('cf-navs.auth', JSON.stringify(body.data))
-    return { ok: true, username: body.data.username }
-  }, ORIGIN, ADMIN_USER, ADMIN_PASS)
+  const result = await cdp.call(loginInPage, ORIGIN, ADMIN_USER, ADMIN_PASS)
+  return result?.ok ? { ok: true, username: result.username } : { ok: false, status: result?.status }
 }
 
 async function readInjectedConcurrency(cdp) {
@@ -424,7 +411,7 @@ async function coldReset(cdp) {
       if (typeof caches !== 'undefined') {
         for (const name of await caches.keys()) await caches.delete(name)
       }
-    } catch (e) { /* opaque origin or unavailable */ }
+    } catch { /* opaque origin or unavailable */ }
     return true
   })
 }
@@ -792,11 +779,7 @@ function findFreePort() {
 }
 
 function runWrangler(args, label) {
-  const result = spawnSync(process.execPath, [wranglerBin, ...args, '--config', configPath], {
-    cwd: rootDir,
-    stdio: ['ignore', 'ignore', 'inherit'],
-  })
-  if (result.status !== 0) throw new Error(`${label} failed with exit code ${result.status}`)
+  runWranglerSync(configPath, args, label)
 }
 
 function killTree(child) {

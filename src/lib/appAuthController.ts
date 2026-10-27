@@ -1,5 +1,8 @@
-import type { LogoutResp, LogoutRevocationFailure } from '../../shared/types'
+import type { LoginResp, LogoutResp, LogoutRevocationFailure, Settings } from '../../shared/types'
+import type { AdminTab } from './adminTypes'
+import { getErrorMessage, isUnauthorizedError } from './api'
 import { createHomeGateState, type AppView } from './appNavigation'
+import { toastStore } from './toast'
 
 export interface AuthUIRegion {
   loginModalOpen: boolean
@@ -123,5 +126,276 @@ export function createAuthViewIntent() {
       return () => captured === epoch
     },
     invalidate() { epoch += 1 },
+  }
+}
+
+export type AuthViewIntent = ReturnType<typeof createAuthViewIntent>
+
+// 认证用例：打开 / 关闭登录框、登录、登出、进入后台、忘记密码，以及登录态数据加载
+// （`ensureLoggedInDataLoaded`）、变更后刷新与统计页刷新（App.svelte 拆分第 7d 步，代码审查三轮第 17 项）。
+//
+// 不持有状态：loginModalOpen / currentView / rootError 仍归 App 经回调写入，认证视图意图由 App 创建并注入
+// （改密也要作废它）。登出按原顺序经注入的函数重置分类编辑框 → 设置状态 → 书签编辑框。
+// 语句顺序与 await 位置与原 App 实现逐条一致，三个原先套了一层 async 的处理器（打开登录 / 进入后台 / 登录）
+// 同样保留包装，兑现时机逐个微任务一致。
+
+export interface AuthControllerDeps {
+  authViewIntent: AuthViewIntent
+  authStore: {
+    login: (username: string, password: string) => Promise<unknown>
+    logout: () => Promise<LogoutResp | null>
+    resetError: () => void
+  }
+  isLoggedIn: () => boolean
+  isAdminPath: () => boolean
+  /** App 的 `canSeeHome`（公开站点或已登录）。 */
+  getCanSeeHome: () => boolean
+  getPublicMode: () => boolean | null | undefined
+  /** `get(adminStore)`。 */
+  readAdminState: () => { loaded: boolean; data: { settings: Settings | null } }
+  setSession: (session: LoginResp | null) => void
+  resetAdminData: () => void
+  clearCachedAdminData: () => Promise<void>
+  refreshLoggedInData: (force?: boolean) => Promise<unknown>
+  /** dataService.confirmLoggedInDataAfterLocalMutation。 */
+  confirmLoggedInDataAfterLocalMutation: () => Promise<unknown>
+  refreshPublicData: () => Promise<unknown>
+  applyConfigFromSettings: (settings: Settings) => void
+  ensureLazyComponent: (name: 'LoginModal' | 'Admin') => Promise<unknown>
+  replacePath: (pathname: string) => void
+  /** `boot.enterRecover`。 */
+  enterRecover: () => void
+  /** 登出时按此顺序调用：分类编辑框、设置状态、书签编辑框。 */
+  resetCategories: () => void
+  resetSettings: () => void
+  resetBookmarks: () => void
+  setRootError: (message: string) => void
+  setLoginModalOpen: (open: boolean) => void
+  setCurrentView: (view: AppView) => void
+}
+
+export interface AuthController {
+  openLogin: () => Promise<void>
+  closeLogin: () => Promise<void>
+  switchToAdmin: () => Promise<void>
+  /** 失败不抛出（authStore 已记录错误）。 */
+  login: (payload: { username: string; password: string }) => Promise<void>
+  logout: () => Promise<void>
+  forgotPassword: () => void
+  ensureLoggedInDataLoaded: () => Promise<boolean>
+  refreshAdminDataAfterMutation: () => Promise<void>
+  /** 写入结果已在本地应用后的版本确认；失败同样只提示、不抛出。 */
+  confirmAdminDataAfterLocalMutation: () => Promise<void>
+  selectAdminTab: (tab: AdminTab) => Promise<void>
+}
+
+export function createAuthController(deps: AuthControllerDeps): AuthController {
+  const {
+    authViewIntent,
+    authStore,
+    isLoggedIn,
+    isAdminPath,
+    getCanSeeHome,
+    getPublicMode,
+    readAdminState,
+    setSession,
+    resetAdminData,
+    clearCachedAdminData,
+    refreshLoggedInData,
+    confirmLoggedInDataAfterLocalMutation,
+    refreshPublicData,
+    applyConfigFromSettings,
+    ensureLazyComponent,
+    replacePath,
+    enterRecover,
+    resetCategories,
+    resetSettings,
+    resetBookmarks,
+    setRootError,
+    setLoginModalOpen,
+    setCurrentView,
+  } = deps
+
+  async function ensureLoggedInDataLoaded(): Promise<boolean> {
+    if (!isLoggedIn()) return false
+
+    const current = readAdminState()
+    if (current.loaded && current.data.settings) {
+      return true
+    }
+
+    try {
+      await refreshLoggedInData()
+      return isLoggedIn() && readAdminState().loaded
+    } catch (error) {
+      if (isUnauthorizedError(error)) {
+        setSession(null)
+        resetAdminData()
+        await clearCachedAdminData()
+        await refreshPublicData()
+        await openLogin()
+        return false
+      }
+
+      setRootError(getErrorMessage(error))
+      return false
+    }
+  }
+
+  async function refreshAdminDataAfterMutation(): Promise<void> {
+    try {
+      await refreshLoggedInData(true)
+    } catch (error) {
+      // 写入已经成功；刷新失败时保留本地即时结果，并提示用户稍后重试。
+      setRootError(getErrorMessage(error))
+    }
+  }
+
+  async function confirmAdminDataAfterLocalMutation(): Promise<void> {
+    try {
+      await confirmLoggedInDataAfterLocalMutation()
+    } catch (error) {
+      setRootError(getErrorMessage(error))
+    }
+  }
+
+  async function selectAdminTab(tab: AdminTab): Promise<void> {
+    if (tab !== 'analytics') return
+
+    try {
+      await refreshLoggedInData(true)
+    } catch (error) {
+      setRootError(getErrorMessage(error))
+    }
+  }
+
+  async function openLoginUseCase(): Promise<void> {
+    authViewIntent.invalidate()
+    setRootError('')
+    authStore.resetError()
+    await ensureLazyComponent('LoginModal')
+    setLoginModalOpen(true)
+    if (!getCanSeeHome()) setCurrentView('login')
+  }
+  async function openLogin(): Promise<void> {
+    await openLoginUseCase()
+  }
+
+  async function closeLogin(): Promise<void> {
+    authViewIntent.invalidate()
+    authStore.resetError()
+    if (!getCanSeeHome()) {
+      setLoginModalOpen(true)
+      setCurrentView('login')
+      return
+    }
+
+    setLoginModalOpen(false)
+  }
+
+  async function switchToAdmin(): Promise<void> {
+    await openAdminUseCase()
+  }
+
+  async function completeLoginUseCase(payload: { username: string; password: string }): Promise<void> {
+    authViewIntent.invalidate()
+    await authStore.login(payload.username, payload.password)
+    setLoginModalOpen(false)
+    setRootError('')
+    await refreshLoggedInData(true)
+    if (isAdminPath()) {
+      await ensureLazyComponent('Admin')
+      setCurrentView('admin')
+      return
+    }
+    setCurrentView('home')
+  }
+  async function login(payload: { username: string; password: string }): Promise<void> {
+    try {
+      await completeLoginUseCase(payload)
+    } catch {
+      // authStore 已经记录错误
+    }
+  }
+
+  async function completeLogoutUseCase(previousSettings: Settings | null): Promise<string | null> {
+    const revocationWarning = logoutRevocationWarning(await authStore.logout())
+    if (isLoggedIn()) return revocationWarning
+    resetCategories()
+    resetSettings()
+    resetBookmarks()
+    resetAdminData()
+    await clearCachedAdminData()
+    if (isLoggedIn()) return revocationWarning
+    if (previousSettings) {
+      applyConfigFromSettings(previousSettings)
+    }
+    await refreshPublicData()
+    return revocationWarning
+  }
+
+  async function logout(): Promise<void> {
+    const viewIsCurrent = authViewIntent.begin()
+    setRootError('')
+    const previousSettings = readAdminState().data.settings
+
+    try {
+      const revocationWarning = await completeLogoutUseCase(previousSettings)
+
+      const homeGate = createHomeGateState({
+        publicMode: getPublicMode(),
+        authenticated: false,
+      })
+      if (viewIsCurrent() && !isLoggedIn()) {
+        if (homeGate.loginModalOpen) await ensureLazyComponent('LoginModal')
+        // Lazy loading can yield to another login/recovery action as well.
+        if (viewIsCurrent() && !isLoggedIn()) {
+          setLoginModalOpen(homeGate.loginModalOpen)
+          setCurrentView(homeGate.view)
+        }
+      }
+      // 视图先切换，确保全局 Toast 不被登出后的页面切换影响。
+      if (revocationWarning) {
+        toastStore.addToast(revocationWarning, 'error', { duration: 12000 })
+      }
+    } catch (error) {
+      if (viewIsCurrent()) setRootError(getErrorMessage(error))
+    }
+  }
+
+  async function openAdminUseCase(): Promise<void> {
+    if (!isLoggedIn()) {
+      await openLogin()
+      return
+    }
+
+    if (!await ensureLoggedInDataLoaded()) {
+      return
+    }
+
+    await ensureLazyComponent('Admin')
+    replacePath('/admin')
+    setCurrentView('admin')
+  }
+
+  function forgotPassword(): void {
+    authViewIntent.invalidate()
+    // 忘记密码是登录态的子流程，按模态语义处理：不改 URL，避免 pushState 制造一个没有
+    // popstate 监听的历史项（后退键会让 URL 与视图错位）。直达 /recover 仍由 onMount 处理。
+    setLoginModalOpen(false)
+    enterRecover()
+  }
+
+  return {
+    openLogin,
+    closeLogin,
+    switchToAdmin,
+    login,
+    logout,
+    forgotPassword,
+    ensureLoggedInDataLoaded,
+    refreshAdminDataAfterMutation,
+    confirmAdminDataAfterLocalMutation,
+    selectAdminTab,
   }
 }

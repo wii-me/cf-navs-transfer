@@ -1,13 +1,28 @@
+<svelte:options runes />
+
 <script lang="ts">
-  import { tick } from 'svelte'
+  import { tick, untrack } from 'svelte'
   import { cloneSettingsForm, type SettingsFormModel } from '../../lib/settingsForm'
   import Switch from '../ui/Switch.svelte'
   import Tooltip from '../ui/Tooltip.svelte'
 
-  export let form: SettingsFormModel
-  export let saving = false
+  interface Props {
+    /** SettingsPanel 以 `bind:form` 传入；写回字段或整体替换都经 bindable setter 通知父组件。 */
+    form: SettingsFormModel
+    saving?: boolean
+  }
 
-  $: form.card_show_description = form.card_description_mode === 'always'
+  let { form = $bindable(), saving = false }: Props = $props()
+
+  // 原 `$: form.card_show_description = form.card_description_mode === 'always'`：与原语句一样先于 DOM 更新执行，
+  // 父组件每次通知 form（字段写回或整体替换）都会重跑。写回只在值不同时发生——字段写回经 bindable setter
+  // 再次通知父组件，同值重写会让本段无限重跑（legacy 的 `$:` 每次刷新只跑一次，没有这个问题）。
+  $effect.pre(() => {
+    const showDescription = form.card_description_mode === 'always'
+    untrack(() => {
+      if (form.card_show_description !== showDescription) form.card_show_description = showDescription
+    })
+  })
 
   async function syncForm(): Promise<void> {
     await tick()
@@ -19,8 +34,8 @@
   id="settings-section-card"
   class="group group-wide group-card"
   disabled={saving}
-  on:input={() => void syncForm()}
-  on:change={() => void syncForm()}
+  oninput={() => void syncForm()}
+  onchange={() => void syncForm()}
 >
   <legend>卡片展示</legend>
   <div class="settings-subsection">
@@ -61,7 +76,7 @@
         <Switch
           checked={form.card_icon_show_title}
           ariaLabel="显示极简卡片标题"
-          on:change={(event) => { form.card_icon_show_title = event.detail; void syncForm() }}
+          onchange={(checked) => { form.card_icon_show_title = checked; void syncForm() }}
         />
       </div>
     </div>

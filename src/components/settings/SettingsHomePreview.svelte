@@ -1,3 +1,5 @@
+<svelte:options runes />
+
 <script lang="ts">
   import type { PublicBookmark } from '../../../shared/types'
   import { buildHomeBackground } from '../../lib/appData'
@@ -6,8 +8,13 @@
   import BookmarkCard from '../BookmarkCard.svelte'
   import HomeHeroSearch from '../HomeHeroSearch.svelte'
 
-  export let settings: SettingsFormModel
-  export let theme: 'light' | 'dark' = 'light'
+  interface Props {
+    settings: SettingsFormModel
+    theme?: 'light' | 'dark'
+  }
+
+  // SettingsPanel 以 `bind:theme` 传入（起始值 'light'），预览主题跨分区保持。
+  let { settings, theme = $bindable('light') }: Props = $props()
 
   const previewSections = [
     { id: 'preview-tools', title: '常用工具', count: 2 },
@@ -49,18 +56,18 @@
     },
   ]
 
-  let previewQuery = ''
+  let previewQuery = $state('')
 
-  $: previewSettings = {
+  const previewSettings = $derived({
     ...settings,
     search_engine: {
       ...settings.search_engine,
       engines: settings.search_engine.engines.map((engine) => ({ ...engine, icon: '' })),
     },
-  }
-  $: pageTitle = previewSettings.site_title || '导航首页'
-  $: contentMaxWidth = `${previewSettings.content_layout.max_width}${previewSettings.content_layout.max_width_unit}`
-  $: previewStyle = [
+  })
+  const pageTitle = $derived(previewSettings.site_title || '导航首页')
+  const contentMaxWidth = $derived(`${previewSettings.content_layout.max_width}${previewSettings.content_layout.max_width_unit}`)
+  const previewStyle = $derived([
     buildHomeBackground(previewSettings, theme),
     `--content-max-width: ${contentMaxWidth}`,
     `--content-margin-x: ${previewSettings.content_layout.margin_x}px`,
@@ -75,12 +82,12 @@
     previewSettings.card_text_color ? `--card-text-color: ${previewSettings.card_text_color}` : '',
     `--preview-card-width: ${previewSettings.card_size.width}px`,
     `--preview-accent-fallback: ${theme === 'dark' ? '#7dd3fc' : '#2563eb'}`,
-  ].filter(Boolean).join('; ')
-  $: descriptionMode = previewSettings.card_description_mode
-  $: showDescription = descriptionMode !== 'hidden'
-  $: mostVisitedBookmarks = getMostVisitedBookmarks(previewBookmarks, previewSettings.most_visited_count)
-  $: safePreviewCss = previewSettings.custom_css.replace(/<\/style/gi, '<\\/style')
-  $: customContentPreview = `<!doctype html>
+  ].filter(Boolean).join('; '))
+  const descriptionMode = $derived(previewSettings.card_description_mode)
+  const showDescription = $derived(descriptionMode !== 'hidden')
+  const mostVisitedBookmarks = $derived(getMostVisitedBookmarks(previewBookmarks, previewSettings.most_visited_count))
+  const safePreviewCss = $derived(previewSettings.custom_css.replace(/<\/style/gi, '<\\/style'))
+  const customContentPreview = $derived(`<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
@@ -109,7 +116,7 @@
     <footer class="home-footer">${previewSettings.footer_html || '<span>页脚 HTML 预览区域</span>'}</footer>
   </div>
 </body>
-</html>`
+</html>`)
 </script>
 
 <aside class="home-preview" aria-label="首页实时预览" data-testid="settings-home-preview">
@@ -124,14 +131,14 @@
         class:active={theme === 'light'}
         aria-pressed={theme === 'light'}
         data-testid="preview-theme-light"
-        on:click={() => theme = 'light'}
+        onclick={() => theme = 'light'}
       >浅色</button>
       <button
         type="button"
         class:active={theme === 'dark'}
         aria-pressed={theme === 'dark'}
         data-testid="preview-theme-dark"
-        on:click={() => theme = 'dark'}
+        onclick={() => theme = 'dark'}
       >深色</button>
     </div>
   </header>

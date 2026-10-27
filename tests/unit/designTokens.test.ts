@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import postcss from 'postcss'
 
 // 断言设计令牌的声明与引用文本：`src/app.css` 的 `:root` 是否声明 `--font-size-*`/`--radius-*`/`--transition-*`/
 // `--control-padding-*`，各弹窗组件的 `<style>` 是否用 `var(--radius-)`/`var(--font-size-)`/`var(--control-padding-)`
@@ -23,6 +24,19 @@ function styleBlocks(path: string): string {
   const source = readFileSync(path, 'utf8')
   if (path.endsWith('.css')) return source
   return [...source.matchAll(/<style>([\s\S]*?)<\/style>/g)].map((match) => match[1]).join('\n')
+}
+
+function declaredZIndex(path: string, selector: string): number {
+  let value: number | undefined
+  postcss.parse(styleBlocks(path)).walkRules(selector, (rule) => {
+    rule.walkDecls('z-index', (declaration) => {
+      value = Number(declaration.value)
+    })
+  })
+  if (value === undefined || !Number.isFinite(value)) {
+    throw new Error(`${selector} must declare a numeric z-index in ${path}`)
+  }
+  return value
 }
 
 describe('design tokens', () => {
@@ -107,6 +121,11 @@ describe('modal control consistency', () => {
     ]) {
       expect(styleBlocks(path), path).toContain('border-radius: var(--radius-xl)')
     }
+  })
+
+  it('places confirmation overlays above the bookmark editor', () => {
+    expect(declaredZIndex('src/components/ConfirmDialog.svelte', '.confirm-backdrop'))
+      .toBeGreaterThan(declaredZIndex('src/components/BookmarkEditModal.svelte', '.modal-backdrop'))
   })
 
   it('keeps the iOS zoom guard able to win', () => {

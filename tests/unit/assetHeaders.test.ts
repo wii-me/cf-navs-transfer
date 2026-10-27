@@ -114,3 +114,18 @@ it('generates the same strict policy for HTML assets without changing script ass
   expect(rules).not.toContain('/assets/')
   expect(applyHeaders('/sw.js',new Response('code')).headers.get('Cache-Control')).toBe('no-cache, max-age=0, must-revalidate')
 })
+
+describe('standalone guide page headers', () => {
+  it('keeps /guide/ under the site-wide frame-denial policy', () => {
+    const guide = applyHeaders('/guide/', new Response('<html>', { headers: { 'content-type': 'text/html' } }))
+    expect(guide.headers.get('X-Frame-Options')).toBe('DENY')
+    expect(guide.headers.get('Content-Security-Policy')).toContain("frame-ancestors 'none'")
+  })
+
+  it('emits the same static security policy for the standalone guide', () => {
+    const rules = buildStaticHtmlHeaderRules()
+    const guide = rules.split('\n\n').find(rule => rule.startsWith('/guide/\n'))
+    expect(guide).toContain("frame-ancestors 'none'")
+    expect(guide).toContain('x-frame-options: DENY')
+  })
+})

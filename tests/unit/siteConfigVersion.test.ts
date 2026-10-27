@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getDataVersion, getSiteConfig, getSiteConfigWithDataVersion } from '../../worker/lib/db/settings'
+import { dataVersionFromValue, getSiteConfig, getSiteConfigWithDataVersion } from '../../worker/lib/db/settings'
 import publicRoutes from '../../worker/routes/public'
 import type { Env } from '../../worker/types'
 
@@ -74,7 +74,9 @@ describe('site config and data version reading', () => {
       const merged = await getSiteConfigWithDataVersion(createDb(rows))
 
       expect(merged.config, label).toEqual(await getSiteConfig(createDb(rows)))
-      expect(merged.version, label).toEqual(await getDataVersion(createDb(rows)))
+      // 单独的 getDataVersion 读取器已删除（无生产调用方），直接对照同一个解析函数。
+      const raw = rows.find((entry) => entry.key === 'data_version')?.value ?? null
+      expect(merged.version, label).toEqual(dataVersionFromValue(raw as string | null))
     }
   })
 

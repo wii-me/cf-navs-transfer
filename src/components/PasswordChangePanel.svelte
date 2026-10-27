@@ -1,27 +1,34 @@
+<svelte:options runes />
+
 <script lang="ts">
   import type { ChangePasswordReq } from '../../shared/types'
 
   type AsyncVoid<T = void> = T | Promise<T>
 
-  export let saving = false
-  export let onChangePassword: ((payload: ChangePasswordReq) => AsyncVoid) | undefined = undefined
+  interface Props {
+    saving?: boolean
+    onChangePassword?: (payload: ChangePasswordReq) => AsyncVoid
+  }
 
-  let currentPassword = ''
-  let newPassword = ''
-  let confirmPassword = ''
-  let changingPassword = false
-  let passwordError = ''
-  let passwordMessage = ''
+  let { saving = false, onChangePassword }: Props = $props()
 
-  $: passwordMismatch = Boolean(confirmPassword) && newPassword !== confirmPassword
-  $: canSave =
+  let currentPassword = $state('')
+  let newPassword = $state('')
+  let confirmPassword = $state('')
+  let changingPassword = $state(false)
+  let passwordError = $state('')
+  let passwordMessage = $state('')
+
+  const passwordMismatch = $derived(Boolean(confirmPassword) && newPassword !== confirmPassword)
+  const canSave = $derived(
     Boolean(onChangePassword) &&
     !saving &&
     !changingPassword &&
     currentPassword.length > 0 &&
     newPassword.length >= 8 &&
     newPassword.length <= 256 &&
-    newPassword === confirmPassword
+    newPassword === confirmPassword,
+  )
 
   async function handleChangePassword() {
     if (!canSave || !onChangePassword) {
@@ -66,7 +73,7 @@
         type="password"
         autocomplete="current-password"
         placeholder="输入当前管理员密码"
-        on:keydown={handlePasswordKeydown}
+        onkeydown={handlePasswordKeydown}
       />
     </label>
 
@@ -79,7 +86,7 @@
         minlength="8"
         maxlength="256"
         placeholder="至少 8 个字符"
-        on:keydown={handlePasswordKeydown}
+        onkeydown={handlePasswordKeydown}
       />
     </label>
 
@@ -92,7 +99,7 @@
         minlength="8"
         maxlength="256"
         placeholder="再次输入新密码"
-        on:keydown={handlePasswordKeydown}
+        onkeydown={handlePasswordKeydown}
       />
     </label>
   </div>
@@ -107,7 +114,7 @@
     <small>修改成功后，现有登录会话会失效，需要重新登录。</small>
   {/if}
 
-  <button type="button" class="ghost-button password-save-button" on:click={handleChangePassword} disabled={!canSave}>
+  <button type="button" class="ghost-button password-save-button" onclick={handleChangePassword} disabled={!canSave}>
     {#if changingPassword}
       更新中...
     {:else}

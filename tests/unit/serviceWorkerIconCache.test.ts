@@ -93,7 +93,7 @@ function loadServiceWorker(networkResponse: (request: Request) => Response) {
     installedShells,
     async dispatchFetch(url: string) {
       const request = new Request(url)
-      let responded: Promise<Response> | Response | null = null
+      let responded = null as Promise<Response> | Response | null
       const pending: Promise<unknown>[] = []
       listeners.fetch?.({
         request,

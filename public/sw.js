@@ -221,18 +221,20 @@ self.addEventListener('fetch', (event) => {
   // 发布会替换 dist 并移除旧 hash 资源，因此 CACHE 版本必须随构建产物递增，
   // 否则旧 HTML 会引用已经不存在的 chunk。检测到新版本时会通知页面，由页面决定怎么提示。
   if (request.mode === 'navigate') {
+    // Only the app root shares the shell key; standalone documents keep their own URL.
+    const cacheKey = url.pathname === '/' || url.pathname === '/index.html' ? SHELL_URL : request
     event.respondWith(
-      matchCurrentCache(SHELL_URL).then((cached) => {
+      matchCurrentCache(cacheKey).then((cached) => {
         const network = fetch(request)
           .then(async (response) => {
             if (response.ok && response.headers.get('content-type')?.includes('text/html')) {
-              const changed = cached ? await shellChanged(cached, response) : true
-              cacheResponse(SHELL_URL, response)
+              const changed = cacheKey === SHELL_URL && (cached ? await shellChanged(cached, response) : true)
+              cacheResponse(cacheKey, response)
               if (cached && changed) notifyClients({ type: 'shell-updated' })
             }
             return response
           })
-          .catch(() => cached || caches.match('/'))
+          .catch(() => cached || matchCurrentCache(SHELL_URL))
 
         if (!cached) return network
 

@@ -46,7 +46,7 @@ async function finishImport() {
 function mount(options: SortableListOptions) {
   const element = document.createElement('div')
   element.innerHTML = '<div data-sortable-item data-sort-id="1">One</div><div data-sortable-item data-sort-id="2">Two</div>'
-  document.body.append(element)
+  document.body.appendChild(element)
   const action = createAction(element, options)
   mounted.push({ element, action })
   return { element, action }

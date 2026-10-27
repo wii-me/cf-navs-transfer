@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { createNativeImageWatchdog } from '../../src/lib/nativeImageWatchdog'
 
 describe('native image watchdog', () => {
@@ -9,7 +9,7 @@ describe('native image watchdog', () => {
   let options: IntersectionObserverInit | undefined
   let rect: DOMRect
   let watchdog: ReturnType<typeof createNativeImageWatchdog>
-  let onTimeout: ReturnType<typeof vi.fn>
+  let onTimeout: Mock<(url: string) => void>
   const url = '/icons/a.png'
   const nextUrl = '/icons/b.png'
 
@@ -17,7 +17,7 @@ describe('native image watchdog', () => {
     callback([{
       target: image, isIntersecting: visible, intersectionRatio: visible ? 1 : 0,
       boundingClientRect: rect,
-    } as IntersectionObserverEntry], observer)
+    } as unknown as IntersectionObserverEntry], observer)
   }
   function update(source = url, enabled = true) {
     if (image.getAttribute('src') !== source) image.src = source
@@ -40,7 +40,7 @@ describe('native image watchdog', () => {
     image = document.createElement('img')
     image.src = url
     image.loading = 'lazy'
-    document.body.append(image)
+    document.body.appendChild(image)
     Object.defineProperties(image, {
       complete: { configurable: true, value: false },
       naturalWidth: { configurable: true, value: 0 },

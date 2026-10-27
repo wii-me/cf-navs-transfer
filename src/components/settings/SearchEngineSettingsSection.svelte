@@ -1,12 +1,19 @@
+<svelte:options runes />
+
 <script lang="ts">
   import { tick } from 'svelte'
   import { faviconImIcon } from '../../lib/icons'
   import { cloneSettingsForm, type SettingsFormModel } from '../../lib/settingsForm'
   import InputGroup from '../ui/InputGroup.svelte'
 
-  export let form: SettingsFormModel
-  export let saving = false
-  export let enginesValid = true
+  interface Props {
+    /** SettingsPanel 以 `bind:form` 传入；写回字段或整体替换都经 bindable setter 通知父组件。 */
+    form: SettingsFormModel
+    saving?: boolean
+    enginesValid?: boolean
+  }
+
+  let { form = $bindable(), saving = false, enginesValid = true }: Props = $props()
 
   async function syncForm(): Promise<void> {
     await tick()
@@ -33,9 +40,9 @@
 
   function handleEngineSelection(event: Event): void {
     // 原生 select 先派发 input 再派发 change；Svelte 的 bind:value 只在 change 时提交，
-    // 而 fieldset 的 on:input 会先 cloneSettingsForm（此刻 current 仍是旧值），把用户刚
+    // 而 fieldset 的 oninput 会先 cloneSettingsForm（此刻 current 仍是旧值），把用户刚
     // 选中的选项在 change 到达前重置回旧值——表现为「选了没选中、保存按钮仍禁用」。
-    // 在 select 自身（目标阶段，早于 fieldset 冒泡）于 input 阶段立即提交选择。
+    // 在 select 自身（委托冒泡顺序里早于 fieldset）于 input 阶段立即提交选择。
     const select = event.currentTarget as HTMLSelectElement
     form.search_engine.current = select.value
   }
@@ -60,8 +67,8 @@
   id="settings-section-search"
   class="group group-wide group-search"
   disabled={saving}
-  on:input={() => void syncForm()}
-  on:change={() => void syncForm()}
+  oninput={() => void syncForm()}
+  onchange={() => void syncForm()}
 >
   <legend>搜索引擎</legend>
   <p class="group-desc">维护首页搜索框可切换的外部搜索引擎，查询模板中用 {'{q}'} 代表关键词。</p>
@@ -73,7 +80,7 @@
         class="native-select"
         bind:value={form.search_engine.current}
         disabled={form.search_engine.engines.length === 0}
-        on:input={handleEngineSelection}
+        oninput={handleEngineSelection}
       >
         {#if form.search_engine.engines.length === 0}
           <option value="">无可用引擎</option>
@@ -103,24 +110,25 @@
               bind:value={engine.icon}
               placeholder="图标链接"
               ariaLabel="图标链接"
-              on:input={() => void syncForm()}
+              oninput={() => void syncForm()}
             >
-              <button
-                slot="suffix"
-                type="button"
-                class="favicon-suffix-button"
-                on:click={() => applyFaviconImIcon(index)}
-                disabled={!faviconImIcon(engine.url_template)}
-                aria-label="根据查询模板域名生成图标"
-                title={faviconImIcon(engine.url_template)
-                  ? '根据查询模板域名生成 Favicon.im 图标 URL'
-                  : '请先填写有效的查询模板 URL'}
-              >
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <circle cx="11" cy="11" r="7" />
-                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                </svg>
-              </button>
+              {#snippet suffix()}
+                <button
+                  type="button"
+                  class="favicon-suffix-button"
+                  onclick={() => applyFaviconImIcon(index)}
+                  disabled={!faviconImIcon(engine.url_template)}
+                  aria-label="根据查询模板域名生成图标"
+                  title={faviconImIcon(engine.url_template)
+                    ? '根据查询模板域名生成 Favicon.im 图标 URL'
+                    : '请先填写有效的查询模板 URL'}
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                </button>
+              {/snippet}
             </InputGroup>
             {#if canPreviewIcon(engine.icon)}
               <span class="engine-icon-preview" title="搜索引擎图标预览">
@@ -140,7 +148,7 @@
         <button
           type="button"
           class="engine-delete-button"
-          on:click={() => removeEngine(index)}
+          onclick={() => removeEngine(index)}
           disabled={form.search_engine.engines.length <= 1}
           aria-label="删除"
           title="删除"
@@ -156,7 +164,7 @@
     {/each}
   </div>
 
-  <button type="button" class="ghost-button add-engine" on:click={addEngine}>+ 添加搜索引擎</button>
+  <button type="button" class="ghost-button add-engine" onclick={addEngine}>+ 添加搜索引擎</button>
 
   {#if !enginesValid}
     <small class="warn">每个引擎都需填写名称，且查询模板必须包含 {'{q}'} 占位符。</small>

@@ -1,5 +1,7 @@
+<svelte:options runes />
+
 <script lang="ts">
-  import DeviceIconCachePanel from './DeviceIconCachePanel.svelte'
+  import { untrack } from 'svelte'
   import type { ChangePasswordReq } from '../../shared/types'
   import { CARD_SIZE_LIMITS } from '../../shared/settings'
   import {
@@ -24,13 +26,23 @@
   type SettingsPanelValue = SettingsFormModel
   type AsyncVoid<T = void> = T | Promise<T>
 
-  export let value: Partial<SettingsPanelValue> | null = null
-  export let loading = false
-  export let saving = false
-  export let error = ''
-  export let onSubmit: ((payload: SettingsPanelValue) => AsyncVoid) | undefined = undefined
-  export let onVerifyDevice: (() => Promise<void>) | undefined = undefined
-  export let onChangePassword: ((payload: ChangePasswordReq) => AsyncVoid) | undefined = undefined
+  interface Props {
+    value?: Partial<SettingsPanelValue> | null
+    loading?: boolean
+    saving?: boolean
+    error?: string
+    onSubmit?: (payload: SettingsPanelValue) => AsyncVoid
+    onChangePassword?: (payload: ChangePasswordReq) => AsyncVoid
+  }
+
+  let {
+    value = null,
+    loading = false,
+    saving = false,
+    error = '',
+    onSubmit = undefined,
+    onChangePassword = undefined,
+  }: Props = $props()
 
   const settingsSections = [
     { id: 'basic', label: '站点设置', hint: '标题、首页显示与默认主题' },
@@ -39,50 +51,54 @@
     { id: 'layout', label: '布局与导航', hint: '内容宽度、边距与导航位置' },
     { id: 'search', label: '搜索设置', hint: '默认引擎与搜索服务' },
     { id: 'footer', label: '自定义样式/脚本', hint: '页脚、CSS 与 JavaScript' },
-    { id: 'device', label: '设备缓存', hint: '仅此浏览器的图标副本与清理' },
     { id: 'account', label: '账号安全', hint: '修改管理员密码' },
   ]
 
-  let form: SettingsPanelValue = cloneSettingsForm(emptySettingsForm)
-  let initialForm: SettingsPanelValue = cloneSettingsForm(emptySettingsForm)
+  // 各设置分区以 `bind:form` 双向绑定并就地写回字段（`bind:value={form.x}` / `bind:group`），需要深层响应；
+  // 分区内的字段绑定由此作用在 $state 代理上，不再报 binding_property_non_reactive。
+  let form: SettingsPanelValue = $state(cloneSettingsForm(emptySettingsForm))
+  // 只整体替换、不就地修改。
+  let initialForm: SettingsPanelValue = $state.raw(cloneSettingsForm(emptySettingsForm))
+  // 只在下面的副作用里比较，不进模板。
   let formKey = ''
-  let activeSectionId = 'basic'
-  let previewTheme: 'light' | 'dark' = 'light'
+  let activeSectionId = $state('basic')
+  let previewTheme: 'light' | 'dark' = $state('light')
 
-  $: nextKey = JSON.stringify({ value, loading })
-  $: if (nextKey !== formKey) {
-    formKey = nextKey
-    initialForm = createSettingsFormState(value)
-    form = cloneSettingsForm(initialForm)
-  }
+  const nextKey = $derived(JSON.stringify({ value, loading }))
+  // 键变化时整体重置；原语句其余引用都受键比较守卫，只以键为依赖。
+  $effect.pre(() => {
+    const key = nextKey
+    untrack(() => {
+      if (key === formKey) return
+      formKey = key
+      initialForm = createSettingsFormState(value)
+      form = cloneSettingsForm(initialForm)
+    })
+  })
 
-  $: normalizedForm = normalizeSettingsForm(form)
-  $: normalizedInitialForm = normalizeSettingsForm(initialForm)
-  $: isDirty = JSON.stringify(normalizedForm) !== JSON.stringify(normalizedInitialForm)
-  $: hasTitle = normalizedForm.site_title.length > 0
-  $: enginesValid =
-    normalizedForm.search_engine.engines.length > 0 &&
+  const normalizedForm = $derived(normalizeSettingsForm(form))
+  const normalizedInitialForm = $derived(normalizeSettingsForm(initialForm))
+  const isDirty = $derived(JSON.stringify(normalizedForm) !== JSON.stringify(normalizedInitialForm))
+  const hasTitle = $derived(normalizedForm.site_title.length > 0)
+  const enginesValid = $derived(normalizedForm.search_engine.engines.length > 0 &&
     normalizedForm.search_engine.engines.every(
       (engine) => engine.name.length > 0 && engine.url_template.includes('{q}'),
-    )
-  $: lightBackgroundValid = normalizedForm.backgrounds.light.value.length > 0
-  $: darkBackgroundValid = normalizedForm.backgrounds.dark.value.length > 0
-  $: backgroundValid = lightBackgroundValid && darkBackgroundValid
-  $: cardSizeValid =
-    Number.isFinite(normalizedForm.card_size.width) &&
+    ))
+  const lightBackgroundValid = $derived(normalizedForm.backgrounds.light.value.length > 0)
+  const darkBackgroundValid = $derived(normalizedForm.backgrounds.dark.value.length > 0)
+  const backgroundValid = $derived(lightBackgroundValid && darkBackgroundValid)
+  const cardSizeValid = $derived(Number.isFinite(normalizedForm.card_size.width) &&
     normalizedForm.card_size.width >= CARD_SIZE_LIMITS.width.min &&
     normalizedForm.card_size.width <= CARD_SIZE_LIMITS.width.max &&
     Number.isFinite(normalizedForm.card_size.height) &&
     normalizedForm.card_size.height >= CARD_SIZE_LIMITS.height.min &&
-    normalizedForm.card_size.height <= CARD_SIZE_LIMITS.height.max
-  $: contentLayoutValid =
-    Number.isFinite(normalizedForm.content_layout.max_width) &&
+    normalizedForm.card_size.height <= CARD_SIZE_LIMITS.height.max)
+  const contentLayoutValid = $derived(Number.isFinite(normalizedForm.content_layout.max_width) &&
     normalizedForm.content_layout.max_width > 0 &&
     Number.isFinite(normalizedForm.content_layout.margin_x) &&
     Number.isFinite(normalizedForm.content_layout.margin_top) &&
-    Number.isFinite(normalizedForm.content_layout.margin_bottom)
-  $: canSave =
-    Boolean(onSubmit) &&
+    Number.isFinite(normalizedForm.content_layout.margin_bottom))
+  const canSave = $derived(Boolean(onSubmit) &&
     !loading &&
     !saving &&
     hasTitle &&
@@ -90,8 +106,10 @@
     backgroundValid &&
     cardSizeValid &&
     contentLayoutValid &&
-    isDirty
-  async function handleSubmit() {
+    isDirty)
+
+  async function handleSubmit(event: SubmitEvent) {
+    event.preventDefault()
     if (!canSave) {
       return
     }
@@ -128,10 +146,10 @@
       <p class="status-desc">请稍候，正在准备当前配置。</p>
     </div>
   {:else}
-    <form id="settings-form" class="settings-form" on:submit|preventDefault={handleSubmit}>
+    <form id="settings-form" class="settings-form" onsubmit={handleSubmit}>
       <aside class="settings-submenu" aria-label="设置功能区">
         {#each settingsSections as section (section.id)}
-          <button type="button" class:active={activeSectionId === section.id} on:click={() => activeSectionId = section.id}>
+          <button type="button" class:active={activeSectionId === section.id} onclick={() => activeSectionId = section.id}>
             <strong>{section.label}</strong><span>{section.hint}</span>
           </button>
         {/each}
@@ -159,8 +177,6 @@
             <SearchEngineSettingsSection bind:form {saving} {enginesValid} />
           {:else if activeSectionId === 'footer'}
             <FooterSettingsSection bind:form {saving} />
-          {:else if activeSectionId === 'device'}
-            <DeviceIconCachePanel onVerify={onVerifyDevice} />
           {:else if activeSectionId === 'account'}
             <PasswordChangePanel {saving} {onChangePassword} />
           {/if}

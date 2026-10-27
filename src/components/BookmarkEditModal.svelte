@@ -1,5 +1,7 @@
+<svelte:options runes />
+
 <script lang="ts">
-  import { onDestroy } from 'svelte'
+  import { onDestroy, untrack } from 'svelte'
   import { setPageScrollLocked } from '../lib/pageScrollLock'
   import {
     DEFAULT_LOGO_SURF_SCHEME,
@@ -49,98 +51,145 @@
   import LogoSchemeSelector from './LogoSchemeSelector.svelte'
   import type { IconifyCandidate as IconifySearchCandidate } from '../../shared/types'
 
-  export let open = false
-  export let loading = false
-  export let error = ''
-  export let mode: 'create' | 'edit' = 'create'
-  export let value: Partial<BookmarkFormValue> | null = null
-  export let categories: CategoryTreeOption[] = []
-  export let onSubmit: ((payload: BookmarkFormValue) => void | Promise<void>) | undefined = undefined
-  export let onCancel: (() => void) | undefined = undefined
-  export let onDelete: ((bookmark: { id: string | number; title: string }) => void | Promise<void>) | undefined = undefined
-  export let deleting = false
-  export let imageHostUrl = ''
+  interface Props {
+    open?: boolean
+    loading?: boolean
+    error?: string
+    mode?: 'create' | 'edit'
+    value?: Partial<BookmarkFormValue> | null
+    categories?: CategoryTreeOption[]
+    onSubmit?: (payload: BookmarkFormValue) => void | Promise<void>
+    onCancel?: () => void
+    onDelete?: (bookmark: { id: string | number; title: string }) => void | Promise<void>
+    deleting?: boolean
+    imageHostUrl?: string
+  }
 
-  let form: BookmarkFormValue = { ...emptyBookmarkForm }
+  let {
+    open = false,
+    loading = false,
+    error = '',
+    mode = 'create',
+    value = null,
+    categories = [],
+    onSubmit = undefined,
+    onCancel = undefined,
+    onDelete = undefined,
+    deleting = false,
+    imageHostUrl = '',
+  }: Props = $props()
+
+  // 子组件经 `bind:` 写回字段（BookmarkBaseFields / ColorAlphaInput），需要深层响应。
+  let form: BookmarkFormValue = $state({ ...emptyBookmarkForm })
+  // 只在下面的副作用里比较，不进模板。
   let formKey = ''
-  let faviconError = ''
-  let selectedLogoSchemeName = DEFAULT_LOGO_SURF_SCHEME.name
-  let iconifyName = ''
-  let iconifyUseConfirmed = false
-  let confirmedIconifyName = ''
-  let iconifySearchState: BookmarkIconifySearchState = createBookmarkIconifySearchState()
+  let faviconError = $state('')
+  let selectedLogoSchemeName = $state(DEFAULT_LOGO_SURF_SCHEME.name)
+  let iconifyName = $state('')
+  let iconifyUseConfirmed = $state(false)
+  let confirmedIconifyName = $state('')
+  // 控制器每次返回新对象；不做深层代理。
+  let iconifySearchState: BookmarkIconifySearchState = $state.raw(createBookmarkIconifySearchState())
   let iconifySearchTimer: ReturnType<typeof setTimeout> | null = null
   let iconifySearchAbortController: AbortController | null = null
-  let titleLookupState: BookmarkTitleState = createBookmarkTitleState()
+  let titleLookupState: BookmarkTitleState = $state.raw(createBookmarkTitleState())
 
   // 当前链接下的图标候选
-  let candidates: IconCandidate[] = []
-  let candidateError = ''
+  let candidates: IconCandidate[] = $state.raw([])
+  let candidateError = $state('')
 
-  $: nextKey = JSON.stringify({ open, mode, value, categories })
-  $: setPageScrollLocked(open)
-  $: if (nextKey !== formKey) {
-    formKey = nextKey
-    faviconError = ''
-    candidateError = ''
-    const fallbackCategoryId = categories[0]?.id
-    form = createBookmarkFormValue(value, fallbackCategoryId)
-    selectedLogoSchemeName = findLogoSchemeName(form.icon) ?? DEFAULT_LOGO_SURF_SCHEME.name
-    const iconifySelection = initializeBookmarkIconifySelection({
-      mode,
-      iconSource: form.icon_source,
-      icon: form.icon,
-    })
-    iconifyName = iconifySelection.iconifyName
-    iconifyUseConfirmed = iconifySelection.iconifyUseConfirmed
-    confirmedIconifyName = iconifySelection.confirmedIconifyName
-    iconifySearchState = createBookmarkIconifySearchState(iconifySearchState.requestId)
-    // 弹窗是单例，requestId 必须接着上一轮往下走，否则上一轮在途的响应会污染新表单。
-    titleLookupState = createBookmarkTitleState(titleLookupState.requestId)
-    // 编辑模式也重新生成候选
-    if (form.url.trim()) {
-      candidates = getIconCandidates(form.url.trim(), form.title.trim())
-    } else {
-      candidates = []
-    }
-  }
-
-  // 输入 URL 后实时生成候选
-  $: if (form.url.trim() && formKey) {
-    candidates = getIconCandidates(form.url.trim(), form.title.trim())
-    candidateError = ''
-  }
-
-  $: currentLogoScheme = getLogoSchemeByName(selectedLogoSchemeName)
-  $: iconifyInput = deriveBookmarkIconifyInput(iconifyName)
-  $: normalizedIconifyName = iconifyInput.normalizedIconifyName
-  $: iconifySourceUrl = iconifyInput.iconifySourceUrl
-  $: iconifyPreviewUrl = iconifyInput.iconifyPreviewUrl
-  $: showLogoSchemes = form.icon_source === 'logo_surf' && Boolean(form.url.trim())
-  $: showIconifyOptions = form.icon_source === 'iconify'
-  $: iconifySelected = isBookmarkIconifySelected({
-    iconifyUseConfirmed,
-    normalizedIconifyName,
-    confirmedIconifyName,
+  const nextKey = $derived(JSON.stringify({ open, mode, value, categories }))
+  $effect.pre(() => {
+    const locked = open
+    untrack(() => setPageScrollLocked(locked))
   })
-  $: scheduleIconifyCandidateSearch(showIconifyOptions, iconifyName)
-  $: logoPreviewText = (form.title.trim() || 'NAV').slice(0, 4)
-  $: if (shouldResetBookmarkIconifyConfirmation({
+  // 键变化时整体重置表单；原语句其余引用都受键比较守卫，只以键为依赖。
+  $effect.pre(() => {
+    const key = nextKey
+    untrack(() => {
+      if (key === formKey) return
+      formKey = key
+      faviconError = ''
+      candidateError = ''
+      const fallbackCategoryId = categories[0]?.id
+      form = createBookmarkFormValue(value, fallbackCategoryId)
+      selectedLogoSchemeName = findLogoSchemeName(form.icon) ?? DEFAULT_LOGO_SURF_SCHEME.name
+      const iconifySelection = initializeBookmarkIconifySelection({
+        mode,
+        iconSource: form.icon_source,
+        icon: form.icon,
+      })
+      iconifyName = iconifySelection.iconifyName
+      iconifyUseConfirmed = iconifySelection.iconifyUseConfirmed
+      confirmedIconifyName = iconifySelection.confirmedIconifyName
+      iconifySearchState = createBookmarkIconifySearchState(iconifySearchState.requestId)
+      // 弹窗是单例，requestId 必须接着上一轮往下走，否则上一轮在途的响应会污染新表单。
+      titleLookupState = createBookmarkTitleState(titleLookupState.requestId)
+      // 编辑模式也重新生成候选
+      if (form.url.trim()) {
+        candidates = getIconCandidates(form.url.trim(), form.title.trim())
+      } else {
+        candidates = []
+      }
+    })
+  })
+
+  // 输入 URL 后实时生成候选。
+  // 原 `$:` 以整个 form 为依赖（legacy 对象粒度）：任一字段写入都会重跑并清空 candidateError；
+  // 逐个读取字段保留这一粒度，而不是只在 url / title 变化时重跑。
+  $effect.pre(() => {
+    for (const key in form) void form[key as keyof BookmarkFormValue]
+    if (!form.url.trim() || !formKey) return
+    const url = form.url.trim()
+    const title = form.title.trim()
+    untrack(() => {
+      candidates = getIconCandidates(url, title)
+      candidateError = ''
+    })
+  })
+
+  const currentLogoScheme = $derived(getLogoSchemeByName(selectedLogoSchemeName))
+  const iconifyInput = $derived(deriveBookmarkIconifyInput(iconifyName))
+  const normalizedIconifyName = $derived(iconifyInput.normalizedIconifyName)
+  const iconifySourceUrl = $derived(iconifyInput.iconifySourceUrl)
+  const iconifyPreviewUrl = $derived(iconifyInput.iconifyPreviewUrl)
+  const showLogoSchemes = $derived(form.icon_source === 'logo_surf' && Boolean(form.url.trim()))
+  const showIconifyOptions = $derived(form.icon_source === 'iconify')
+  // 原拓扑顺序：确认复位在 iconifySelected 之前；只在需要时写回。
+  $effect.pre(() => {
+    if (shouldResetBookmarkIconifyConfirmation({
+      iconifyUseConfirmed,
+      normalizedIconifyName,
+      confirmedIconifyName,
+    })) {
+      untrack(() => { iconifyUseConfirmed = false })
+    }
+  })
+  const iconifySelected = $derived(isBookmarkIconifySelected({
     iconifyUseConfirmed,
     normalizedIconifyName,
     confirmedIconifyName,
-  })) {
-    iconifyUseConfirmed = false
-  }
-  $: if (form.icon_source === 'logo_surf' && form.url.trim()) {
-    const nextLogoIcon = logoSurfIcon(form.title.trim(), form.url.trim(), currentLogoScheme)
-    if (form.icon !== nextLogoIcon) {
-      form.icon = nextLogoIcon
+  }))
+  $effect.pre(() => {
+    const enabled = showIconifyOptions
+    const name = iconifyName
+    untrack(() => scheduleIconifyCandidateSearch(enabled, name))
+  })
+  const logoPreviewText = $derived((form.title.trim() || 'NAV').slice(0, 4))
+  // 两条图标同步只在值不同时写回 form.icon。
+  $effect.pre(() => {
+    if (form.icon_source === 'logo_surf' && form.url.trim()) {
+      const nextLogoIcon = logoSurfIcon(form.title.trim(), form.url.trim(), currentLogoScheme)
+      if (form.icon !== nextLogoIcon) {
+        form.icon = nextLogoIcon
+      }
     }
-  }
-  $: if (form.icon_source === 'iconify' && normalizedIconifyName && form.icon !== iconifySourceUrl) {
-    form.icon = iconifySourceUrl
-  }
+  })
+  $effect.pre(() => {
+    if (form.icon_source === 'iconify' && normalizedIconifyName && form.icon !== iconifySourceUrl) {
+      form.icon = iconifySourceUrl
+    }
+  })
 
   function clearIconifySearchTimer() {
     if (iconifySearchTimer) {
@@ -296,7 +345,8 @@
     window.open(`${base}/upload`, '_blank', 'noopener,noreferrer')
   }
 
-  async function handleSubmit() {
+  async function handleSubmit(event: SubmitEvent) {
+    event.preventDefault()
     await onSubmit?.(buildBookmarkSubmitPayload(form, iconifyName))
   }
 
@@ -323,7 +373,7 @@
     <div class="modal-card" data-testid="bookmark-modal" role="dialog" aria-modal="true" aria-labelledby="bookmark-modal-title">
       <BookmarkModalHeader {mode} {loading} {deleting} onCancel={handleCancel} />
 
-      <form class="modal-form" on:submit|preventDefault={handleSubmit}>
+      <form class="modal-form" onsubmit={handleSubmit}>
         <BookmarkBaseFields
           bind:categoryId={form.category_id}
           bind:title={form.title}

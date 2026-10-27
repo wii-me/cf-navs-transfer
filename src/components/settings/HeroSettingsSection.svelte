@@ -1,3 +1,5 @@
+<svelte:options runes />
+
 <script lang="ts">
   import { tick } from 'svelte'
   import { cloneSettingsForm, type SettingsFormModel } from '../../lib/settingsForm'
@@ -5,8 +7,13 @@
   import Tooltip from '../ui/Tooltip.svelte'
   import Slider from '../ui/Slider.svelte'
 
-  export let form: SettingsFormModel
-  export let saving = false
+  interface Props {
+    /** SettingsPanel 以 `bind:form` 传入；写回字段或整体替换都经 bindable setter 通知父组件。 */
+    form: SettingsFormModel
+    saving?: boolean
+  }
+
+  let { form = $bindable(), saving = false }: Props = $props()
 
   async function syncForm(): Promise<void> {
     await tick()
@@ -34,7 +41,7 @@
         max={20}
         step={1}
         bind:value={form.most_visited_count}
-        on:input={() => void syncForm()}
+        oninput={() => void syncForm()}
       />
     </div>
 
@@ -43,7 +50,7 @@
       <Switch
         checked={form.site_title_show}
         ariaLabel="显示站点标题"
-        on:change={(event) => setField('site_title_show', event.detail)}
+        onchange={(checked) => setField('site_title_show', checked)}
       />
     </div>
 
@@ -52,7 +59,7 @@
       <Switch
         checked={form.search_box_show}
         ariaLabel="显示搜索框"
-        on:change={(event) => setField('search_box_show', event.detail)}
+        onchange={(checked) => setField('search_box_show', checked)}
       />
     </div>
 
@@ -62,7 +69,7 @@
         checked={form.search_engine_selector_show}
         disabled={saving || !form.search_box_show}
         ariaLabel="显示引擎选择器"
-        on:change={(event) => setField('search_engine_selector_show', event.detail)}
+        onchange={(checked) => setField('search_engine_selector_show', checked)}
       />
     </div>
   </div>

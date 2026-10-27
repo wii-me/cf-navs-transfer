@@ -108,7 +108,7 @@ describe('service worker registration', () => {
   it('forwards the shell-update notice to the caller', () => {
     // 监听独立注册，供页面在模块求值阶段同步挂上，赢下 shell-updated 早于 load 的竞态。
     const onShellUpdated = vi.fn()
-    let listener: ((event: { data?: unknown }) => void) | null = null
+    let listener = null as ((event: { data?: unknown }) => void) | null
     const container = {
       addEventListener: (_type: 'message', handler: (event: { data?: unknown }) => void) => {
         listener = handler

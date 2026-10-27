@@ -9,7 +9,7 @@ function bounds(element: Element, left: number, top: number, width: number, heig
 function fixture() {
   document.body.innerHTML = '<div data-testid="bookmark-modal"><form><div class="modal-actions"><button type="button">取消</button><button type="submit" disabled>保存</button></div></form></div>'
   const card = document.querySelector('[data-testid="bookmark-modal"]')!
-  const bar = card.querySelector('.modal-actions')!
+  const bar = card.querySelector<HTMLElement>('.modal-actions')!
   const [cancel, save] = [...bar.querySelectorAll('button')]
   bounds(card, 10, 10, 370, 824)
   bounds(bar, 24, 770, 342, 54)

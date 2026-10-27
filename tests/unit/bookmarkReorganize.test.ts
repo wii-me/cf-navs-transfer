@@ -54,7 +54,9 @@ describe('reorganizeBookmarks', () => {
     ])
 
     expect(updateBatches).toHaveLength(1)
-    expect(updateBatches[0]).toHaveLength(2)
+    // two update chunks + trailing data_version bump in the same atomic batch
+    expect(updateBatches[0]).toHaveLength(3)
+    expect(updateBatches[0][2].sql).toContain("'data_version'")
     expect(updateBatches[0][0].sql).toContain('SET category_id = CASE id')
     expect(updateBatches[0][0].params).toEqual([11, 1, 10, 1, 12, 2, 11, 10, 12])
     expect(updateBatches[0][1].sql).toContain('SET sort = CASE id')

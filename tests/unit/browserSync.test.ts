@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { syncBrowserBookmarks } from '../../worker/lib/db/browserSync'
+import { createMutationReceipt } from '../../worker/lib/db/mutation'
 
 type Statement = {
   sql: string
@@ -9,9 +10,12 @@ type Statement = {
   first: <T>() => Promise<T | null>
 }
 
-function createBrowserSyncDb() {
+function createBrowserSyncDb(options: { categoryExists?: boolean } = {}) {
   const inserts: Statement[] = []
+  const batches: Statement[][] = []
+  const categoryExists = options.categoryExists ?? true
   let nextId = 100
+  const category = { id: 7, parent_id: null, title: '浏览器新增收藏', icon: null, is_private: 0, sort: 0, created_at: 1 }
 
   const prepare = (sql: string): Statement => {
     const statement: Statement = {
@@ -35,25 +39,10 @@ function createBrowserSyncDb() {
             ] as T[]
           }
         }
-        if (sql.startsWith('SELECT url FROM bookmarks')) return { results: [] as T[] }
         return { results: [] as T[] }
       },
       async first<T>() {
-        if (sql.startsWith('SELECT id, parent_id, title')) {
-          return {
-            id: 7,
-            parent_id: null,
-            title: '浏览器新增收藏',
-            icon: null,
-            is_private: 0,
-            sort: 0,
-            created_at: 1,
-          } as T
-        }
-        if (sql.startsWith('INSERT INTO bookmarks')) {
-          inserts.push(statement)
-          return { id: nextId++ } as T
-        }
+        if (sql.startsWith('SELECT id, parent_id, title') && categoryExists) return category as T
         return null
       },
     }
@@ -62,12 +51,25 @@ function createBrowserSyncDb() {
 
   const db = {
     prepare,
-    async batch() {
-      return []
+    async batch(statements: Statement[]) {
+      // Ignore the schema-migration batch (DDL / triggers); record only data mutations.
+      if (!statements.some((statement) => /^\s*(CREATE|ALTER)\b/.test(statement.sql))) {
+        batches.push(statements)
+      }
+      return statements.map((statement) => {
+        if (statement.sql.startsWith('INSERT INTO bookmarks')) {
+          inserts.push(statement)
+          return { results: [{ id: nextId++ }], meta: { changes: 1 } }
+        }
+        if (statement.sql.startsWith('INSERT INTO categories')) {
+          return { results: [category], meta: { changes: 1 } }
+        }
+        return { results: [], meta: { changes: 1 } }
+      })
     },
   }
 
-  return { db: db as unknown as D1Database, inserts }
+  return { db: db as unknown as D1Database, inserts, batches }
 }
 
 describe('browser bookmark sync', () => {
@@ -89,5 +91,49 @@ describe('browser bookmark sync', () => {
       'https://favicon.im/example.com?larger=true',
       'favicon_im',
     ])
+  })
+
+  it('commits every insert and the data_version bump in one batch', async () => {
+    const { db, batches } = createBrowserSyncDb()
+    const receipt = createMutationReceipt()
+
+    const result = await syncBrowserBookmarks(db, [
+      { title: 'A', url: 'https://a.example' },
+      { title: 'B', url: 'https://b.example' },
+    ], receipt)
+
+    expect(result).toMatchObject({ category_id: 7, created: 2, skipped: 0 })
+    expect(batches).toHaveLength(1)
+    expect(batches[0].map((statement) => statement.sql.trim().slice(0, 20))).toEqual([
+      'INSERT INTO bookmark',
+      'INSERT INTO bookmark',
+      "INSERT OR REPLACE IN",
+    ])
+    expect(receipt.data_version).toBe(batches[0][2].params[0])
+  })
+
+  it('creates the missing sync category inside the same batch', async () => {
+    const { db, batches, inserts } = createBrowserSyncDb({ categoryExists: false })
+
+    const result = await syncBrowserBookmarks(db, [{ title: 'A', url: 'https://a.example' }])
+
+    expect(result).toMatchObject({ category_id: 7, category_title: '浏览器新增收藏', created: 1 })
+    expect(batches).toHaveLength(1)
+    expect(batches[0][0].sql).toContain('INSERT INTO categories')
+    expect(batches[0][0].sql).toContain('WHERE NOT EXISTS')
+    // Without a known id the insert resolves the category by subquery in the same transaction.
+    expect(inserts[0].sql).toContain('SELECT id FROM categories WHERE parent_id IS NULL AND title = ?')
+    expect(inserts[0].params[0]).toBe('浏览器新增收藏')
+  })
+
+  it('skips the write and the version bump when nothing new arrives', async () => {
+    const { db, batches } = createBrowserSyncDb()
+    const receipt = createMutationReceipt()
+
+    const result = await syncBrowserBookmarks(db, [{ title: 'Bad', url: 'ftp://example.com' }], receipt)
+
+    expect(result).toMatchObject({ created: 0, skipped: 1 })
+    expect(batches).toHaveLength(0)
+    expect(receipt.data_version).toBeNull()
   })
 })

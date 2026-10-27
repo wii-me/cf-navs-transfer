@@ -6,6 +6,7 @@
 
 - **Wrangler CLI 部署**：适合本地可运行命令行的用户，完整控制 D1/KV/R2 创建和部署，并通过 `/install` 完成 schema 与管理员初始化。
 - **Cloudflare 控制台在线部署**：适合先 Fork 项目，再通过 Cloudflare 关联 GitHub 自动构建部署的用户。
+- **GitHub Actions 部署（备选）**：当 Cloudflare Workers Builds 不可用时，可用仓库内置 workflow 在推送后自动部署；默认不启用，需要显式设置仓库变量和 Cloudflare API Token。
 
 ## 方式一：Wrangler CLI 部署
 
@@ -96,7 +97,19 @@ npx wrangler deploy
 
 > 💡 **提示**：若打开 `/install` 提示数据表未初始化，可以在控制台的 D1 数据库控制台（Console）执行一次 [schema.sql](../../schema.sql)，或在本地运行 `npm run db:init:remote` 即可。
 
-`package.json` 的 Cloudflare Git 元数据声明 D1/KV/R2 资源，不声明 `SETUP_TOKEN` 或旧版恢复 Secret，因此 GitHub 导入不会自动生成或填充 Secret 参数。正常路径无需 Cloudflare API Token、GitHub Actions 或手动 SQL；首次部署请从生产分支 `main` 触发，资源创建完成前不要使用预览分支自动部署。
+`package.json` 的 Cloudflare Git 元数据声明 D1/KV/R2 资源，不声明 `SETUP_TOKEN` 或旧版恢复 Secret，因此 GitHub 导入不会自动生成或填充 Secret 参数。正常路径无需 Cloudflare API Token、GitHub Actions 或手动 SQL；只有选用方式三时才需要前两者；首次部署请从生产分支 `main` 触发，资源创建完成前不要使用预览分支自动部署。
+
+## 方式三：GitHub Actions（备选）
+
+仅当 Cloudflare Workers Builds / Git 导入不可用时使用；默认部署仍是 Cloudflare 账号关联的 Git 构建。启用后，推送到部署分支会自动执行构建和 `wrangler deploy`。
+
+1. Fork 后创建或复用 `cf-navs-db` D1、`SESSION` KV 命名空间与 `cf-navs-storage` R2 存储桶。
+2. 创建具备 Workers Scripts、D1、KV 编辑权限的 Cloudflare API Token。
+3. 在 fork 的 **Settings → Secrets and variables → Actions** 添加 Secrets `CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`，并添加 Variable `CF_NAVS_DEPLOY_PROVIDER=github-actions`；默认部署分支是 `develop`，以 `main` 为生产分支时再加 `CF_NAVS_DEPLOY_BRANCH=main`。
+4. 断开该 Worker 的 Workers Builds / Git 集成，避免重复部署。
+5. 推送到部署分支后，按下方首次登录步骤设置 `SETUP_TOKEN` 并访问 `/install`。
+
+完整权限、资源命名和排障要求见 [DEPLOYMENT.md](DEPLOYMENT.md) 的「方式三」。
 
 ## 🔑 首次登录
 

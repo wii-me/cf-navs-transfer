@@ -42,6 +42,8 @@
   </p>
 </div>
 
+**Languages:** [English](translations/en/README.md)
+
 ---
 
 ## 📢 近期更新日志

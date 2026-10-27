@@ -1,0 +1,18 @@
+# 编辑器基础约定（代码审查三轮第 6 项）。只描述仓库现有风格，不要求重排已有文件；
+# 格式化由评审把关，仓库不使用 Prettier。行尾以 .gitattributes 为准（LF，Windows 脚本 CRLF）。
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{bat,cmd,ps1}]
+end_of_line = crlf
+
+# Markdown 行尾两个空格是硬换行，不自动删除。
+[*.md]
+trim_trailing_whitespace = false

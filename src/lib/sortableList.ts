@@ -55,7 +55,7 @@ let sortableModulePromise: Promise<SortableModule> | null = null
 
 const loadSortable = async (): Promise<SortableModule> => {
   if (!sortableModulePromise) {
-    // @ts-ignore sortablejs 在本项目未提供类型声明
+    // @ts-expect-error sortablejs 在本项目未提供类型声明
     sortableModulePromise = import('sortablejs/modular/sortable.core.esm.js') as Promise<SortableModule>
   }
 

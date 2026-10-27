@@ -38,6 +38,7 @@ import { CdpSession, sleep } from './lib/cdpSession.mjs'
 import { resolveBaseUrl, resolveChromeProfileRoot, resolveSetting } from './lib/verifyTarget.mjs'
 import { requireAdminCredentials, redactCredentials } from './lib/verifyCredentials.mjs'
 import { pageInstallIconPerformanceProbe } from './lib/iconPerformanceProbe.mjs'
+import { loginInPage } from './lib/browserLogin.mjs'
 
 const BASE_URL = resolveBaseUrl()
 const ORIGIN = new URL(BASE_URL).origin
@@ -426,17 +427,8 @@ function buildBootstrapSource() {
 // ---------------------------------------------------------------------------
 
 async function login(cdp) {
-  return cdp.call(async function doLogin(baseOrigin, username, password) {
-    const response = await fetch(`${baseOrigin}/api/login`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-    })
-    const body = await response.json()
-    if (!response.ok || body.code !== 0) return { ok: false, status: response.status }
-    localStorage.setItem('cf-navs.auth', JSON.stringify(body.data))
-    return { ok: true, username: body.data.username }
-  }, ORIGIN, ADMIN_USER, ADMIN_PASS)
+  const result = await cdp.call(loginInPage, ORIGIN, ADMIN_USER, ADMIN_PASS)
+  return result?.ok ? { ok: true, username: result.username } : { ok: false, status: result?.status }
 }
 
 async function readBuildId(cdp) {
@@ -458,7 +450,7 @@ async function coldReset(cdp) {
       if (typeof caches !== 'undefined') {
         for (const name of await caches.keys()) await caches.delete(name)
       }
-    } catch (e) { /* opaque origin or unavailable */ }
+    } catch { /* opaque origin or unavailable */ }
     return true
   })
 }
@@ -487,7 +479,7 @@ async function readObjectUrlProbe(cdp) {
   return cdp.call(function read() {
     try {
       return window.__iconPerformanceProbe ? window.__iconPerformanceProbe.read() : null
-    } catch (e) {
+    } catch {
       return null
     }
   })

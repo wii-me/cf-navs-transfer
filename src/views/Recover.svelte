@@ -1,23 +1,29 @@
+<svelte:options runes />
+
 <script lang="ts">
   import { api, getErrorMessage } from '../lib/api'
   import { ApiError } from '../lib/api'
   import { ErrCode, type LoginResp } from '../../shared/types'
   import { SETUP_TOKEN_ASCII_ERROR, isAsciiPrintableToken } from '../lib/setupTokenInput'
 
-  export let onRecovered: (session: LoginResp) => Promise<void> | void
-  export let onGoInstall: () => void
-  export let onCancel: () => void
+  interface Props {
+    onRecovered: (session: LoginResp) => Promise<void> | void
+    onGoInstall: () => void
+    onCancel: () => void
+  }
+
+  let { onRecovered, onGoInstall, onCancel }: Props = $props()
 
   const MIN_PASSWORD_LENGTH = 8
   const MAX_PASSWORD_LENGTH = 12
 
-  let setupToken = ''
-  let password = ''
-  let passwordConfirmation = ''
-  let submitting = false
-  let localError = ''
-  let serverError = ''
-  let tokenHint = false
+  let setupToken = $state('')
+  let password = $state('')
+  let passwordConfirmation = $state('')
+  let submitting = $state(false)
+  let localError = $state('')
+  let serverError = $state('')
+  let tokenHint = $state(false)
 
   function countCharClasses(value: string): number {
     let classes = 0
@@ -28,9 +34,10 @@
     return classes
   }
 
-  $: formError = localError || serverError
+  const formError = $derived(localError || serverError)
 
-  async function handleSubmit(): Promise<void> {
+  async function handleSubmit(event: SubmitEvent): Promise<void> {
+    event.preventDefault()
     localError = ''
     serverError = ''
     tokenHint = false
@@ -104,7 +111,7 @@
       </ol>
     </div>
 
-    <form class="recover-form" aria-busy={submitting} on:submit|preventDefault={handleSubmit}>
+    <form class="recover-form" aria-busy={submitting} onsubmit={handleSubmit}>
       <p class="configuration-label">身份验证</p>
       <h2>重置密码</h2>
       <p class="recover-note-text">用户名保持不变，本页面只重置密码。</p>
@@ -172,8 +179,8 @@
         {submitting ? '正在重置…' : '重置并登录'}
       </button>
       <div class="recover-links">
-        <button type="button" class="recover-link" on:click={onCancel} disabled={submitting}>返回登录</button>
-        <button type="button" class="recover-link" on:click={onGoInstall} disabled={submitting}>站点未安装？前往初始化</button>
+        <button type="button" class="recover-link" onclick={onCancel} disabled={submitting}>返回登录</button>
+        <button type="button" class="recover-link" onclick={onGoInstall} disabled={submitting}>站点未安装？前往初始化</button>
       </div>
     </form>
   </section>

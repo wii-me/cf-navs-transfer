@@ -198,7 +198,7 @@ describe('settings form model', () => {
       card_background_color: 'rgba(18, 52, 86, 0.4)',
       card_background_opacity: 1,
       content_layout: { max_width: 10, max_width_unit: '%', margin_x: -1, margin_top: 90, margin_bottom: 90 },
-      navigation: { position: 'invalid' as never, always_expanded: true },
+      navigation: { position: 'invalid' as never, always_expanded: true, top_layout: 'scroll' },
       footer_html: '  <p>Footer</p>  ',
     })
 

@@ -140,7 +140,7 @@ function estimateTextUnits(value: string): number {
       units += 0.35
     } else if (/^[A-Za-z0-9]$/.test(char)) {
       units += 0.62
-    } else if (/^[\u0000-\u00ff]$/.test(char)) {
+    } else if (/^[\u0000-\u00ff]$/.test(char)) { // eslint-disable-line no-control-regex -- 有意按整个 Latin-1 区段估算字宽
       units += 0.72
     } else {
       units += 1
@@ -210,6 +210,7 @@ function splitLongToken(token: string, maxUnits: number): string[] {
 function wrapLogoText(text: string, maxLines = 4): string[] {
   const normalized = text.replace(/\s+/g, ' ').trim() || 'NAV'
   const totalUnits = estimateTextUnits(normalized)
+  // eslint-disable-next-line no-control-regex -- 有意按整个 Latin-1 区段区分宽字符
   const cjkChars = [...normalized].filter((char) => !/^[\u0000-\u00ff]$/.test(char)).length
   const targetLineUnits = cjkChars >= 2 ? 2 : 4
   const desiredLines = Math.max(1, Math.min(maxLines, Math.ceil(totalUnits / targetLineUnits)))

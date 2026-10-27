@@ -1,5 +1,7 @@
+<svelte:options runes />
+
 <script lang="ts">
-  import { onDestroy } from 'svelte'
+  import { onDestroy, untrack } from 'svelte'
   import type { IconifyCandidate as IconifySearchCandidate } from '../../shared/types'
   import { getErrorMessage, iconifyApi } from '../lib/api'
   import type { CategoryFormValue } from '../lib/adminTypes'
@@ -28,67 +30,96 @@
     icon: '',
   }
 
-  export let open = false
-  export let loading = false
-  export let error = ''
-  export let mode: 'create' | 'edit' = 'create'
-  export let value: Partial<CategoryFormValue> | null = null
-  export let onSubmit: ((payload: CategoryFormValue) => void | Promise<void>) | undefined = undefined
-  export let onCancel: (() => void) | undefined = undefined
-  export let imageHostUrl = ''
-  export let categories: Array<{ id: string | number; parent_id: string | number | null; title: string }> = []
+  interface Props {
+    open?: boolean
+    loading?: boolean
+    error?: string
+    mode?: 'create' | 'edit'
+    value?: Partial<CategoryFormValue> | null
+    onSubmit?: (payload: CategoryFormValue) => void | Promise<void>
+    onCancel?: () => void
+    imageHostUrl?: string
+    categories?: Array<{ id: string | number; parent_id: string | number | null; title: string }>
+  }
 
-  let form: CategoryFormValue = { ...emptyForm }
+  let {
+    open = false,
+    loading = false,
+    error = '',
+    mode = 'create',
+    value = null,
+    onSubmit = undefined,
+    onCancel = undefined,
+    imageHostUrl = '',
+    categories = [],
+  }: Props = $props()
+
+  // 输入框与 CategoryTreeSelect 经 `bind:` 写回字段，需要深层响应。
+  let form: CategoryFormValue = $state({ ...emptyForm })
+  // 只在下面的副作用里比较，不进模板。
   let formKey = ''
-  let iconifyName = ''
-  let iconifyUseConfirmed = false
-  let confirmedIconifyName = ''
-  let iconifySearchState: BookmarkIconifySearchState = createBookmarkIconifySearchState()
+  let iconifyName = $state('')
+  let iconifyUseConfirmed = $state(false)
+  let confirmedIconifyName = $state('')
+  // 控制器每次返回新对象；不做深层代理。
+  let iconifySearchState: BookmarkIconifySearchState = $state.raw(createBookmarkIconifySearchState())
   let iconifySearchTimer: ReturnType<typeof setTimeout> | null = null
   let iconifySearchAbortController: AbortController | null = null
-  let iconifyError = ''
+  let iconifyError = $state('')
 
-  $: nextKey = JSON.stringify({ open, mode, value })
-  $: if (nextKey !== formKey) {
-    formKey = nextKey
-    iconifyError = ''
-    form = {
-      ...emptyForm,
-      ...(value ?? {}),
-      parent_id: value?.parent_id ?? null,
-      title: value?.title ?? '',
-      icon: value?.icon ?? '',
-    }
-    const iconifySelection = initializeBookmarkIconifySelection({
-      mode,
-      iconSource: iconifyNameFromUrl(form.icon) ? 'iconify' : '',
-      icon: form.icon,
+  const nextKey = $derived(JSON.stringify({ open, mode, value }))
+  // 键变化时整体重置表单；原语句其余引用都受键比较守卫，只以键为依赖。
+  $effect.pre(() => {
+    const key = nextKey
+    untrack(() => {
+      if (key === formKey) return
+      formKey = key
+      iconifyError = ''
+      form = {
+        ...emptyForm,
+        ...(value ?? {}),
+        parent_id: value?.parent_id ?? null,
+        title: value?.title ?? '',
+        icon: value?.icon ?? '',
+      }
+      const iconifySelection = initializeBookmarkIconifySelection({
+        mode,
+        iconSource: iconifyNameFromUrl(form.icon) ? 'iconify' : '',
+        icon: form.icon,
+      })
+      iconifyName = iconifySelection.iconifyName
+      iconifyUseConfirmed = iconifySelection.iconifyUseConfirmed
+      confirmedIconifyName = iconifySelection.confirmedIconifyName
+      iconifySearchState = createBookmarkIconifySearchState(iconifySearchState.requestId)
+      clearIconifySearchTimer()
     })
-    iconifyName = iconifySelection.iconifyName
-    iconifyUseConfirmed = iconifySelection.iconifyUseConfirmed
-    confirmedIconifyName = iconifySelection.confirmedIconifyName
-    iconifySearchState = createBookmarkIconifySearchState(iconifySearchState.requestId)
-    clearIconifySearchTimer()
-  }
-
-  $: iconifyInput = deriveBookmarkIconifyInput(iconifyName)
-  $: normalizedIconifyName = iconifyInput.normalizedIconifyName
-  $: categoryHasChildren = form.id != null && categories.some((category) => Number(category.parent_id) === Number(form.id))
-  $: parentCategoryOptions = categoryHasChildren ? [] : buildParentCategoryOptions(categories, form.id)
-  $: iconifyPreviewUrl = iconifyInput.iconifyPreviewUrl
-  $: iconifySelected = isBookmarkIconifySelected({
-    iconifyUseConfirmed,
-    normalizedIconifyName,
-    confirmedIconifyName,
   })
-  $: scheduleIconifyCandidateSearch(open, iconifyName)
-  $: if (shouldResetBookmarkIconifyConfirmation({
+
+  const iconifyInput = $derived(deriveBookmarkIconifyInput(iconifyName))
+  const normalizedIconifyName = $derived(iconifyInput.normalizedIconifyName)
+  const categoryHasChildren = $derived(form.id != null && categories.some((category) => Number(category.parent_id) === Number(form.id)))
+  const parentCategoryOptions = $derived(categoryHasChildren ? [] : buildParentCategoryOptions(categories, form.id))
+  const iconifyPreviewUrl = $derived(iconifyInput.iconifyPreviewUrl)
+  // 原拓扑顺序：确认复位在 iconifySelected 之前；只在需要时写回。
+  $effect.pre(() => {
+    if (shouldResetBookmarkIconifyConfirmation({
+      iconifyUseConfirmed,
+      normalizedIconifyName,
+      confirmedIconifyName,
+    })) {
+      untrack(() => { iconifyUseConfirmed = false })
+    }
+  })
+  const iconifySelected = $derived(isBookmarkIconifySelected({
     iconifyUseConfirmed,
     normalizedIconifyName,
     confirmedIconifyName,
-  })) {
-    iconifyUseConfirmed = false
-  }
+  }))
+  $effect.pre(() => {
+    const enabled = open
+    const name = iconifyName
+    untrack(() => scheduleIconifyCandidateSearch(enabled, name))
+  })
 
   function clearIconifySearchTimer() {
     if (iconifySearchTimer) {
@@ -184,7 +215,8 @@
     iconifyError = ''
   }
 
-  async function handleSubmit() {
+  async function handleSubmit(event: SubmitEvent) {
+    event.preventDefault()
     await onSubmit?.({
       ...form,
       title: form.title.trim(),
@@ -213,10 +245,10 @@
           <p class="modal-eyebrow">分类管理</p>
           <h2 id="category-modal-title">{mode === 'create' ? '新增分类' : '编辑分类'}</h2>
         </div>
-        <button type="button" class="ghost-button" on:click={handleCancel} disabled={loading}>取消</button>
+        <button type="button" class="ghost-button" onclick={handleCancel} disabled={loading}>取消</button>
       </div>
 
-      <form class="modal-form" on:submit|preventDefault={handleSubmit}>
+      <form class="modal-form" onsubmit={handleSubmit}>
         <label>
           <span>分类名称</span>
           <input bind:value={form.title} type="text" placeholder="例如：常用工具" required />
@@ -238,7 +270,7 @@
         <label>
           <span>图标</span>
           <div class="icon-row">
-            <input bind:value={form.icon} type="text" placeholder="例如：🧰 或 icon-tools" on:input={syncManualIconInput} />
+            <input bind:value={form.icon} type="text" placeholder="例如：🧰 或 icon-tools" oninput={syncManualIconInput} />
             {#if form.icon.trim() && !iconifySelected}
               <CategoryIcon category={{ id: Number(form.id) || 0, title: form.title, icon: form.icon }} preview size={32} />
             {/if}
@@ -246,7 +278,7 @@
               <button
                 type="button"
                 class="ghost-button upload-button"
-                on:click={openImageHost}
+                onclick={openImageHost}
                 disabled={loading}
                 title="打开图床上传图标"
               >
@@ -285,7 +317,7 @@
         {/if}
 
         <div class="modal-actions">
-          <button type="button" class="ghost-button" on:click={handleCancel} disabled={loading}>取消</button>
+          <button type="button" class="ghost-button" onclick={handleCancel} disabled={loading}>取消</button>
           <button type="submit" class="primary-button" disabled={loading || !form.title.trim()}>
             {#if loading}保存中...{:else}保存{/if}
           </button>

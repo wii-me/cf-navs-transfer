@@ -138,7 +138,7 @@ export function createVerificationCleanup({ baseUrl, run, credentials, fetchImpl
             if (!ok(response)) throw new Error('Post-logout validation unavailable')
             if (now() >= deadline) break
             await sleep(1000)
-          } while (true)
+          } while (true) // eslint-disable-line no-constant-condition -- 由 deadline / 401 显式 break
           if (!evidence.rejected) throw new Error('Session remains valid after cleanup deadline')
         } catch (error) { evidence.error = error.message; result.errors.push('Session ' + id + ': ' + error.message) }
       }

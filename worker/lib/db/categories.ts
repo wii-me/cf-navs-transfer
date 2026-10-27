@@ -6,6 +6,7 @@ import { sortRowsByIds } from './sort'
 import { ensureSchema } from './schema'
 import { decodeVersionedIcon, iconContentRevision } from '../iconRevision'
 import { withSchemaRetry } from './schema'
+import { Mutation, chunkIds, commitMutation, placeholders, type MutationReceipt } from './mutation'
 
 // Mutation consumers immediately replace their local entity. Return its current
 // icon identity with the write, without a second query or a duplicate image body.
@@ -102,7 +103,7 @@ async function validateCategoryParent(
   }
 }
 
-export async function createCategory(db: D1Database, req: CategoryUpsertReq): Promise<Category> {
+export async function createCategory(db: D1Database, req: CategoryUpsertReq, receipt?: MutationReceipt): Promise<Category> {
   await ensureSchema(db)
   const now = Date.now()
   const parentId = req.parent_id ?? null
@@ -110,7 +111,7 @@ export async function createCategory(db: D1Database, req: CategoryUpsertReq): Pr
   const inline = req.icon ? decodeVersionedIcon(req.icon) : null
   const revision = inline ? await iconContentRevision(inline) : null
 
-  const category = await db
+  const insert = db
     .prepare(
       `INSERT INTO categories (parent_id, title, icon, icon_revision, is_private, sort, created_at)
        SELECT ?, ?, ?, ?, ?, COALESCE(MAX(sort), -1) + 1, ?
@@ -118,7 +119,9 @@ export async function createCategory(db: D1Database, req: CategoryUpsertReq): Pr
        RETURNING ${CATEGORY_WRITE_RESULT_FIELDS}`,
     )
     .bind(parentId, req.title, req.icon ?? null, revision, req.is_private === true ? 1 : 0, now, parentId)
-    .first<Category>()
+  // 聚合 INSERT ... SELECT 恒产生一行，版本无条件提升。
+  const [result] = await commitMutation(db, [insert], receipt)
+  const category = (result?.results?.[0] as Category | undefined) ?? null
 
   if (!category) throw new Error('failed to create category')
   return category
@@ -128,6 +131,7 @@ export async function updateCategory(
   db: D1Database,
   id: number,
   req: CategoryUpsertReq,
+  receipt?: MutationReceipt,
 ): Promise<Category | null> {
   await ensureSchema(db)
   const current = await getCategory(db, id)
@@ -141,23 +145,21 @@ export async function updateCategory(
 
   if (parentId === current.parent_id) {
     if (req.is_private === undefined) {
-      return await db
+      return await commitCategoryUpdate(db, id, receipt, db
         .prepare(
           `UPDATE categories SET title = ?, icon_blob = CASE WHEN icon IS ? THEN icon_blob ELSE NULL END, icon_revision = CASE WHEN icon IS ? THEN COALESCE(icon_revision, ?) ELSE ? END, icon_write_epoch = icon_write_epoch + CASE WHEN icon IS ? THEN 0 ELSE 1 END, icon = ? WHERE id = ? RETURNING ${CATEGORY_WRITE_RESULT_FIELDS}`,
         )
-        .bind(req.title, nextIcon, nextIcon, revision, revision, nextIcon, nextIcon, id)
-        .first<Category>()
+        .bind(req.title, nextIcon, nextIcon, revision, revision, nextIcon, nextIcon, id))
     }
 
-    return await db
+    return await commitCategoryUpdate(db, id, receipt, db
       .prepare(
         `UPDATE categories SET title = ?, icon_blob = CASE WHEN icon IS ? THEN icon_blob ELSE NULL END, icon_revision = CASE WHEN icon IS ? THEN COALESCE(icon_revision, ?) ELSE ? END, icon_write_epoch = icon_write_epoch + CASE WHEN icon IS ? THEN 0 ELSE 1 END, icon = ?, is_private = COALESCE(?, is_private) WHERE id = ? RETURNING ${CATEGORY_WRITE_RESULT_FIELDS}`,
       )
-      .bind(req.title, nextIcon, nextIcon, revision, revision, nextIcon, nextIcon, req.is_private === undefined ? null : (req.is_private === true ? 1 : 0), id)
-      .first<Category>()
+      .bind(req.title, nextIcon, nextIcon, revision, revision, nextIcon, nextIcon, req.is_private === undefined ? null : (req.is_private === true ? 1 : 0), id))
   }
 
-  return await db
+  return await commitCategoryUpdate(db, id, receipt, db
     .prepare(
       `UPDATE categories
        SET parent_id = ?, title = ?, icon_blob = CASE WHEN icon IS ? THEN icon_blob ELSE NULL END,
@@ -168,8 +170,22 @@ export async function updateCategory(
        WHERE id = ?
        RETURNING ${CATEGORY_WRITE_RESULT_FIELDS}`,
     )
-    .bind(parentId, req.title, nextIcon, nextIcon, revision, revision, nextIcon, nextIcon, req.is_private === undefined ? null : (req.is_private === true ? 1 : 0), parentId, id, id)
-    .first<Category>()
+    .bind(parentId, req.title, nextIcon, nextIcon, revision, revision, nextIcon, nextIcon, req.is_private === undefined ? null : (req.is_private === true ? 1 : 0), parentId, id, id))
+}
+
+// 版本写入放在 UPDATE 之后：改图标会触发 category_icon_publish 写入随机版本，末尾这条
+// 覆盖它，对外只变一次且与响应一致；分类在校验后被并发删除时守卫为假，不提升版本。
+async function commitCategoryUpdate(
+  db: D1Database,
+  id: number,
+  receipt: MutationReceipt | undefined,
+  update: D1PreparedStatement,
+): Promise<Category | null> {
+  const [result] = await new Mutation(db)
+    .add(update)
+    .bump({ sql: 'EXISTS (SELECT 1 FROM categories WHERE id = ?)', params: [id] })
+    .commit(receipt)
+  return (result?.results?.[0] as Category | undefined) ?? null
 }
 
 async function getChildCounts(db: D1Database, ids: number[]): Promise<Map<number, number>> {
@@ -182,44 +198,64 @@ async function getChildCounts(db: D1Database, ids: number[]): Promise<Map<number
   return new Map((results ?? []).map((row) => [row.parent_id, Number(row.count)]))
 }
 
-export async function deleteCategory(db: D1Database, id: number): Promise<boolean> {
+export async function deleteCategory(db: D1Database, id: number, receipt?: MutationReceipt): Promise<boolean> {
   await ensureSchema(db)
   const childCounts = await getChildCounts(db, [id])
   if ((childCounts.get(id) ?? 0) > 0) {
     throw new CategoryConflictError('category has child categories')
   }
 
-  const [, categoryDelete] = await db.batch([
-    db.prepare('DELETE FROM bookmarks WHERE category_id = ?').bind(id),
-    db.prepare('DELETE FROM categories WHERE id = ?').bind(id),
-  ])
-  return (categoryDelete.meta.changes ?? 0) > 0
+  // DELETE 不触发图标触发器：守卫放在最前，「删除前分类存在」才提升版本。
+  const [, categoryDelete] = await new Mutation(db)
+    .bump({ sql: 'EXISTS (SELECT 1 FROM categories WHERE id = ?)', params: [id] })
+    .add(
+      db.prepare('DELETE FROM bookmarks WHERE category_id = ?').bind(id),
+      db.prepare('DELETE FROM categories WHERE id = ?').bind(id),
+    )
+    .commit(receipt)
+  return (categoryDelete?.meta?.changes ?? 0) > 0
 }
 
 export async function batchDeleteCategories(
   db: D1Database,
   ids: number[],
+  receipt?: MutationReceipt,
 ): Promise<{ deleted: number; deleted_bookmarks: number }> {
   await ensureSchema(db)
-  if (ids.length === 0) return { deleted: 0, deleted_bookmarks: 0 }
+  const unique = [...new Set(ids)]
+  if (unique.length === 0) return { deleted: 0, deleted_bookmarks: 0 }
 
-  const childCounts = await getChildCounts(db, ids)
-  const blockedId = ids.find((id) => (childCounts.get(id) ?? 0) > 0)
+  const childCounts = await getChildCounts(db, unique)
+  const blockedId = unique.find((id) => (childCounts.get(id) ?? 0) > 0)
   if (blockedId != null) throw new CategoryConflictError(`category ${blockedId} has child categories`)
 
-  const statements = [
-    ...ids.map((id) => db.prepare('DELETE FROM bookmarks WHERE category_id = ?').bind(id)),
-    ...ids.map((id) => db.prepare('DELETE FROM categories WHERE id = ?').bind(id)),
-  ]
-  const results = await db.batch(statements)
-  const bookmarkResults = results.slice(0, ids.length)
-  const categoryResults = results.slice(ids.length)
-  const deleted_bookmarks = bookmarkResults.reduce((sum, result) => sum + (result.meta.changes ?? 0), 0)
-  const deleted = categoryResults.reduce((sum, result) => sum + (result.meta.changes ?? 0), 0)
+  // 分块 `IN (...)`，每块：守卫版本写入（删除前有分类或直属书签才提升）→ 删书签 → 删分类。
+  const mutation = new Mutation(db)
+  const chunks = chunkIds(unique)
+  for (const chunk of chunks) {
+    const list = placeholders(chunk.length)
+    mutation
+      .bump({
+        sql: `(EXISTS (SELECT 1 FROM categories WHERE id IN (${list})) OR EXISTS (SELECT 1 FROM bookmarks WHERE category_id IN (${list})))`,
+        params: [...chunk, ...chunk],
+      })
+      .add(
+        db.prepare(`DELETE FROM bookmarks WHERE category_id IN (${list})`).bind(...chunk),
+        db.prepare(`DELETE FROM categories WHERE id IN (${list})`).bind(...chunk),
+      )
+  }
+  const results = await mutation.commit(receipt)
+  let deleted = 0
+  let deleted_bookmarks = 0
+  results.forEach((result, index) => {
+    const changes = result?.meta?.changes ?? 0
+    if (index % 2 === 0) deleted_bookmarks += changes
+    else deleted += changes
+  })
   return { deleted, deleted_bookmarks }
 }
 
-export async function sortCategories(db: D1Database, req: CategorySortReq): Promise<void> {
+export async function sortCategories(db: D1Database, req: CategorySortReq, receipt?: MutationReceipt): Promise<void> {
   await ensureSchema(db)
   if (new Set(req.ids).size !== req.ids.length) {
     throw new CategoryValidationError('category sort ids must be unique')
@@ -235,5 +271,5 @@ export async function sortCategories(db: D1Database, req: CategorySortReq): Prom
     throw new CategoryValidationError('category sort ids must include the complete sibling set')
   }
 
-  await sortRowsByIds(db, 'categories', req.ids)
+  await sortRowsByIds(db, 'categories', req.ids, receipt)
 }

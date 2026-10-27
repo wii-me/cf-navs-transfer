@@ -1,4 +1,3 @@
-import { iconDevice } from './iconDeviceState'
 import { derived, writable, type Readable } from 'svelte/store'
 import type {
   AdminData,
@@ -10,17 +9,14 @@ import type {
   Settings,
   SiteConfig,
 } from '../../shared/types'
+import { authApi, getErrorMessage, isUnauthorizedError } from './api'
 import {
   AUTH_STORAGE_KEY,
-  subscribeBrowserStorageChanges,
-  authApi,
   clearStoredAuthSession,
-  getErrorMessage,
   getStoredAuthSession,
-  isUnauthorizedError,
   setStoredAuthSession,
-} from './api'
-import { clearIconAccessKey } from './iconAccessKey'
+  subscribeBrowserStorageChanges,
+} from './authSession'
 
 export interface LoadableState<T> {
   data: T
@@ -128,7 +124,19 @@ function createPublicStore() {
   }
 }
 
+// 会话生命周期钩子：authStore 不直接依赖本地图标库或图标访问 key，
+// 由 appServices.initAppServices() 在启动时接上（见 main.ts）。没接时为空操作。
+export interface AuthLifecycleHooks {
+  /** 登出开始时调用（先于撤销请求），用于删除本机私密图标条目。 */
+  onLogoutStart: () => void
+  /** 本地会话消失时调用（登出、401、其它标签页退出），用于清理跟会话绑定的凭据。 */
+  onSessionCleared: () => void
+}
+
+const noopAuthLifecycle: AuthLifecycleHooks = { onLogoutStart: () => {}, onSessionCleared: () => {} }
+
 function createAuthStore() {
+  let lifecycle: AuthLifecycleHooks = noopAuthLifecycle
   const initialSession = getStoredAuthSession()
   const { subscribe, update } = writable<AuthState>({
     session: initialSession,
@@ -146,7 +154,7 @@ function createAuthStore() {
   subscribeBrowserStorageChanges(key => {
     if (key === AUTH_STORAGE_KEY || key === null) {
       const session = getStoredAuthSession()
-      if (!session) clearIconAccessKey()
+      if (!session) lifecycle.onSessionCleared()
       reflectSession(session)
     }
   })
@@ -157,7 +165,7 @@ function createAuthStore() {
     } else {
       clearStoredAuthSession()
       // 图标授权 key 跟着会话走：登出或 401 后不能继续把过期 key 挂在 URL 上。
-      clearIconAccessKey()
+      lifecycle.onSessionCleared()
     }
 
     reflectSession(session)
@@ -193,7 +201,7 @@ function createAuthStore() {
   // 没有本地会话可退、或请求本身失败时返回 null——此时无从判断服务端状态。
   async function logout(): Promise<LogoutResp | null> {
     const logoutToken = getStoredAuthSession()?.token
-    void iconDevice.beginLogout()
+    lifecycle.onLogoutStart()
     update((state) => ({ ...state, loading: true, error: null }))
 
     let result: LogoutResp | null = null
@@ -219,6 +227,7 @@ function createAuthStore() {
     login,
     logout,
     setSession: (session: LoginResp | null) => applySession(session),
+    configureLifecycle: (hooks: AuthLifecycleHooks | null) => { lifecycle = hooks ?? noopAuthLifecycle },
     resetError: () => update((state) => ({ ...state, error: null })),
   }
 }

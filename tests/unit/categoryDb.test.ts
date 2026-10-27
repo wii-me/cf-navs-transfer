@@ -26,6 +26,8 @@ function createDb(handlerForSql: (sql: string) => StatementHandler) {
       const handler = handlerForSql(sql)
       const statement = {
         sql,
+        entry,
+        handler,
         bind(...params: unknown[]) {
           entry.params = params
           return statement
@@ -49,10 +51,15 @@ function createDb(handlerForSql: (sql: string) => StatementHandler) {
       }
       return statement
     },
-    async batch(statements: Array<{ sql?: string }>) {
+    async batch(statements: Array<{ sql?: string; entry?: { params: unknown[] }; handler?: StatementHandler }>) {
       // Schema DDL/internal initialization is not a category mutation. Count actual business DML.
       if (statements.some((statement) => /^\s*(?:UPDATE|DELETE FROM|INSERT INTO) categories\b/.test(statement.sql ?? ''))) batchCalls += 1
-      return statements.map(() => ({ meta: { changes: 1 }, results: [] }))
+      // Mutations now commit through one batch (business write + data_version bump);
+      // RETURNING rows come back as batch results like D1.
+      return statements.map((statement) => {
+        const row = /\bRETURNING\b/.test(statement.sql ?? '') ? statement.handler?.first?.(statement.entry?.params ?? []) : null
+        return { meta: { changes: 1 }, results: row ? [row] : [] }
+      })
     },
   }
 
@@ -95,7 +102,10 @@ describe('category database hierarchy rules', () => {
     }))
 
     await sortCategories(fake.db, { parent_id: null, ids: [2, 1] })
-    expect(fake.runCalls).toBe(1)
+    // Sort chunk and data_version bump are one atomic batch, never a separate run().
+    expect(fake.batchCalls).toBe(1)
+    expect(fake.runCalls).toBe(0)
+    expect(fake.prepared.some((entry) => entry.sql.includes("'data_version'"))).toBe(true)
     expect(fake.prepared.some((entry) => entry.sql.startsWith('UPDATE categories SET sort'))).toBe(true)
   })
 

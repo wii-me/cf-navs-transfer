@@ -2,7 +2,7 @@ import type { MiddlewareHandler } from 'hono'
 import { ErrCode } from '../../shared/types'
 import { fail } from '../lib/response'
 import type { Env, HonoEnv, SessionValue } from '../types'
-import { getJwtSecret, verifyJwt, rotateJwtSecret } from '../lib/jwt'
+import { getJwtSecret, verifyJwt, rotateJwtSecret, refreshJwtSecretAfterVerifyFailure } from '../lib/jwt'
 import { isSessionRevoked } from '../lib/sessionRevocation'
 import { hasSessionBinding } from '../lib/sessionStore'
 
@@ -59,8 +59,11 @@ export function clearAllCachedSessions(): void {
   sessionMemoryCache.clear()
 }
 
-export async function clearAllSessions(env: Env): Promise<void> {
-  await rotateJwtSecret(env.DB)
+export async function clearAllSessions(
+  env: Env,
+  alsoWrite: ReadonlyArray<readonly [key: string, value: unknown]> = [],
+): Promise<void> {
+  await rotateJwtSecret(env.DB, alsoWrite)
 }
 
 export async function validateSession(env: Env, token: string): Promise<SessionValue | null> {
@@ -74,7 +77,12 @@ export async function validateSession(env: Env, token: string): Promise<SessionV
   }
 
   const secret = await getJwtSecret(env.DB)
-  const payload = await verifyJwt(token, secret)
+  let payload = await verifyJwt(token, secret)
+  if (!payload) {
+    // 另一 isolate 刚轮换过密钥时，本 isolate 的缓存可能还是旧值：按需重读一次再校验。
+    const refreshed = await refreshJwtSecretAfterVerifyFailure(env.DB)
+    if (refreshed) payload = await verifyJwt(token, refreshed)
+  }
   if (!payload) {
     sessionMemoryCache.delete(token)
     return null
@@ -107,6 +115,10 @@ export async function validateSession(env: Env, token: string): Promise<SessionV
 }
 
 export const authRequired: MiddlewareHandler<HonoEnv> = async (c, next) => {
+  if (c.get('authenticated') === true) {
+    await next()
+    return
+  }
   const queryToken = c.req.query('token')?.trim()
   const token = extractBearerToken(c.req.header('Authorization')) || (queryToken ? queryToken : null)
   if (!token) {
@@ -120,5 +132,6 @@ export const authRequired: MiddlewareHandler<HonoEnv> = async (c, next) => {
 
   c.set('username', session.username)
   c.set('sessionExpiresAt', session.exp)
+  c.set('authenticated', true)
   await next()
 }

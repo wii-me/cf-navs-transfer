@@ -1,13 +1,25 @@
+<svelte:options runes />
+
 <script lang="ts">
   import { LOGO_SURF_COLOR_SCHEMES, type LogoSurfColorScheme } from '../lib/icons'
 
   type AsyncVoid<T = void> = T | Promise<T>
 
-  export let selectedLogoSchemeName = ''
-  export let iconSource = ''
-  export let currentLogoScheme: LogoSurfColorScheme
-  export let logoPreviewText = 'NAV'
-  export let onSelectScheme: ((scheme: LogoSurfColorScheme) => AsyncVoid) | undefined = undefined
+  interface Props {
+    selectedLogoSchemeName?: string
+    iconSource?: string
+    currentLogoScheme: LogoSurfColorScheme
+    logoPreviewText?: string
+    onSelectScheme?: (scheme: LogoSurfColorScheme) => AsyncVoid
+  }
+
+  let {
+    selectedLogoSchemeName = '',
+    iconSource = '',
+    currentLogoScheme,
+    logoPreviewText = 'NAV',
+    onSelectScheme,
+  }: Props = $props()
 </script>
 
 <div class="logo-scheme-section field-wide">
@@ -21,7 +33,7 @@
         type="button"
         class="scheme-button"
         class:selected={selectedLogoSchemeName === scheme.name && iconSource === 'logo_surf'}
-        on:click={() => onSelectScheme?.(scheme)}
+        onclick={() => onSelectScheme?.(scheme)}
         title={`${scheme.name}: ${scheme.bgColor} / ${scheme.textColor}`}
       >
         <span class="scheme-preview" style="background: {scheme.bgColor}; color: {scheme.textColor};">

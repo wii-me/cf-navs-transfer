@@ -1,4 +1,3 @@
-import { iconAuthReceipt } from '../lib/iconCopyMetadata'
 import { Hono } from 'hono'
 import {
   ErrCode,
@@ -9,17 +8,19 @@ import {
 } from '../../shared/types'
 import { toPublicSettings } from '../../shared/settings'
 import {
+  PUBLIC_DATA_CACHE_CONTROL,
   cachePrivatePublicDataResponse,
   cachePublicDataResponse,
   cacheSiteConfigResponse,
   matchPublicDataCache,
   matchSiteConfigCache,
+  parsePublicDataVersion,
 } from '../lib/cache'
-import { getPublicDataSource, getSiteConfig, getSiteConfigWithDataVersion, incrementBookmarkClick } from '../lib/db'
+import { getPublicDataSource, getSiteConfig, getSiteConfigWithDataVersion } from '../lib/db'
+import { recordBookmarkClick } from '../lib/clickRateLimit'
 import { shouldBypassRequestCache } from '../lib/requestCache'
 import { fail } from '../lib/response'
 import { ok } from '../lib/response'
-import { hasSessionBinding } from '../lib/sessionStore'
 import { extractBearerToken, validateSession } from '../middleware/auth'
 import type { HonoEnv } from '../types'
 
@@ -104,7 +105,6 @@ publicRoutes.get('/data/version', async (c) => {
   const data: DataVersionResp = {
     version,
     ...iconMetadata,
-    ...(session && token ? { auth_receipt: await iconAuthReceipt(token, session.exp) } : {}),
     site_title: siteConfig.site_title,
     public_mode: siteConfig.public_mode,
   }
@@ -114,113 +114,101 @@ publicRoutes.get('/data/version', async (c) => {
   })
 })
 
+function forbiddenPublicDataResponse(config: SiteConfig): Response {
+  return Response.json({
+    ...fail(ErrCode.FORBIDDEN, 'forbidden'),
+    data: {
+      site_title: config.site_title,
+      public_mode: false,
+    },
+  }, {
+    headers: { 'Cache-Control': 'no-store' },
+  })
+}
+
+function withNoStore(response: Response): Response {
+  const copy = new Response(response.body, response)
+  copy.headers.set('Cache-Control', 'no-store')
+  return copy
+}
+
 publicRoutes.get('/public/data', async (c) => {
   const token = extractBearerToken(c.req.header('Authorization'))
-  const bypassCache = shouldBypassRequestCache(c.req.header('Cache-Control'), c.req.header('Pragma'))
-  let privateAccessAllowed = false
-  if (!token && !bypassCache) {
-    const cached = await matchPublicDataCache(c.req.url)
-    if (cached) return cached
-  }
-
-  const cachedSiteConfig = bypassCache ? null : await readCachedSiteConfig(c.req.url)
-  const siteConfig = cachedSiteConfig ?? await getSiteConfig(c.env.DB)
-  if (!cachedSiteConfig && !bypassCache) {
-    cacheSiteConfigData(c, c.req.url, siteConfig)
-  }
-  if (!siteConfig.public_mode) {
-    if (!token) {
-      const response = c.json({
-        ...fail(ErrCode.FORBIDDEN, 'forbidden'),
-        data: {
-          site_title: siteConfig.site_title,
-          public_mode: false,
-        },
-      }, 200, {
-        'Cache-Control': 'no-store',
-      })
-      if (!bypassCache) {
-        cachePrivatePublicDataResponse(c, c.req.url, response)
-      }
-      return response
-    }
-
-    const session = await validateSession(c.env, token)
-    if (!session) {
-      return unauthorizedResponse()
-    }
-
-    c.set('username', session.username)
-    c.set('sessionExpiresAt', session.exp)
-    privateAccessAllowed = true
-  } else if (token) {
-    // 公开模式下，普通访客无需登录；但携带有效管理员会话时，额外返回私密书签。
-    // 无效 token 不应被当作管理员会话使用，避免旧会话或伪造请求混淆权限。
+  if (token) {
+    // 带 token 的请求一律按会话判定且从不读写共享缓存：无效 token 不能退回匿名结果，
+    // 有效会话（无论公开模式开关）额外返回私密书签。
     const session = await validateSession(c.env, token)
     if (!session) return unauthorizedResponse()
     c.set('username', session.username)
     c.set('sessionExpiresAt', session.exp)
-    privateAccessAllowed = true
+    const source = await getPublicDataSource(c.env.DB, true)
+    const data: PublicData = publicDataPayload(source)
+    return c.json(ok(data), 200, { 'Cache-Control': 'no-store' })
   }
 
-  const publicDataSource = await getPublicDataSource(
-    c.env.DB,
-    cachedSiteConfig ? undefined : siteConfig,
-    privateAccessAllowed,
-  )
-  const publicSettings = publicDataSource.settings
-  if (!publicSettings.public_mode && !privateAccessAllowed) {
-    if (!token) {
-      const response = c.json({
-        ...fail(ErrCode.FORBIDDEN, 'forbidden'),
-        data: {
-          site_title: publicSettings.site_title,
-          public_mode: false,
-        },
-      }, 200, {
-        'Cache-Control': 'no-store',
-      })
-      if (!bypassCache) {
-        cachePrivatePublicDataResponse(c, c.req.url, response)
-      }
-      return response
+  // 匿名请求不理会客户端的 no-cache / Pragma：否则任何人都能用一个请求头强制读 D1，
+  // edge cache 形同虚设。新鲜度改由 `?v=<data_version>` 保证：版本前进即换键。
+  const requestedVersion = parsePublicDataVersion(c.req.url)
+  const hit = await matchPublicDataCache(c.req.url, requestedVersion)
+  if (hit) return hit
+
+  let siteConfig: SiteConfig | null = null
+  let requestedVersionIsCurrent = true
+  if (requestedVersion) {
+    // 带版本未命中：一次轻量 settings 查询确认版本是否仍是当前版本。过期或伪造的 v
+    // 只付这一条小查询，随后复用当前版本的缓存副本（以 no-store 返回），不触发全量聚合读取。
+    const meta = await getSiteConfigWithDataVersion(c.env.DB)
+    siteConfig = meta.config
+    cacheSiteConfigData(c, c.req.url, siteConfig)
+    requestedVersionIsCurrent = meta.version === requestedVersion
+    if (siteConfig.public_mode && !requestedVersionIsCurrent) {
+      const current = await matchPublicDataCache(c.req.url, meta.version)
+      if (current) return withNoStore(current)
     }
-
-    const session = await validateSession(c.env, token)
-    if (!session) {
-      return unauthorizedResponse()
+  } else {
+    siteConfig = await readCachedSiteConfig(c.req.url)
+    if (!siteConfig) {
+      siteConfig = await getSiteConfig(c.env.DB)
+      cacheSiteConfigData(c, c.req.url, siteConfig)
     }
-
-    c.set('username', session.username)
-    c.set('sessionExpiresAt', session.exp)
-    privateAccessAllowed = true
   }
 
-  const canUsePublicCache = publicSettings.public_mode && !token
-
-  const data: PublicData = {
-    categories: publicDataSource.categories,
-    bookmarks: publicDataSource.bookmarks,
-    settings: toPublicSettings(publicSettings),
-    version: publicDataSource.version,
-    ...(publicDataSource.dataset_epoch ? { dataset_epoch: publicDataSource.dataset_epoch, icon_local_copy_protocol: publicDataSource.icon_local_copy_protocol, icon_inline_copy_protocol: publicDataSource.icon_inline_copy_protocol } : {}),
-    ...(privateAccessAllowed && token ? { auth_receipt: await iconAuthReceipt(token, c.get('sessionExpiresAt')) } : {}),
+  // 私有站点的 1005 响应短时缓存在本次请求的键下；过期版本不缓存，避免占用无效键。
+  const forbidden = (config: SiteConfig) => {
+    const response = forbiddenPublicDataResponse(config)
+    if (requestedVersionIsCurrent) cachePrivatePublicDataResponse(c, c.req.url, response, requestedVersion)
+    return response
   }
+  if (!siteConfig.public_mode) return forbidden(siteConfig)
 
-  const response = c.json(ok(data), 200, {
-    'Cache-Control': canUsePublicCache && !bypassCache
-      ? 'public, max-age=30, s-maxage=120, stale-while-revalidate=300'
-      : 'no-store',
+  const source = await getPublicDataSource(c.env.DB, false)
+  // 可见性与版本以同一 batch 为准；先前读到的配置可能已过期。
+  if (!source.settings.public_mode) return forbidden(source.settings)
+
+  const cacheable = requestedVersion === null || source.version === requestedVersion
+  const response = c.json(ok<PublicData>(publicDataPayload(source)), 200, {
+    'Cache-Control': cacheable ? PUBLIC_DATA_CACHE_CONTROL : 'no-store',
   })
-
-  if (canUsePublicCache && !bypassCache) {
-    cachePublicDataResponse(c, c.req.url, response)
-  }
-
+  // 内容总是写进它真实版本的键（版本由同一 batch 读出），让随后带新版本的请求直接命中；
+  // 无版本请求另外写旧客户端使用的无版本键。
+  cachePublicDataResponse(c, c.req.url, response, source.version)
+  if (requestedVersion === null) cachePublicDataResponse(c, c.req.url, response, null)
   return response
 })
 
+function publicDataPayload(source: Awaited<ReturnType<typeof getPublicDataSource>>): PublicData {
+  return {
+    categories: source.categories,
+    bookmarks: source.bookmarks,
+    settings: toPublicSettings(source.settings),
+    version: source.version,
+    ...(source.dataset_epoch ? { dataset_epoch: source.dataset_epoch } : {}),
+    ...(source.icon_epoch !== undefined ? { icon_epoch: source.icon_epoch } : {}),
+  }
+}
+
 import { getClientIp } from '../middleware/rateLimit'
+import { serverError } from '../lib/routeHelpers'
 
 publicRoutes.post('/public/bookmarks/:id/click', async (c) => {
   const id = Number(c.req.param('id'))
@@ -228,44 +216,17 @@ publicRoutes.post('/public/bookmarks/:id/click', async (c) => {
     return c.json(fail(ErrCode.BAD_REQUEST, 'invalid id'), 400)
   }
 
-  // 点击计数限流（每 IP + 书签 10 分钟最多 3 次）。这是 best-effort：缺 `SESSION` 绑定或
-  // KV 抛错时**继续计数**，不像鉴权路径那样 fail-closed——限流失效只是计数偏高，而拒绝
-  // 匿名点击会让公开首页的正常功能坏掉（PROB-31 的口径区分）。
-  if (hasSessionBinding(c.env)) {
-    try {
-      const ip = getClientIp(c)
-      const rateLimitKey = `rl:click:${ip}:${id}`
-      const now = Date.now()
-      const raw = await c.env.SESSION.get(rateLimitKey)
-      let state = raw ? JSON.parse(raw) : null
-
-      if (state && state.resetAt > now) {
-        if (state.count >= 3) {
-          // Silent ignore, return success
-          return c.json(ok(null))
-        }
-        state.count++
-      } else {
-        state = { count: 1, resetAt: now + 600000 }
-      }
-
-      const ttl = Math.max(1, Math.ceil((state.resetAt - now) / 1000))
-      await c.env.SESSION.put(rateLimitKey, JSON.stringify(state), { expirationTtl: ttl })
-    } catch (err) {
-      console.error('Failed to apply click count rate limiting:', err)
-    }
-  }
-
+  // 限流（每 IP + 书签 10 分钟最多 3 次）与计数在同一个 D1 batch；超限仍返回成功但不计数。
   try {
-    const success = await incrementBookmarkClick(c.env.DB, id)
-    if (!success) {
+    const outcome = await recordBookmarkClick(c.env.DB, id, getClientIp(c))
+    if (outcome === 'not_found') {
       return c.json(fail(ErrCode.NOT_FOUND, 'bookmark not found'), 404)
     }
     // 点击计数不提升 data_version：每次点击都提升会让所有访客的公开数据缓存整体失效。
     // 后台「访问分析」在打开时强制拉取最新聚合数据，因此这里无需破坏缓存。
     return c.json(ok(null))
-  } catch {
-    return c.json(fail(ErrCode.SERVER_ERROR, 'failed to increment click count'), 500)
+  } catch (error) {
+    return serverError(c, 'failed to increment click count', error, 500)
   }
 })
 

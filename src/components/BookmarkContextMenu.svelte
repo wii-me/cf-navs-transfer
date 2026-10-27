@@ -1,15 +1,28 @@
+<svelte:options runes />
+
 <script lang="ts">
-  import { afterUpdate, onDestroy, onMount, tick } from 'svelte'
+  import { onDestroy, onMount, tick, untrack } from 'svelte'
+  import { on } from 'svelte/events'
   import CategoryTreeSelect from './CategoryTreeSelect.svelte'
   import type { CategoryTreeOption } from '../lib/categorySelect'
 
   type AsyncVoid<T = void> = T | Promise<T>
 
-  export let categories: CategoryTreeOption[] = []
-  export let currentCategoryId: string | number | null = null
-  export let onEdit: (() => AsyncVoid) | undefined = undefined
-  export let onMoveBookmark: ((categoryId: number) => AsyncVoid) | undefined = undefined
-  export let canMove = false
+  interface Props {
+    categories?: CategoryTreeOption[]
+    currentCategoryId?: string | number | null
+    onEdit?: () => AsyncVoid
+    onMoveBookmark?: (categoryId: number) => AsyncVoid
+    canMove?: boolean
+  }
+
+  let {
+    categories = [],
+    currentCategoryId = null,
+    onEdit,
+    onMoveBookmark,
+    canMove = false,
+  }: Props = $props()
 
   // 菜单默认从卡片下沿向下展开。页面末尾那一排卡片下方没有空间，菜单会越过视口底边，
   // 「编辑」按钮落在视口外且被裁掉（Issue #30）。这里在挂载后测量真实几何，必要时向上
@@ -17,13 +30,14 @@
   const VIEWPORT_MARGIN_PX = 8
   const ANCHOR_OVERLAP_PX = 6
 
-  let movePickerOpen = false
-  let moveCategoryId: string | number | null = currentCategoryId
-  let moveSubmitting = false
+  let movePickerOpen = $state(false)
+  let moveCategoryId: string | number | null = $state(untrack(() => currentCategoryId))
+  let moveSubmitting = $state(false)
+  // 元素引用只在测量函数里用，不进模板依赖。
   let menuElement: HTMLDivElement | null = null
-  let placement: 'down' | 'up' = 'down'
-  let maxHeight: number | null = null
-  let topOffset: number | null = null
+  let placement: 'down' | 'up' = $state('down')
+  let maxHeight: number | null = $state(null)
+  let topOffset: number | null = $state(null)
   let remeasureQueued = false
 
   function handleEditClick() {
@@ -66,8 +80,8 @@
 
     // Flex children shrink inside a clamped menu. Measure without the previous
     // cap, otherwise the shrunken height would repeatedly remove/reapply it.
-    // Keep temporary DOM writes on a local reference: assigning through the
-    // bound variable would invalidate Svelte and recursively trigger afterUpdate.
+    // Keep temporary DOM writes on a local reference (historically: assigning
+    // through the bound variable would invalidate Svelte and retrigger the remeasure).
     const element = menuElement
     const previousMaxHeight = element.style.maxHeight
     const scrollPositions = [element, ...element.querySelectorAll<HTMLElement>('[role="tree"]')].map(node => ({ node, top: node.scrollTop, left: node.scrollLeft }))
@@ -138,7 +152,31 @@
   }
 
   // 菜单高度会随「移动」选择器展开而变化，所以每次更新后都重新测量，而不是只在挂载时测一次。
-  afterUpdate(scheduleMeasure)
+  // 原 after-update 钩子（runes 下不可用）→ 显式读取全部模板依赖的 $effect：挂载后与任一依赖变化后
+  // 都在 DOM 更新之后排一次测量（测量写回的 placement / maxHeight / topOffset 变化时同样再测一次，
+  // 与原先「测量写回 → 组件更新 → 钩子」一致，写回只在值变化时发生，不会循环）。
+  $effect(() => {
+    void [placement, maxHeight, topOffset, onEdit, movePickerOpen, canMove, onMoveBookmark, categories, categories.length, moveCategoryId]
+    untrack(scheduleMeasure)
+  })
+
+  // 菜单内的 click / pointerdown / touch 不冒泡到卡片与 window 的「点外部关闭」监听；keydown 见 handleMenuKeydown。
+  // 原 `on:click|stopPropagation` 等是直接挂在菜单节点上的监听：内层按钮与分类选择器的委托处理器先在这里
+  // 跑完，再停止冒泡。改成事件属性会走根节点委托、在祖先的原生监听之后才 stopPropagation，所以这里用
+  // svelte/events 的 on() 直接挂载，保持原先的挂载点与先后顺序。
+  function attachMenuListeners(node: HTMLDivElement): () => void {
+    const stop = (event: Event) => event.stopPropagation()
+    const offs = [
+      on(node, 'click', stop),
+      on(node, 'keydown', handleMenuKeydown),
+      on(node, 'pointerdown', stop),
+      on(node, 'touchstart', stop),
+      on(node, 'touchmove', stop),
+    ]
+    return () => {
+      for (const off of offs) off()
+    }
+  }
 
   onMount(() => {
     measurePlacement()
@@ -155,20 +193,25 @@
     window.visualViewport?.removeEventListener('scroll', scheduleMeasure)
   })
 
-  $: if (
-    movePickerOpen &&
-    !moveSubmitting &&
-    onMoveBookmark &&
-    moveCategoryId != null &&
-    Number(moveCategoryId) !== Number(currentCategoryId)
-  ) {
-    const targetCategoryId = Number(moveCategoryId)
-    moveSubmitting = true
-    movePickerOpen = false
-    void Promise.resolve(onMoveBookmark(targetCategoryId)).finally(() => {
-      moveSubmitting = false
+  // 原 `$:`：依赖 movePickerOpen / moveSubmitting / onMoveBookmark / moveCategoryId / currentCategoryId，
+  // 与原语句一样先于 DOM 更新执行；语句体写回的 moveSubmitting / movePickerOpen 在 untrack 中，
+  // 写回引起的重跑因 movePickerOpen 已为 false 而为空操作。
+  $effect.pre(() => {
+    const open = movePickerOpen
+    const submitting = moveSubmitting
+    const move = onMoveBookmark
+    const target = moveCategoryId
+    const current = currentCategoryId
+    if (!open || submitting || !move || target == null || Number(target) === Number(current)) return
+    untrack(() => {
+      const targetCategoryId = Number(target)
+      moveSubmitting = true
+      movePickerOpen = false
+      void Promise.resolve(move(targetCategoryId)).finally(() => {
+        moveSubmitting = false
+      })
     })
-  }
+  })
 </script>
 
 <div
@@ -179,17 +222,13 @@
   style={`${maxHeight !== null ? `max-height: ${maxHeight}px;` : ''}${topOffset !== null ? `top: ${topOffset}px; bottom: auto;` : ''}`}
   role="menu"
   tabindex="-1"
-  on:click|stopPropagation
-  on:keydown={handleMenuKeydown}
-  on:pointerdown|stopPropagation
-  on:touchstart|stopPropagation
-  on:touchmove|stopPropagation
+  {@attach attachMenuListeners}
 >
   {#if onEdit && !movePickerOpen}
-    <button type="button" data-testid="bookmark-context-edit" on:click={handleEditClick}>编辑</button>
+    <button type="button" data-testid="bookmark-context-edit" onclick={handleEditClick}>编辑</button>
   {/if}
   {#if canMove && onMoveBookmark && categories.length > 0 && !movePickerOpen}
-    <button type="button" data-testid="bookmark-context-move" on:click={openMovePicker}>移动</button>
+    <button type="button" data-testid="bookmark-context-move" onclick={openMovePicker}>移动</button>
   {/if}
   {#if movePickerOpen}
     <div class="move-picker" data-testid="bookmark-context-move-picker">
@@ -202,7 +241,7 @@
         onLayoutChange={scheduleMeasure}
         testId="bookmark-context-move-select"
       />
-      <button type="button" class="move-cancel" on:click={closeMovePicker}>取消</button>
+      <button type="button" class="move-cancel" onclick={closeMovePicker}>取消</button>
     </div>
   {/if}
 </div>

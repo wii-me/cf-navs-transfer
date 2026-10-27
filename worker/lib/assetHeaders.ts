@@ -50,7 +50,8 @@ export function buildStaticHtmlHeaderRules(): string {
   setSecurityHeaders(headers)
   headers.set('Cache-Control', HTML_CACHE)
   const lines = [...headers].map(([name, value]) => `  ${name}: ${value}`).join('\n')
-  return ['/', '/index.html', '/admin', '/admin/', '/install', '/install/'].map(route => `${route}\n${lines}`).join('\n\n')
+  const htmlRoutes = ['/', '/index.html', '/admin', '/admin/', '/install', '/install/', '/guide/', '/guide/index.html']
+  return htmlRoutes.map(route => `${route}\n${lines}`).join('\n\n')
 }
 
 export function withAssetCacheHeaders(request: Request, response: Response): Response {
@@ -75,9 +76,7 @@ export function withAssetCacheHeaders(request: Request, response: Response): Res
       headers.set('Cache-Control', SHORT_STATIC_CACHE)
     }
 
-    if (isHtml) {
-      setSecurityHeaders(headers)
-    }
+    if (isHtml) setSecurityHeaders(headers)
   }
 
   return new Response(response.body, {

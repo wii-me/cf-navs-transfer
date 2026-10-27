@@ -60,7 +60,8 @@ async function databaseIsReachable(db: D1Database): Promise<boolean> {
   try {
     await db.prepare('SELECT 1 AS ok').first()
     return true
-  } catch {
+  } catch (error) {
+    console.error('[install] database probe failed:', error)
     return false
   }
 }
@@ -69,7 +70,8 @@ async function sessionStoreIsReachable(session: KVNamespace): Promise<boolean> {
   try {
     await session.get(KV_PROBE_KEY)
     return true
-  } catch {
+  } catch (error) {
+    console.error('[install] session store probe failed:', error)
     return false
   }
 }
@@ -93,6 +95,7 @@ async function recoverStaleInstallClaim(db: D1Database): Promise<void> {
   try {
     values = await getSettingValues<string>(db, [ADMIN_USERNAME_KEY, ADMIN_PASSWORD_KEY, INSTALL_MARKER_KEY])
   } catch (error) {
+    // 缺表 = 尚未建 schema，属预期；其余错误抛给路由 catch 统一记录。
     if (isMissingTableError(error)) return
     throw error
   }
@@ -113,6 +116,7 @@ async function getInstallationState(db: D1Database, backfillMarker = false): Pro
       INSTALL_MARKER_KEY,
     ])
   } catch (error) {
+    // 缺表 = 尚未安装，属预期；其余错误抛给路由 catch 统一记录。
     if (isMissingTableError(error)) {
       return { installed: false, incompleteCredentials: false, schemaVersion: null }
     }
@@ -156,7 +160,8 @@ installRoutes.get('/install/status', async (c) => {
   let state: InstallationState
   try {
     state = await getInstallationState(c.env.DB, true)
-  } catch {
+  } catch (error) {
+    console.error('[install] status: reading installation state failed:', error)
     return noStore(c.json(ok({ state: 'unavailable', reason: 'database_unreachable' } satisfies InstallStatusResp)))
   }
 
@@ -209,7 +214,8 @@ installRoutes.post('/install', async (c) => {
     if (existing.incompleteCredentials) {
       return noStore(c.json(fail(ErrCode.SERVER_ERROR, 'existing administrator credentials are incomplete')))
     }
-  } catch {
+  } catch (error) {
+    console.error('[install] reading installation state failed:', error)
     return noStore(c.json(fail(ErrCode.SERVER_ERROR, 'database is unavailable')))
   }
 
@@ -223,7 +229,8 @@ installRoutes.post('/install', async (c) => {
   try {
     await ensureInstallRateLimitTable(c.env.DB)
     rateLimitState = await readInstallFailures(c.env.DB, getRateLimitKey(ip))
-  } catch {
+  } catch (error) {
+    console.error('[install] reading rate limit failed:', error)
     return noStore(c.json(fail(ErrCode.SERVER_ERROR, 'database is unavailable')))
   }
   if (rateLimitState && rateLimitState.resetAt > Date.now() && rateLimitState.count >= RATE_LIMIT_MAX_ATTEMPTS) {
@@ -236,7 +243,8 @@ installRoutes.post('/install', async (c) => {
       if (limited) {
         return noStore(c.json(fail(ErrCode.RATE_LIMITED, 'too many setup token attempts')))
       }
-    } catch {
+    } catch (error) {
+      console.error('[install] recording failed attempt failed:', error)
       return noStore(c.json(fail(ErrCode.SERVER_ERROR, 'database is unavailable')))
     }
     return noStore(c.json(fail(ErrCode.UNAUTHORIZED, 'unauthorized'), 401))
@@ -246,6 +254,7 @@ installRoutes.post('/install', async (c) => {
   try {
     body = await c.req.json<InstallReq>()
   } catch {
+    // 请求体不是合法 JSON：客户端输入错误，属预期分支，不记日志（也避免把正文写进日志）。
     return noStore(c.json(fail(ErrCode.BAD_REQUEST, 'invalid request body')))
   }
 
@@ -309,26 +318,30 @@ installRoutes.post('/install', async (c) => {
     await clearInstallFailures(c.env.DB, getRateLimitKey(ip))
     try {
       return noStore(c.json(ok(await createSession(c.env, username))))
-    } catch {
+    } catch (error) {
+      console.error('[install] session creation after install failed:', error)
       return noStore(c.json(fail(ErrCode.SERVER_ERROR, 'installation completed but session creation failed')))
     }
-  } catch {
+  } catch (error) {
+    console.error('[install] installation failed:', error)
     if (claimToken) {
       try {
         const committed = await getInstallationState(c.env.DB)
         if (committed.installed) {
           return noStore(c.json(fail(ErrCode.SERVER_ERROR, 'installation completed but session creation failed')))
         }
-      } catch {
+      } catch (recheckError) {
         // Continue with conditional claim cleanup.
+        console.error('[install] post-failure state recheck failed:', recheckError)
       }
       try {
         await c.env.DB
           .prepare('DELETE FROM settings WHERE key = ? AND value = ?')
           .bind(ADMIN_USERNAME_KEY, JSON.stringify(claimToken))
           .run()
-      } catch {
+      } catch (cleanupError) {
         // Preserve the original installation failure response.
+        console.error('[install] install claim cleanup failed:', cleanupError)
       }
     }
     return noStore(c.json(fail(ErrCode.SERVER_ERROR, 'installation failed')))

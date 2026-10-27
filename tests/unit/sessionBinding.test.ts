@@ -4,14 +4,14 @@ import { createSession } from '../../worker/lib/session'
 import { hasSessionBinding } from '../../worker/lib/sessionStore'
 import { clearAllCachedSessions, validateSession } from '../../worker/middleware/auth'
 import authRoutes from '../../worker/routes/auth'
-import publicRoutes from '../../worker/routes/public'
 import type { Env } from '../../worker/types'
 
 // PROB-31：`SESSION` 绑定的必选性此前三处口径不一致 ——
 //   - loginRateLimit 无条件读 env.SESSION（缺绑定时抛 TypeError，兜成 code=1500）
 //   - validateSession 当可选，静默跳过撤销名单检查
 //   - Env.SESSION 类型却是必填
-// 现在统一为：正确性依赖它的路径 fail-closed，best-effort 计数路径降级继续。
+// 现在统一为：正确性依赖它的路径 fail-closed。点击计数限流已改用 D1（见 clickRateLimit.test.ts），
+// 不再依赖 SESSION。
 
 function createDb() {
   const values = new Map<string, string>()
@@ -139,19 +139,5 @@ describe('缺 SESSION 绑定时的登录路径', () => {
     expect(body.code).toBe(1500)
     expect(body.msg).toContain('SESSION')
     expect(body.msg).not.toBe('internal server error')
-  })
-})
-
-describe('缺 SESSION 绑定时的 best-effort 路径', () => {
-  it('点击计数继续工作，不因为限流失效而拒绝匿名点击', async () => {
-    // 与鉴权路径刻意不同：限流失效只是计数偏高，而拒绝匿名点击会让公开首页坏掉。
-    const response = await publicRoutes.request(
-      'https://nav.example.com/public/bookmarks/1/click',
-      { method: 'POST' },
-      { DB: createDb() } as unknown as Env,
-    )
-
-    expect(response.status).toBe(200)
-    expect((await response.json() as { code: number }).code).toBe(0)
   })
 })

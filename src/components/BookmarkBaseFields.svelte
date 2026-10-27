@@ -1,19 +1,37 @@
+<svelte:options runes />
+
 <script lang="ts">
   import type { BookmarkFormValue } from '../lib/adminTypes'
   import type { CategoryTreeOption } from '../lib/categorySelect'
   import CategoryTreeSelect from './CategoryTreeSelect.svelte'
 
-  export let categoryId: string | number | undefined = undefined
-  export let title = ''
-  export let url = ''
-  export let openMethod: BookmarkFormValue['open_method'] = 'new_tab'
-  export let isPrivate = false
-  export let description = ''
-  export let descriptionMode: BookmarkFormValue['description_mode'] = 'inherit'
-  export let categories: CategoryTreeOption[] = []
-  export let loading = false
-  export let titleLoading = false
-  export let onUrlBlur: (() => void) | undefined = undefined
+  interface Props {
+    categoryId?: string | number
+    title?: string
+    url?: string
+    openMethod?: BookmarkFormValue['open_method']
+    isPrivate?: boolean
+    description?: string
+    descriptionMode?: BookmarkFormValue['description_mode']
+    categories?: CategoryTreeOption[]
+    loading?: boolean
+    titleLoading?: boolean
+    onUrlBlur?: () => void
+  }
+
+  let {
+    categoryId = $bindable(undefined),
+    title = $bindable(''),
+    url = $bindable(''),
+    openMethod = $bindable('new_tab'),
+    isPrivate = $bindable(false),
+    description = $bindable(''),
+    descriptionMode = $bindable('inherit'),
+    categories = [],
+    loading = false,
+    titleLoading = false,
+    onUrlBlur,
+  }: Props = $props()
 </script>
 
 <div class="field-compact field-label">
@@ -43,7 +61,7 @@
     type="url"
     placeholder="https://example.com"
     required
-    on:blur={() => onUrlBlur?.()}
+    onblur={() => onUrlBlur?.()}
   />
 </label>
 

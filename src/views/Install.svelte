@@ -1,3 +1,5 @@
+<svelte:options runes />
+
 <script lang="ts">
   import { SETUP_TOKEN_ASCII_ERROR, isAsciiPrintableToken } from '../lib/setupTokenInput'
 
@@ -9,23 +11,35 @@
     | 'session_store_unreachable'
     | 'status_error'
 
-  export let mode: InstallViewMode = 'needs_install'
-  export let missingBindings: Array<'DB' | 'SESSION'> = []
-  export let schemaVersion: number | null = null
-  export let installing = false
-  export let error = ''
-  export let onInstall: (value: {
-    setupToken: string
-    username: string
-    password: string
-  }) => Promise<void> | void
-  export let onRetryStatus: () => Promise<void> | void
+  interface Props {
+    mode?: InstallViewMode
+    missingBindings?: Array<'DB' | 'SESSION'>
+    schemaVersion?: number | null
+    installing?: boolean
+    error?: string
+    onInstall: (value: {
+      setupToken: string
+      username: string
+      password: string
+    }) => Promise<void> | void
+    onRetryStatus: () => Promise<void> | void
+  }
 
-  let setupToken = ''
-  let username = 'admin'
-  let password = ''
-  let passwordConfirmation = ''
-  let localError = ''
+  let {
+    mode = 'needs_install',
+    missingBindings = [],
+    schemaVersion = null,
+    installing = false,
+    error = '',
+    onInstall,
+    onRetryStatus,
+  }: Props = $props()
+
+  let setupToken = $state('')
+  let username = $state('admin')
+  let password = $state('')
+  let passwordConfirmation = $state('')
+  let localError = $state('')
 
   function configurationCopy(): { title: string; message: string; action: string } {
     if (mode === 'setup_token_missing') {
@@ -63,10 +77,11 @@
     }
   }
 
-  $: formError = localError || error
-  $: configuration = mode === 'needs_install' ? null : configurationCopy()
+  const formError = $derived(localError || error)
+  const configuration = $derived(mode === 'needs_install' ? null : configurationCopy())
 
-  async function handleSubmit(): Promise<void> {
+  async function handleSubmit(event: SubmitEvent): Promise<void> {
+    event.preventDefault()
     localError = ''
 
     if (!setupToken.trim()) {
@@ -135,10 +150,10 @@
             <span>{error}</span>
           </div>
         {/if}
-        <button class="install-submit" type="button" on:click={onRetryStatus}>{configuration.action}</button>
+        <button class="install-submit" type="button" onclick={onRetryStatus}>{configuration.action}</button>
       </div>
     {:else}
-      <form class="install-form" aria-busy={installing} on:submit|preventDefault={handleSubmit}>
+      <form class="install-form" aria-busy={installing} onsubmit={handleSubmit}>
         <div class="field">
         <label for="setup-token">部署密钥</label>
         <input
@@ -203,7 +218,7 @@
         <div class="install-error" role="alert">
           <strong>安装未完成</strong>
           <span>{formError}</span>
-          <button type="button" on:click={onRetryStatus} disabled={installing}>重新检查安装状态</button>
+          <button type="button" onclick={onRetryStatus} disabled={installing}>重新检查安装状态</button>
         </div>
       {/if}
 

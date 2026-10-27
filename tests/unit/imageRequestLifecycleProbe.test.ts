@@ -199,7 +199,8 @@ describe('pageInstallImageLifecycleProbe', () => {
   it('records subtree removal but not connected reparenting, reorder, or same-batch reinsertion', () => {
     const left = document.createElement('section')
     const right = document.createElement('section')
-    document.body.append(left, right)
+    document.body.appendChild(left)
+    document.body.appendChild(right)
     const one = image('/api/icon/1', left)
     const two = image('/api/category-icon/2', right)
     const probe = install()

@@ -70,7 +70,7 @@ describe('api client surface', () => {
   it('keeps the server routes that the smoke test exercises', () => {
     // 反向确认：删的是客户端封装，不是服务端契约
     const source = readFileSync('worker/routes/auth.ts', 'utf8')
-    expect(source).toContain("authRoutes.get('/me'")
+    expect(source).toContain("authProtectedRoutes.get('/me'")
     expect(readFileSync('worker/routes/public.ts', 'utf8')).toContain("publicRoutes.get('/config'")
     expect(readFileSync('worker/routes/settings.ts', 'utf8')).toContain("settingsRoutes.get('/'")
     expect(readFileSync('worker/routes/bookmarks.ts', 'utf8')).toContain("bookmarksRoutes.get('/'")

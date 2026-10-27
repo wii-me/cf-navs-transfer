@@ -1,3 +1,5 @@
+<svelte:options runes />
+
 <script lang="ts">
   import type { BookmarkFormValue } from '../lib/adminTypes'
   import {
@@ -9,10 +11,19 @@
 
   type AsyncVoid<T = void> = T | Promise<T>
 
-  export let candidates: IconCandidate[] = []
-  export let form: BookmarkFormValue
-  export let urlFilled = false
-  export let onSelect: ((candidate: IconCandidate) => AsyncVoid) | undefined = undefined
+  interface Props {
+    candidates?: IconCandidate[]
+    form: BookmarkFormValue
+    urlFilled?: boolean
+    onSelect?: (candidate: IconCandidate) => AsyncVoid
+  }
+
+  let {
+    candidates = [],
+    form,
+    urlFilled = false,
+    onSelect,
+  }: Props = $props()
 
   function handleSelect(candidate: IconCandidate) {
     void onSelect?.(candidate)

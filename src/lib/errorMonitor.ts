@@ -86,7 +86,7 @@ const MAX_BATCHES_PER_MINUTE = 6
 const ERROR_DEDUPE_TTL_MS = 60_000
 const MAX_DEDUPE_ENTRIES = 100
 
-let _batch: ClassifiedError[] = []
+const _batch: ClassifiedError[] = []
 let _flushTimer: ReturnType<typeof setTimeout> | null = null
 let _reportCount = 0
 let _reportWindowStart = 0

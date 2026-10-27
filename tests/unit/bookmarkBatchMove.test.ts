@@ -67,7 +67,9 @@ describe('batchMoveBookmarks', () => {
     await expect(batchMoveBookmarks(db, request())).resolves.toBe(1)
 
     expect(writeBatches).toHaveLength(1)
-    expect(writeBatches[0]).toHaveLength(2)
+    // two update chunks + trailing data_version bump in the same atomic batch
+    expect(writeBatches[0]).toHaveLength(3)
+    expect(writeBatches[0][2].sql).toContain("'data_version'")
     expect(writeBatches[0][0].sql).toContain('SET category_id = CASE id')
     expect(writeBatches[0][0].params).toEqual([1, 2, 1])
     expect(writeBatches[0][1].params).toEqual([2, 0, 3, 1, 1, 2, 2, 3, 1])

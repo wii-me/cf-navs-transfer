@@ -1,12 +1,16 @@
+<svelte:options runes />
+
 <script lang="ts">
   import { observeIconVisibility } from '../lib/iconVisibility'
-  import { createTrustedIconView, emptyTrustedIcon } from '../lib/trustedIconView'
-  let trustedImage = emptyTrustedIcon
-  const trustedView = createTrustedIconView(value => { trustedImage = value })
+  import { createLocalIconView, emptyLocalIcon } from '../lib/localIconView'
+  import { applyIconDisplayOverride, bookmarkIconDisplay } from '../lib/iconDisplayStore'
+  // 本地图标视图每次发布新对象；不做深层代理。
+  let localImage = $state.raw(emptyLocalIcon)
+  const localView = createLocalIconView(value => { localImage = value })
   let anchor: HTMLSpanElement
-  let inView = false
+  let inView = $state(false)
   let stopVisibility: (() => void) | undefined
-  import { onDestroy, onMount } from 'svelte'
+  import { onDestroy, onMount, untrack } from 'svelte'
   import {
     createBookmarkIconCacheKey,
     deleteCachedBookmarkIcon,
@@ -17,45 +21,80 @@
   } from '../lib/localBookmarkIconCache'
   import { resolveCachedBookmarkIconDisplaySrc } from '../lib/cachedBookmarkIconDisplay'
 
-  export let id: string | number
-  export let icon = ''
-  export let iconSource: string | null | undefined = null
-  export let iconCached: boolean | number | null | undefined = undefined
-  export let iconRevision: string | null | undefined = undefined
-  export let iconWriteEpoch: number | undefined = undefined
-  export let iconDisplay: 'image' | 'text' | 'empty' | undefined = undefined
-  export let iconBlob = ''
-  export let src = ''
-  export let alt = ''
-  export let fallback = ''
-  export let className = ''
-  export let style = ''
+  interface Props {
+    id: string | number
+    icon?: string
+    iconSource?: string | null
+    iconCached?: boolean | number | null
+    iconRevision?: string | null
+    iconWriteEpoch?: number
+    iconDisplay?: 'image' | 'text' | 'empty'
+    iconBlob?: string
+    src?: string
+    alt?: string
+    fallback?: string
+    className?: string
+    style?: string
+  }
 
-  let localUrl = ''
-  let syncLocalUrl = ''
-  let cachePending = false
-  let failed = false
+  let {
+    id,
+    icon = '',
+    iconSource = null,
+    iconCached = undefined,
+    iconRevision = undefined,
+    iconWriteEpoch = undefined,
+    iconDisplay = undefined,
+    iconBlob = '',
+    src = '',
+    alt = '',
+    fallback = '',
+    className = '',
+    style = '',
+  }: Props = $props()
+
+  let localUrl = $state('')
+  let cachePending = $state(false)
+  let failed = $state(false)
+  // 只在下面的副作用里比较，不进模板。
   let stateKey = ''
   const requestSequence = { current: 0 }
 
-  $: trimmedIcon = icon.trim()
-  $: trimmedIconBlob = iconBlob.trim()
-  $: trustedView.set({ id: Number(id), icon: trimmedIcon, icon_blob: trimmedIconBlob, icon_revision: iconRevision, icon_cached: iconCached, icon_write_epoch: iconWriteEpoch, icon_display: iconDisplay, visible: inView, online_url: src })
-  $: cacheKey = createBookmarkIconCacheKey({
+  // 图标显示状态来自独立的按 id 订阅表，与结构化书签数据分离。
+  // watch 对同一 id 返回同一个 store，`$iconDisplayOverride` 不会反复重订阅。
+  const iconDisplayOverride = $derived(bookmarkIconDisplay.watch(Number(id)))
+  const iconRow = $derived(applyIconDisplayOverride({ icon: icon.trim(), icon_blob: iconBlob.trim(), icon_revision: iconRevision, icon_cached: iconCached, icon_write_epoch: iconWriteEpoch, icon_display: iconDisplay }, $iconDisplayOverride))
+  const trimmedIcon = $derived(iconRow.icon ?? '')
+  const trimmedIconBlob = $derived(iconRow.icon_blob ?? '')
+  // 与原 `$:` 一样先于 DOM 更新、在状态键判断之前执行；set 内部按签名去重，只在入参依赖变化时调用。
+  $effect.pre(() => {
+    const input = { ...iconRow, id: Number(id), icon: trimmedIcon, icon_blob: trimmedIconBlob, visible: inView, online_url: src }
+    untrack(() => localView.set(input))
+  })
+  const cacheKey = $derived(createBookmarkIconCacheKey({
     id,
     icon: trimmedIcon,
     iconSource,
+  }))
+  const syncLocalUrl = $derived(readCachedBookmarkIconDataUri(cacheKey) ?? '')
+  const shouldWaitForLocalCache = $derived(src.startsWith('/api/icon/') && !isDataImage(trimmedIconBlob))
+  const nextStateKey = $derived(`${cacheKey}:${trimmedIconBlob}:${src}:${localImage.active}`)
+  // 状态键变化时复位并重新加载；只依赖状态键（其余量都已含在键里），
+  // 被调用函数里读写的 localUrl / cachePending / localImage 不作为依赖（与原语句的语法依赖一致）。
+  $effect.pre(() => {
+    const key = nextStateKey
+    const keyForCache = cacheKey
+    const blob = trimmedIconBlob
+    const waitForLocalCache = shouldWaitForLocalCache
+    untrack(() => {
+      if (key === stateKey) return
+      stateKey = key
+      failed = false
+      resetLocalUrl()
+      void loadCachedIcon(keyForCache, blob, waitForLocalCache)
+    })
   })
-  $: syncLocalUrl = readCachedBookmarkIconDataUri(cacheKey) ?? ''
-  $: shouldWaitForLocalCache = src.startsWith('/api/icon/') && !isDataImage(trimmedIconBlob)
-  $: nextStateKey = `${cacheKey}:${trimmedIconBlob}:${src}:${trustedImage.active}`
-  $: if (nextStateKey !== stateKey) {
-    stateKey = nextStateKey
-    failed = false
-    resetLocalUrl()
-    void loadCachedIcon(cacheKey, trimmedIconBlob, shouldWaitForLocalCache)
-  }
-  $: legacyDisplaySrc = resolveCachedBookmarkIconDisplaySrc({
+  const legacyDisplaySrc = $derived(resolveCachedBookmarkIconDisplaySrc({
     syncLocalUrl,
     localUrl,
     failed,
@@ -63,9 +102,9 @@
     shouldWaitForLocalCache,
     cachePending,
     src,
-  })
+  }))
 
-  $: displaySrc = trustedImage.active ? trustedImage.url : legacyDisplaySrc
+  const displaySrc = $derived(localImage.active ? localImage.url : legacyDisplaySrc)
 
   onMount(() => { stopVisibility = observeIconVisibility(anchor, () => { inView = true }) })
 
@@ -77,7 +116,7 @@
   }
 
   async function loadCachedIcon(key: string, dataUri: string, waitForLocalCache: boolean) {
-    if (trustedImage.active) return
+    if (localImage.active) return
     if (isDataImage(dataUri)) {
       requestSequence.current += 1
       cachePending = false
@@ -102,7 +141,7 @@
   }
 
   function handleError() {
-    if (trustedImage.active) { trustedView.failed(); return }
+    if (localImage.active) { localView.failed(); return }
     if (localUrl) {
       resetLocalUrl()
       return
@@ -111,7 +150,7 @@
   }
 
   onDestroy(() => {
-    trustedView.destroy()
+    localView.destroy()
     stopVisibility?.()
     requestSequence.current += 1
     resetLocalUrl()
@@ -127,7 +166,7 @@
     alt={alt}
     loading="lazy"
     decoding="async"
-    on:error={handleError}
+    onerror={handleError}
   />
 {/if}
 {#if !displaySrc && fallback}

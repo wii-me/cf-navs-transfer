@@ -5,8 +5,11 @@ function createSchemaDb(categoryColumns: string[]) {
   const batchedSql: string[] = []
   const db = {
     prepare(sql: string) {
-      return {
+      const statement = {
         sql,
+        bind() { return statement },
+        // schema_version 行缺失 = 未记录版本的旧库。
+        async first() { return null },
         async all() {
           if (sql === 'PRAGMA table_info(bookmarks)') {
             return { results: [{ name: 'icon_source' }, { name: 'icon_blob' }, { name: 'icon_background_color' }, { name: 'description_mode' }] }
@@ -17,6 +20,7 @@ function createSchemaDb(categoryColumns: string[]) {
           return { results: [] }
         },
       }
+      return statement
     },
     async batch(statements: Array<{ sql?: string }>) {
       for (const statement of statements) {

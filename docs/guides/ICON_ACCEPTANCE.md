@@ -25,10 +25,9 @@
 ```sh
 node --experimental-sqlite node_modules/vitest/vitest.mjs run tests/unit/iconAcceptance.test.ts tests/unit/iconAcceptanceCollector.test.ts
 npm run build
-npm run regression:icons:local
 ```
 
-复用已有隔离运行器，自动创建临时 Worker/D1、一次性测试凭据和 Chrome profile；不对生产写入合成数据。运行器的资源归属和清理失败门保持不变。
+（原 `npm run regression:icons:local` 浏览器专项依赖已移除的可信设备，已随图标本地优先缓存 v2 删除；本地优先行为由 `iconLocalStore` / `localIconView` / `bookmarkCardLocalFirst` 单测与测试站实测覆盖。）旧专项曾复用隔离运行器，自动创建临时 Worker/D1、一次性测试凭据和 Chrome profile；不对生产写入合成数据。运行器的资源归属和清理失败门保持不变。
 
 单测先证明验收器会拒绝：可解码错图、兜底、重复位置缺失、分类缺失、重复身份、额外私密对象、证据缺失、解码/画布错误、图文替换和错误文字。采集层另测重复 DOM 命中、不存在元素及画布失败。
 

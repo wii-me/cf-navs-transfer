@@ -4,6 +4,8 @@ export function normalizeSortIds(ids: Array<string | number>): number[] {
 
 export function queueSortSave(previousSave: Promise<void>, save: () => Promise<void>): Promise<void> {
   return previousSave
+    // 有意吞掉：上一次保存的失败已由它自己的 runOptimisticSort 调用方报告并回滚，
+    // 这里只负责排队，不能让旧失败阻断（或重复报告给）本次保存。
     .catch(() => undefined)
     .then(save)
 }
@@ -56,7 +58,11 @@ export async function runOptimisticSort(
   } catch (error) {
     if (isLatestSortRequest(requestSeq, state.requestSeq)) {
       options.onError(error)
-      await options.restoreOnError().catch(() => undefined)
+      // 保存失败已经通过 onError 报告；回滚本身再失败时不能覆盖那条错误，
+      // 但也不能静默——本地顺序可能停在乐观状态，留下诊断线索。
+      await options.restoreOnError().catch((restoreError) => {
+        console.warn('[CF-Navs] failed to restore sort order after save error', restoreError)
+      })
     }
   }
 }

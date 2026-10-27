@@ -140,7 +140,7 @@ PROB-14 还要求至少有一个带书签的二级分类，并有不属于该子
 | PROB-19v 的 KV 写入故障注入 | 要让 KV 真的写失败才能走到 `store_unavailable` 分支，生产上没有安全的注入手段 |
 | REQ-08b 13 套预设视觉 | 要逐套写入 `background_preset_id`，属 Tier 1；且「好不好看」需要人眼 |
 | PROB-16 的数值断点 | `820px` 分行 2 行/98px、浮动按钮 `top=18` 这类一次性数值证据，已在台账里明确标为不构成持续回归 |
-| REQ-15 可信图标的部署与升级验收 | `accept:prod` / `perf:audit` 不会启用设备信任或取得可信副本。授权测试站的真实 UI 专项见 [Issue 浏览器回归](ISSUE_BROWSER_REGRESSION.md)；同 profile 重开等已有证据不再视为未验收，剩余租期/权限组合及跨构建范围看 BACKLOG。`test:icon-storage` 和 `regression:icons:local` 只证明隔离本地环境 |
+| 图标本地优先缓存 v2 | `accept:prod` / `perf:audit` 不检查 IndexedDB 命中；第二次打开零图标请求、改一个图标只重下一张、登出只清私密条目需在授权测试站人工实测 |
 
 ### 5.1 自定义 JS 与 CSP 专项的复验步骤
 

@@ -102,7 +102,7 @@ describe('SearchSpotlight', () => {
   })
 
   it('icon_cached 书签走 /api/icon 代理路径', async () => {
-    const fetch = vi.fn(async () => new Response('<svg/>', { headers: { 'content-type': 'image/svg+xml' } }))
+    const fetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('<svg/>', { headers: { 'content-type': 'image/svg+xml' } }))
     vi.stubGlobal('fetch', fetch)
     const TestURL = class extends URL {}
     Object.assign(TestURL, { createObjectURL: () => 'blob:spotlight', revokeObjectURL: vi.fn() })

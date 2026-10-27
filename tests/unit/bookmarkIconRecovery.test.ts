@@ -4,6 +4,8 @@ import { cleanup, fireEvent, render } from '@testing-library/svelte'
 import BookmarkCard from '../../src/components/BookmarkCard.svelte'
 import SpotlightBookmarkIcon from '../../src/components/SpotlightBookmarkIcon.svelte'
 import type { PublicBookmark } from '../../shared/types'
+import { bookmarkIconDisplay } from '../../src/lib/iconDisplayStore'
+vi.mock('../../src/lib/localIconView', () => import('../helpers/inactiveLocalIconView'))
 
 const bookmark: PublicBookmark = {
   id: 42, category_id: 1, title: 'Recovery', url: 'https://example.test',
@@ -78,7 +80,7 @@ for (const [name, Component] of [['home', BookmarkCard], ['spotlight', Spotlight
     })
 
     it.each(['', 'test-grant'])('recovers an uncached HTTP icon after its direct image request fails (grant=%s)', async (iconAccessKey) => {
-      const fetch = vi.fn(async () => image())
+      const fetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => image())
       vi.stubGlobal('fetch', fetch)
       const { container } = render(Component, { props: { bookmark: { ...bookmark, icon_cached: false }, iconAccessKey } })
       await vi.waitFor(() => expect(container.querySelector('img')?.getAttribute('src')).toBe(bookmark.icon))
@@ -151,5 +153,25 @@ for (const [name, Component] of [['home', BookmarkCard], ['spotlight', Spotlight
       expect(fetch).toHaveBeenCalledTimes(4)
     })
 
+  })
+}
+
+// 代码审查二轮第 2 项：图标显示状态改由按 id 订阅的独立表承载，卡片自己订阅，
+// 不再经由重建整个 bookmarks 数组。这里证明卡片确实消费该表。
+for (const [name, Component] of [['home', BookmarkCard], ['spotlight', SpotlightBookmarkIcon]] as const) {
+  describe(name + ' icon display override', () => {
+    afterEach(() => bookmarkIconDisplay.clear())
+    it('re-renders only from the per-id icon display state', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => image()))
+      const { container } = render(Component, { props: { bookmark } })
+      await vi.waitFor(() => expect(container.querySelector('img')).not.toBeNull())
+      bookmarkIconDisplay.set(bookmark.id + 1, { dataset_epoch: 'a'.repeat(32), icon_revision: null, icon_write_epoch: 1, icon_display: 'empty' })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(container.querySelector('img')).not.toBeNull()
+      bookmarkIconDisplay.set(bookmark.id, { dataset_epoch: 'a'.repeat(32), icon_revision: null, icon_write_epoch: 1, icon_display: 'empty' })
+      await vi.waitFor(() => expect(container.querySelector('img')).toBeNull())
+      bookmarkIconDisplay.clear()
+      await vi.waitFor(() => expect(container.querySelector('img')).not.toBeNull())
+    })
   })
 }

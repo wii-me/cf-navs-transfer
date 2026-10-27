@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { get } from 'svelte/store'
 import { clearIconAccessKey, ensureIconAccessKey, iconAccessKey, readIconAccessKey } from '../../src/lib/iconAccessKey'

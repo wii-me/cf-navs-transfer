@@ -107,7 +107,7 @@ describe('home floating actions', () => {
   })
 })
 
-describe('移动端折叠菜单', () => {
+describe('右上角显隐菜单', () => {
   it('渲染竖三点「更多」触发器，默认收起且带 disclosure 语义', () => {
     render(HomeFloatingActions, { props: { isAuthenticated: true } })
     const trigger = screen.getByTestId('home-actions-menu-trigger')
@@ -146,6 +146,15 @@ describe('移动端折叠菜单', () => {
     expect(trigger.getAttribute('aria-expanded')).toBe('false')
   })
 
+  it('使用指南入口调用页面导航回调', async () => {
+    const onOpenGuide = vi.fn()
+    render(HomeFloatingActions, { props: { isAuthenticated: false, onOpenGuide } })
+
+    await fireEvent.click(screen.getByRole('button', { name: '使用指南' }))
+
+    expect(onOpenGuide).toHaveBeenCalledTimes(1)
+  })
+
   it('Escape 关闭已展开的菜单', async () => {
     render(HomeFloatingActions, { props: { isAuthenticated: true } })
     const trigger = screen.getByTestId('home-actions-menu-trigger')
@@ -174,13 +183,12 @@ describe('移动端折叠菜单', () => {
     expect(source).toContain('top: calc(100% + 6px)')
   })
 
-  it('平板到中屏（800–1650px）顶部导航模式也折叠，避免平铺按钮遮挡居中导航栏', () => {
-    // 居中导航栏（max-width 1200px）右缘距视口约 16px，与右上角平铺按钮组重叠直到约 1608px；
-    // 该区间折叠为「更多」菜单并下移到导航栏下方，>1650px 才恢复平铺。jsdom 不解析 @media，读源码断言。
+  it('桌面与移动端都由更多触发器控制，顶部导航中屏时菜单下移', () => {
+    // jsdom 不解析 @media；DOM 状态另由上面的交互测试验证。
+    expect(source).toContain('.floating-actions .actions-menu-trigger')
     expect(source).toContain('min-width: 800px) and (max-width: 1650px')
     expect(source).toContain('top: 4.5rem;')
-    // 规则必须限定顶部导航模式，否则侧栏模式在 800–1650px 会被误折叠
-    expect(source).toContain('below-top-navigation .actions-menu-trigger')
+    expect(source).toContain('.floating-actions.below-top-navigation.menu-open .actions-group')
   })
 })
 
@@ -192,6 +200,9 @@ describe('离屏搜索按钮（REQ-01）', () => {
     expect(button.getAttribute('aria-hidden')).toBe('false')
     expect(button.getAttribute('aria-label')).toBe('搜索书签')
     expect(button.getAttribute('aria-keyshortcuts')).toBe('Control+K Meta+K')
+    expect(button.closest('.actions-group')).toBeNull()
+    expect(document.querySelector('.floating-actions')?.classList.contains('search-visible')).toBe(true)
+    expect(source).toContain('.floating-actions.search-visible .actions-group')
   })
 
   it('搜索框在视口内时隐藏搜索按钮（在 DOM 但不可见、不可聚焦）', () => {

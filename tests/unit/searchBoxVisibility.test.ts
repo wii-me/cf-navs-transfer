@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { observeSearchBoxVisibility } from '../../src/lib/searchBoxVisibility'
 
@@ -39,7 +38,7 @@ function installFakeIO() {
 describe('observeSearchBoxVisibility', () => {
   it('用 threshold:0 观察目标元素，并按相交状态回调 true/false', () => {
     const { state, emit } = installFakeIO()
-    const el = document.createElement('div')
+    const el = {} as HTMLElement // 纯逻辑：只需一个可被 observe 的引用，不依赖 DOM
     const seen: boolean[] = []
 
     const stop = observeSearchBoxVisibility(el, (visible) => seen.push(visible))
@@ -59,7 +58,7 @@ describe('observeSearchBoxVisibility', () => {
   it('无 IntersectionObserver 时回调恒 true 且清理为 no-op', () => {
     // @ts-expect-error 故意移除以模拟不支持的环境
     globalThis.IntersectionObserver = undefined
-    const el = document.createElement('div')
+    const el = {} as HTMLElement // 纯逻辑：只需一个可被 observe 的引用，不依赖 DOM
     const seen: boolean[] = []
 
     const stop = observeSearchBoxVisibility(el, (visible) => seen.push(visible))

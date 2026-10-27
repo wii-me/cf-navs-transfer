@@ -29,13 +29,16 @@ describe('home responsive layout', () => {
   expect(mobileStyles).not.toMatch(/margin-top:\s*3(\.5)?rem;/)
  })
  it('paints mobile overscroll with the active homepage background', () => {
+  // 根变量写入已抽到 rootStyleWriter（行为见 tests/unit/rootStyleWriter.test.ts），这里只守接线。
   const app = readFileSync('src/App.svelte', 'utf8')
+  const writer = readFileSync('src/lib/rootStyleWriter.ts', 'utf8')
   const globalStyles = readFileSync('src/app.css', 'utf8')
 
-  expect(app).toContain("'--home-background'")
-  expect(app).toContain("'--home-background-mask'")
-  expect(app).toContain("'--home-background-mask-color'")
-  expect(app).toContain('document.documentElement.style.setProperty')
+  expect(app).toContain('rootStyleWriter?.applyTheme(')
+  expect(writer).toContain("'--home-background'")
+  expect(writer).toContain("'--home-background-mask'")
+  expect(writer).toContain("'--home-background-mask-color'")
+  expect(writer).toContain('root.style.setProperty')
   expect(globalStyles).toContain('var(--home-background);')
   expect(globalStyles).toContain('background-attachment: fixed;')
  })

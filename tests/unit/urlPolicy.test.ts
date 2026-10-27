@@ -85,6 +85,7 @@ describe('admin form url normalization', () => {
     description: '',
     description_mode: 'inherit' as const,
     open_method: 'new_tab' as const,
+    is_private: false,
   }
 
   it('completes a bare domain typed into the admin form', () => {

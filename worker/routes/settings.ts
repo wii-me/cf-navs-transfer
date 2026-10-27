@@ -1,13 +1,13 @@
 import { Hono } from 'hono'
-import { BUILTIN_BACKGROUND_PRESET_IDS, ErrCode, type Settings, type SettingsUpdateReq } from '../../shared/types'
+import { BUILTIN_BACKGROUND_PRESET_IDS, type Settings, type SettingsUpdateReq } from '../../shared/types'
 import { SETTINGS_KEYS } from '../../shared/settings'
 import { normalizeCardIconSize, normalizeCardSizeSetting, normalizeCategoryDisplaySetting } from '../../shared/settings'
-import { invalidatePublicDataCache, invalidateSiteConfigCache } from '../lib/cache'
-import { ensureBrowserSyncCategory, getSettings, settingsFromPatchDefaults, touchDataVersion, updateSettings, writeSettingsPatch } from '../lib/db'
-import { fail, ok } from '../lib/response'
-import { badRequest, readJson } from '../lib/routeHelpers'
+import { ensureBrowserSyncCategoryStatement, ensureSchema, getSettings, settingsFromPatchDefaults, updateSettings, writeSettingsPatch } from '../lib/db'
+import { createMutationReceipt } from '../lib/db/mutation'
+import { mutationJson } from '../lib/mutationResponse'
+import { ok } from '../lib/response'
+import { badRequest, readJson, serverError } from '../lib/routeHelpers'
 import { findSettingsLengthError } from '../lib/settingsLimits'
-import { invalidateRuntimeDataCache } from '../lib/runtimeCache'
 import type { HonoEnv } from '../types'
 
 const COMPLETE_PUBLIC_SETTINGS_KEYS: readonly (keyof Settings)[] = SETTINGS_KEYS
@@ -36,8 +36,8 @@ export const settingsRoutes = new Hono<HonoEnv>()
 settingsRoutes.get('/', async (c) => {
   try {
     return c.json(ok(await getSettings(c.env.DB)))
-  } catch {
-    return c.json(fail(ErrCode.SERVER_ERROR, 'failed to get settings'))
+  } catch (error) {
+    return serverError(c, 'failed to get settings', error)
   }
 })
 
@@ -184,29 +184,30 @@ settingsRoutes.put('/', async (c) => {
     if (body.card_size !== undefined) settingsPatch.card_size = normalizeCardSizeSetting(body.card_size)
     if (body.card_icon_size !== undefined) settingsPatch.card_icon_size = normalizeCardIconSize(body.card_icon_size)
     if (body.category_display !== undefined) settingsPatch.category_display = normalizeCategoryDisplaySetting(body.category_display)
-    if (body.browser_sync_enabled === true) {
-      await ensureBrowserSyncCategory(c.env.DB)
-    }
     if (body.card_description_mode !== undefined) {
       settingsPatch.card_show_description = body.card_description_mode === 'always'
     } else if (body.card_show_description !== undefined) {
       settingsPatch.card_description_mode = body.card_show_description ? 'always' : 'hidden'
     }
+    const receipt = createMutationReceipt()
+    // 同步分类语句依赖 categories.parent_id；与原 ensureBrowserSyncCategory 一样先确保旧库已迁移（isolate 内只查一次）。
+    if (body.browser_sync_enabled === true) await ensureSchema(c.env.DB)
+    // 开启浏览器同步时幂等创建同步根分类，与设置写入、data_version 提升同一 batch 提交。
+    const writeOptions = {
+      receipt,
+      extraStatements: body.browser_sync_enabled === true ? [ensureBrowserSyncCategoryStatement(c.env.DB)] : [],
+    }
     const hasCompletePublicSettings = isCompletePublicSettingsPatch(settingsPatch)
     let settings: Settings
     if (hasCompletePublicSettings) {
-      await writeSettingsPatch(c.env.DB, settingsPatch)
+      await writeSettingsPatch(c.env.DB, settingsPatch, writeOptions)
       settings = settingsFromPatchDefaults(settingsPatch)
     } else {
-      settings = await updateSettings(c.env.DB, settingsPatch)
+      settings = await updateSettings(c.env.DB, settingsPatch, writeOptions)
     }
-    await touchDataVersion(c.env.DB)
-    invalidateRuntimeDataCache()
-    invalidatePublicDataCache(c, c.req.url)
-    invalidateSiteConfigCache(c, c.req.url)
-    return c.json(ok(settings))
-  } catch {
-    return c.json(fail(ErrCode.SERVER_ERROR, 'failed to update settings'))
+    return mutationJson(c, settings, receipt, { siteConfig: true })
+  } catch (error) {
+    return serverError(c, 'failed to update settings', error)
   }
 })
 

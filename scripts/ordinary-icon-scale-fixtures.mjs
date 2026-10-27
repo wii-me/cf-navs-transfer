@@ -32,15 +32,10 @@ import { createServer } from 'node:net'
 import { randomBytes } from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { TIER_NAMES, buildTier, computeColdHomeMount, publicCategoryIdSet } from './lib/scaleFixturePlan.mjs'
+import { resolveWranglerConfig, rootDir, runWranglerSync, wranglerBin } from './lib/wranglerLocal.mjs'
 
-const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const wranglerBin = path.join(rootDir, 'node_modules', 'wrangler', 'bin', 'wrangler.js')
-const localConfig = path.join(rootDir, 'wrangler.local.toml')
-const publicConfig = path.join(rootDir, 'wrangler.toml')
-const configPath =
-  process.env.ICONSCALE_WRANGLER_CONFIG || (existsSync(localConfig) ? localConfig : publicConfig)
+const configPath = resolveWranglerConfig(process.env.ICONSCALE_WRANGLER_CONFIG)
 const persistParent = path.join(rootDir, '.wrangler')
 const persistTo = path.resolve(process.env.ICONSCALE_PERSIST_TO || path.join(persistParent, 'state-iconscale-' + randomBytes(6).toString('hex')))
 const readyTimeoutMs = Number.parseInt(process.env.ICONSCALE_READY_TIMEOUT || '120', 10) * 1000
@@ -89,11 +84,7 @@ function findFreePort() {
 }
 
 function runWrangler(args, label) {
-  const result = spawnSync(process.execPath, [wranglerBin, ...args, '--config', configPath], {
-    cwd: rootDir,
-    stdio: ['ignore', 'ignore', 'inherit'],
-  })
-  if (result.status !== 0) throw new Error(`${label} failed with exit code ${result.status}`)
+  runWranglerSync(configPath, args, label)
 }
 
 // End the whole process tree. wrangler spawns workerd; killing only the parent orphans the port

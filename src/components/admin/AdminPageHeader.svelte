@@ -1,13 +1,26 @@
+<svelte:options runes />
+
 <script lang="ts">
   import { transferStore } from '../../lib/stores/transferStore'
   type AsyncVoid<T = void> = T | Promise<T>
 
-  export let isAuthenticated = false
-  export let authLoading = false
-  export let canSeeHome = false
-  export let onOpenLogin: (() => AsyncVoid) | undefined = undefined
-  export let onLogout: (() => AsyncVoid) | undefined = undefined
-  export let onSwitchToHome: (() => AsyncVoid) | undefined = undefined
+  interface Props {
+    isAuthenticated?: boolean
+    authLoading?: boolean
+    canSeeHome?: boolean
+    onOpenLogin?: () => AsyncVoid
+    onLogout?: () => AsyncVoid
+    onSwitchToHome?: () => AsyncVoid
+  }
+
+  let {
+    isAuthenticated = false,
+    authLoading = false,
+    canSeeHome = false,
+    onOpenLogin,
+    onLogout,
+    onSwitchToHome,
+  }: Props = $props()
 
   function handleOpenLogin(): void {
     void onOpenLogin?.()
@@ -33,7 +46,7 @@
         type="button"
         class="icon-button"
         data-testid="admin-home-button"
-        on:click={handleSwitchToHome}
+        onclick={handleSwitchToHome}
         title="返回首页"
         aria-label="返回首页"
       >
@@ -61,7 +74,7 @@
         type="button"
         class="icon-button"
         data-testid="admin-logout-button"
-        on:click={handleLogout}
+        onclick={handleLogout}
         disabled={authLoading}
         title="退出登录"
         aria-label="退出登录"
@@ -77,7 +90,7 @@
         type="button"
         class="icon-button"
         data-testid="admin-login-button"
-        on:click={handleOpenLogin}
+        onclick={handleOpenLogin}
         disabled={authLoading}
         title="管理员登录"
         aria-label="管理员登录"

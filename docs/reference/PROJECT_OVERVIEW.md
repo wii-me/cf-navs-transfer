@@ -118,7 +118,7 @@ worker/
 ├── middleware/
 │   └── auth.ts         # 认证中间件
 ├── lib/
-│   ├── db.ts           # 数据库操作（含幂等迁移）
+│   ├── db.ts           # 数据库操作（版本化幂等迁移见 db/schema.ts）
 │   ├── routeHelpers.ts # 路由层共用校验与响应 helper（含批量/排序上限）
 │   ├── bookmarkPayload.ts # 书签写入 payload 的统一校验与归一化
 │   ├── sessionRevocation.ts # 退出登录的会话撤销名单
@@ -281,13 +281,13 @@ SESSION_TTL = "2592000"             # wrangler.toml 默认会话有效期（30�
 - Worker 边缘计算
 - `/api/config` 使用短 TTL Cloudflare edge cache，设置保存和导入后主动失效
 - `/api/data/version` 使用一次 `settings` 查询同时读取 `site_title`、`public_mode` 和内部 `data_version` 做轻量变更确认；分类、书签、排序、设置、导入和实际变化的显式图标缓存刷新都会更新版本
-- 匿名 `/api/public/data` 未携带 no-cache 指令时使用 Cloudflare edge cache，命中时不读取 D1；cache miss 时优先复用 `/api/config` edge cache，没有命中才轻量读取 `site_title/public_mode` 并预热配置缓存，私有模式下的匿名 1005 响应也短时缓存到 edge，写入接口负责失效缓存
-- `/api/admin/data` 合并后台进入时的数据读取，分类、书签和 settings 使用 D1 batch 读取，并随响应携带当前数据版本；请求带 no-cache 指令时会绕过 Worker isolate 内的短 TTL 运行时聚合缓存
+- 匿名 `/api/public/data` 忽略客户端 no-cache 指令、按 `?v=<data_version>` 版本键使用 Cloudflare edge cache，命中时不读取 D1；cache miss 时优先复用 `/api/config` edge cache，没有命中才轻量读取 `site_title/public_mode` 并预热配置缓存，私有模式下的匿名 1005 响应也短时缓存到 edge，写入接口负责失效缓存
+- `/api/admin/data` 合并后台进入时的数据读取，分类、书签和 settings 使用 D1 batch 读取，并随响应携带当前数据版本；每次直读 D1，不再有 Worker isolate 内的运行时聚合缓存
 - `/api/public/data` 确认公开后用一次 D1 batch 合并公开 settings、分类和书签读取，并只读取首页公开字段；书签公开字段保留 `icon_cached` 轻量标志，不返回 `icon_blob` 二进制或 `created_at` 等管理字段；同请求内刚从 D1 读取过的 `site_title/public_mode` 会合并进公开 settings，避免第二次 settings 查询重复读取这两行。
 - 后台设置面板提交完整 `Settings` 字段时，`PUT /api/settings` 写入 D1 后直接由提交 payload 合成响应；只有兼容性部分更新请求才写后回读完整 settings
 - 分类新增用 `INSERT ... SELECT ... RETURNING` 在目标父级作用域计算末尾排序；分类更新先读取当前父级和子分类状态，再用 `UPDATE ... RETURNING` 完成合法移动。书签新增仍在单条语句中判断分类是否存在；书签更新在 SQL 内只于图标变化时清空 `icon_blob`
 - 分类删除先查询子分类数量执行保护，无子分类时再按删除语句 `changes` 判断目标是否存在，并显式删除直属书签
-- 公开聚合、后台聚合、书签列表和图标详情等读取路径跳过预检查式 schema 迁移，仅在旧库缺列错误时迁移并重试一次
+- schema 迁移版本化（`settings.schema_version` + 有序幂等步骤，每 isolate 一次、版本最新时只读一行不跑 DDL）；公开聚合、后台聚合、书签列表和图标详情等读取路径不做预检，仅在旧库缺列错误时修复式迁移并重试一次
 - `/api/icon/:id`、`/api/category-icon/:id` 与 `/api/iconify/:set/:name.svg` 统一提供图标代理能力，普通书签图标 cache miss 时一次 D1 查询同时读取地址和 `icon_blob`；外站抓取成功后直接返回图片字节。首页普通书签卡片不从聚合响应读取 `icon_blob`，而根据 `icon_cached` 选择本地缓存、已保存的 HTTP(S) 图标 URL 或兼容路径；Iconify 图标和 icon-sets 页面链接不写 `icon_blob`，后台预览通过稳定 `/api/iconify/*` 共享 edge cache，首页展示复用浏览器 HTTP 缓存的 Iconify SVG；Service Worker 不缓存跨域 `opaque` 图标响应，普通 HTTP(S) 书签图标代理抓取失败时按现有临时 SVG fallback 规则处理。
 - 静态资源 CDN
 
@@ -342,7 +342,7 @@ SESSION_TTL = "2592000"             # wrangler.toml 默认会话有效期（30�
 
 ### 生产环境
 
-- **Cloudflare Git（推荐新安装）**：Fork 仓库后在 Dashboard 使用 **Import a repository** 选择现有 Fork；通用 Deploy Button 只能创建新仓库。保留无 ID 的 `DB`/`SESSION` 声明，让 Git 引导流程首轮创建绑定；首轮部署后添加加密 `SETUP_TOKEN` 并重新部署，再访问 `/install` 初始化 schema 和管理员。确认安装成功后建议删除或轮换该 Secret；公开状态检查不依赖它，安装锁由 D1 中的管理员凭据和完成标记判定。正常路径不需要 API Token、GitHub Actions 或手动 SQL。
+- **Cloudflare Git（推荐新安装）**：Fork 仓库后在 Dashboard 使用 **Import a repository** 选择现有 Fork；通用 Deploy Button 只能创建新仓库。保留无 ID 的 `DB`/`SESSION` 声明，让 Git 引导流程首轮创建绑定；首轮部署后添加加密 `SETUP_TOKEN` 并重新部署，再访问 `/install` 初始化 schema 和管理员。确认安装成功后建议删除或轮换该 Secret；公开状态检查不依赖它，安装锁由 D1 中的管理员凭据和完成标记判定。正常路径不需要 API Token、GitHub Actions 或手动 SQL；GitHub Actions 是需显式启用的备选部署方式，见部署指南「方式三」。
 - **Wrangler CLI**：创建 D1/KV，运行 `npm run setup:wrangler`，先运行 `npm run deploy` 创建 Worker，再设置加密 Secret `SETUP_TOKEN` 并重新运行 `npm run deploy`，最后访问 `/install` 初始化 schema 和管理员。`db:init:remote` 仅用于安装器失败后的恢复。
 - `/install` 自动初始化失败时，才在 D1 SQL Console 执行 `schema.sql` 作为恢复手段。
 

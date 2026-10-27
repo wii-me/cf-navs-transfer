@@ -12,8 +12,8 @@
 4. **需要背景时看决策记录**：`plans/` 说明当初为什么这么改、哪些约束必须继续遵守。
    - 缺陷 / 验收欠账 / 文档与源码不一致 / 风险的核对证据：`plans/PROBLEM_HANDLING_TASK_LIST.md`（`PROB-NN`）。
    - 尚未实现的功能需求及其来源：`plans/REQUIREMENT_DEVELOPMENT_TASK_LIST.md`（`REQ-NN`）。
-   - 设置页 / 顶部导航 / 部分导出：`plans/DEV_TASK_BREAKDOWN_UI_NAV_EXPORT.md`，需求边界看 `SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md` 与 `PARTIAL_EXPORT_AND_TOP_NAV_WRAP_REQUIREMENTS.md`。
-   - R-01～R-08 历史 Issue 需求：`plans/DEV_TASK_BREAKDOWN_GITHUB_ISSUES.md`；发布追溯看 `reference/GITHUB_ISSUES_REQUIREMENTS.md`。新一轮开放 Issue / PR 的分析入口见下方「GitHub 任务分析快照」。
+   - 设置页 / 顶部导航 / 部分导出：`plans/_archive/DEV_TASK_BREAKDOWN_UI_NAV_EXPORT.md`，需求边界看 `SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md` 与 `PARTIAL_EXPORT_AND_TOP_NAV_WRAP_REQUIREMENTS.md`。
+   - R-01～R-08 历史 Issue 需求：`plans/_archive/DEV_TASK_BREAKDOWN_GITHUB_ISSUES.md`；发布追溯看 `reference/GITHUB_ISSUES_REQUIREMENTS.md`。新一轮开放 Issue / PR 的分析入口见下方「GitHub 任务分析快照」。
    - 前端体验优化：`plans/FRONTEND_EXPERIENCE_OPTIMIZATION_REQUIREMENTS.md` 是历史需求评估，其中部分条款已有后续实现或裁定；当前剩余范围以 BACKLOG 为准，不能整份当作未实现或已批准的清单。
 5. **涉及公共契约时同步查参考文档**：API 看 `reference/API_CONTRACT.md`，性能看 `reference/PERFORMANCE_CONTRACT.md`，架构和当前功能看 `reference/PROJECT_OVERVIEW.md`，实现细节看 `reference/TECHNICAL_NOTES.md`。
 6. **开发完成后写发布记录**：`CHANGELOG.md` 按版本分节，只记录已交付的变更；未发版的内容放在 `[Unreleased]`。
@@ -25,6 +25,7 @@
 | `guides/` | 快速开始、部署、排障和数据导入等可操作流程 | 面向使用者；命令和步骤必须与当前脚本/配置一致 |
 | `reference/` | API、性能、架构、分类和 Issue 状态等稳定事实 | 面向维护者；涉及契约或实现变化时必须同步更新 |
 | `plans/` | 决策记录：已完成轮次的实施记录、需求评估、核对证据和任务边界 | **不维护待办状态**；历史现状必须标注为历史，行号引用可能已腐烂 |
+| `plans/_archive/` | 已交付、已被取代或只代表某次采集时刻的计划与快照（2026-10-17 归档 16 份） | 只读存档，内容保持原样；其中的「未实现 / 待办 / Open」描述的是当时状态 |
 | `BACKLOG.md` | 内部工作项的唯一状态源 | 只列未完成条目；完成后删除，成果记入 `CHANGELOG.md` |
 | `CHANGELOG.md` | 按版本分节的已交付变更记录 | 只记录已完成事项，不提前记录计划功能 |
 
@@ -43,6 +44,7 @@
 ## 技术参考
 
 - [项目概览](reference/PROJECT_OVERVIEW.md)
+- [分支与发版流程](reference/BRANCHING_AND_RELEASE.md)
 - [GitHub Issues 需求与发布追溯（R-01～R-08）](reference/GITHUB_ISSUES_REQUIREMENTS.md)
 - [API 契约](reference/API_CONTRACT.md)
 - [技术说明](reference/TECHNICAL_NOTES.md)
@@ -58,25 +60,25 @@
 
 以下两份清单分别整理开放 Issue 与 PR 的内容、建议任务、阻塞条件和未来验收，均记录固定采集时间；**不维护实时进度，也不构成开发或合并授权**。云端状态仍以 GitHub Issue / PR 为准。
 
-- [开启 Issue 任务清单](plans/OPEN_ISSUES_TASK_LIST.md)：#21、#19、#16、#15 的正文与评论分析。
-- [开启 PR 审查任务清单](plans/OPEN_PRS_TASK_LIST.md)：#14 的实际差异、CI、合并条件与功能审查任务。
+- [开启 Issue 任务清单](plans/_archive/OPEN_ISSUES_TASK_LIST.md)：#21、#19、#16、#15 的正文与评论分析。
+- [开启 PR 审查任务清单](plans/_archive/OPEN_PRS_TASK_LIST.md)：#14 的实际差异、CI、合并条件与功能审查任务。
 
 ## 开发计划与决策记录
 
 `plans/` 保存已完成轮次的计划文档，以及经过源码核对的需求评估记录。它们不是待办清单，而是决策记录——说明当初为什么这么改、哪些约束在后续修改中必须继续遵守，以及哪些验证还没补齐。
 每份文档文首都标注了状态和对应的实现提交。
 
-- [平台优化（加载 / 安全 / 冗余 / UI / 结构）](plans/PLATFORM_OPTIMIZATION_PLAN.md)
-- [后台管理移动端布局](plans/ADMIN_MOBILE_LAYOUT_PLAN.md)
-- [PR #7 合并检查（私密书签 / 跨分类排序 / 浏览器书签同步）](plans/PR7_MERGE_REVIEW_PLAN.md)
-- [部分导出备份 / 顶部导航分行显示 / 右上角按钮对齐（需求评估）](plans/PARTIAL_EXPORT_AND_TOP_NAV_WRAP_REQUIREMENTS.md)
-- [后台设置页面 UI/UX 调整（需求评估）](plans/SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md)
-- [开发任务规划（设置页 UI/UX + 顶部导航 + 部分导出）](plans/DEV_TASK_BREAKDOWN_UI_NAV_EXPORT.md)
-- [开发任务规划（R-01～R-08 Issue 需求）](plans/DEV_TASK_BREAKDOWN_GITHUB_ISSUES.md)
+- [平台优化（加载 / 安全 / 冗余 / UI / 结构）](plans/_archive/PLATFORM_OPTIMIZATION_PLAN.md)
+- [后台管理移动端布局](plans/_archive/ADMIN_MOBILE_LAYOUT_PLAN.md)
+- [PR #7 合并检查（私密书签 / 跨分类排序 / 浏览器书签同步）](plans/_archive/PR7_MERGE_REVIEW_PLAN.md)
+- [部分导出备份 / 顶部导航分行显示 / 右上角按钮对齐（需求评估）](plans/_archive/PARTIAL_EXPORT_AND_TOP_NAV_WRAP_REQUIREMENTS.md)
+- [后台设置页面 UI/UX 调整（需求评估）](plans/_archive/SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md)
+- [开发任务规划（设置页 UI/UX + 顶部导航 + 部分导出）](plans/_archive/DEV_TASK_BREAKDOWN_UI_NAV_EXPORT.md)
+- [开发任务规划（R-01～R-08 Issue 需求）](plans/_archive/DEV_TASK_BREAKDOWN_GITHUB_ISSUES.md)
 - [前端体验与自用效率优化（需求评估）](plans/FRONTEND_EXPERIENCE_OPTIMIZATION_REQUIREMENTS.md)
 - [书签图标本地优先与隐私分级缓存（已裁定需求基线）](plans/BOOKMARK_ICON_LOCAL_FIRST_REQUIREMENTS.md)：七项产品选择已确认，包含书签第一阶段与分类第二阶段规划、10 MiB 联合预算、离线/撤回、迁移/回滚及验收；不构成开发授权。
 - [书签图标本地优先开发计划](plans/BOOKMARK_ICON_LOCAL_FIRST_DEVELOPMENT.md)：依据已裁定需求，明确架构与状态所有权、内容版本与专用协议、一期书签/二期分类工作包、迁移回滚及验收映射；仅为计划，尚未实施。
-- [设置页 UI/UX 改造规范（原始草案，已被 `SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md` 取代）](plans/UI_UX_Plan.md)
+- [设置页 UI/UX 改造规范（原始草案，已被 `SETTINGS_UI_UX_ADJUSTMENT_REQUIREMENTS.md` 取代）](plans/_archive/UI_UX_Plan.md)
 - [跨设备便笺与文件传输助手实现计划](plans/TRANSFER_NOTES_PLAN.md)
 - [跨设备便笺与文件传输助手设计方案](plans/TRANSFER_NOTES_DESIGN.md)
 

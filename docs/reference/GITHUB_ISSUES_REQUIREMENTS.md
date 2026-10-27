@@ -4,7 +4,7 @@
 >
 > **闭环快照日期：** 2026-09-13（v0.4.0 闭环时点）；表中 GitHub 时间统一按 UTC 记录。
 > **历史查询范围：** 本版关联 #9～#13、#15 的状态，以及闭环时的 Open Issue 列表；不包含 Pull Request。
-> **闭环时 Open 数量：** 2 个，#15、#16；#16 为本版范围外的新增需求。后续开放需求与新报告见 [开启 Issue 任务清单](../plans/OPEN_ISSUES_TASK_LIST.md)，不要把本段当作当前开放全集。
+> **闭环时 Open 数量：** 2 个，#15、#16；#16 为本版范围外的新增需求。后续开放需求与新报告见 [开启 Issue 任务清单](../plans/_archive/OPEN_ISSUES_TASK_LIST.md)，不要把本段当作当前开放全集。
 > **文档目的：** 将云端 Issue 的原始问题、重复关系和待确认信息整理为一份可执行的产品与 UI 规划，并明确 PC、移动端边界。
 
 本文保留需求来源、历史建议方案与验收依据，不替后续需求作实现承诺或优先级决策。§1、§3 是 v0.4.0 云端闭环快照，实时状态以 GitHub Issue 为准；§4、§7 的 Tn 记录保留当时进度，不作为当前未完成清单。
@@ -374,7 +374,7 @@ GitHub 的 Issue 与 Pull Request 共用编号，因此编号不连续不代表�
 - Issue 正文：`gh issue view <number> --repo lbjxr/CF-Navs --json body`
 - Issue 元数据：`gh issue list --repo lbjxr/CF-Navs --state all --limit 100 --json number,title,state,labels,author,createdAt,updatedAt,closedAt,url`
 - 评论：通过 GitHub Issue 评论接口读取；本文只保留稳定的 Issue / 评论链接，不保留临时签名附件地址。
-- **Closed Issue #8 追溯（PROB-26）**：#8 中已实现的“部分导出”诉求对应 R-08；“顶部导航分行”诉求的实现依据为 `docs/plans/PARTIAL_EXPORT_AND_TOP_NAV_WRAP_REQUIREMENTS.md` 与 `src/components/Sidebar.svelte`，不新立 R 编号。#8 的 `bug-fixed` 标签只对应“Chrome 侧栏白色原生滚动条”这一项，不代表上述两项诉求均已由云端关闭确认。
+- **Closed Issue #8 追溯（PROB-26）**：#8 中已实现的“部分导出”诉求对应 R-08；“顶部导航分行”诉求的实现依据为 `docs/plans/_archive/PARTIAL_EXPORT_AND_TOP_NAV_WRAP_REQUIREMENTS.md` 与 `src/components/Sidebar.svelte`，不新立 R 编号。#8 的 `bug-fixed` 标签只对应“Chrome 侧栏白色原生滚动条”这一项，不代表上述两项诉求均已由云端关闭确认。
 - 项目现状：`docs/reference/PROJECT_OVERVIEW.md`、`docs/reference/API_CONTRACT.md` 及本文第 2 节列出的源码路径。
 
 补充 R-01～R-08 的验收证据时应注明对应时间和来源，保留原有历史语境；新一轮开放需求分析见独立任务清单。不要把“本地已有代码”直接等同于“云端 Issue 已关闭”，也不要将本文维护成另一份实时进度表。

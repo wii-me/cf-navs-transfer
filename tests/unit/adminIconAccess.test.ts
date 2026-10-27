@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte'
 import { tick } from 'svelte'
 import CategoryListPanel from '../../src/components/admin/CategoryListPanel.svelte'
 import BookmarkListPanel from '../../src/components/admin/BookmarkListPanel.svelte'
 import AnalyticsPanel from '../../src/components/admin/AnalyticsPanel.svelte'
 import { iconAccessKey } from '../../src/lib/iconAccessKey'
+vi.mock('../../src/lib/localIconView', () => import('../helpers/inactiveLocalIconView'))
 
 // PROB-35 方案 (a)：后台三个面板只给「有效私密」对象的对象代理图标 URL 附加访问 key，
 // 公开对象保持匿名 `/api/{icon,category-icon}/:id?v=...`（可命中共享缓存）。
@@ -41,7 +42,7 @@ const bookmarks = [
   bookmark({ id: 3, category_id: 3, is_private: false }), // 私密祖先链下的公开书签 → 带 key
 ]
 
-const imgBySrc = (root: ParentNode, fragment: string): Element | undefined =>
+const imgBySrc = (root: Element, fragment: string): Element | undefined =>
   Array.from(root.querySelectorAll('img')).find((img) => (img.getAttribute('src') ?? '').includes(fragment))
 
 beforeEach(() => {

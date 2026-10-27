@@ -37,8 +37,8 @@ describe('legacy icon-copy migration', () => {
 
     const result = await migrate()
 
-    expect(result).toEqual({ complete: true, removedLocalStorageKeys: 1, deletedCaches: [LEGACY_ICON_CACHE_NAMES[0]] })
-    expect(storage.keys()).toEqual(['cf-navs.icon-device-v1', 'cf-navs.theme', 'unrelated.bookmark-icon.value'])
+    expect(result).toEqual({ complete: true, removedLocalStorageKeys: 2, deletedCaches: [LEGACY_ICON_CACHE_NAMES[0]] })
+    expect(storage.keys()).toEqual(['cf-navs.theme', 'unrelated.bookmark-icon.value'])
     expect(names).toEqual([CURRENT_EXTERNAL_ICON_CACHE_NAME, 'cf-navs-shell-v7'])
     expect(deleted).toEqual([LEGACY_ICON_CACHE_NAMES[0]])
   })
@@ -67,7 +67,7 @@ describe('legacy icon-copy migration', () => {
   it('reports partial cleanup failures and succeeds on a later retry', async () => {
     const storage = memoryStorage({ [`${LEGACY_ICON_LOCAL_STORAGE_PREFIX}1-old`]: 'old' })
     let denyCacheDelete = true
-    const names = [LEGACY_ICON_CACHE_NAMES[0]]
+    const names: string[] = [LEGACY_ICON_CACHE_NAMES[0]]
     const migrate = createLegacyIconCopyMigrator({
       localStorage: () => storage,
       caches: () => ({

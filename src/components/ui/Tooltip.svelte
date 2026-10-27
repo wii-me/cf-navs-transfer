@@ -1,3 +1,5 @@
+<svelte:options runes />
+
 <script lang="ts">
   // 统一的 (?) Tooltip。承载「系统逻辑/权限」类说明。
   // 桌面：hover + 键盘聚焦触发；移动端触屏：点按切换（Tap to toggle，OQ-C 方案 1）。
@@ -5,16 +7,22 @@
   import { onDestroy, onMount, tick } from 'svelte'
   import { nextTooltipId, openTooltipId } from '../../lib/tooltipStore'
 
-  export let text = ''
-  export let label = '查看说明'
+  interface Props {
+    text?: string
+    label?: string
+  }
+
+  let { text = '', label = '查看说明' }: Props = $props()
 
   const id = nextTooltipId()
   const bubbleId = `${id}-bubble`
+  // 元素引用与 pinned / hovering / positionFrame 只在处理器与定位函数里读，保持普通变量；
+  // 气泡在 {#if} 内反复挂载 / 卸载，其引用用 $state（DOM 节点不会被代理），避免 non_reactive_update。
   let anchorEl: HTMLElement | null = null
   let triggerEl: HTMLButtonElement | null = null
-  let bubbleEl: HTMLElement | null = null
-  let bubbleStyle = 'visibility: hidden;'
-  let open = false
+  let bubbleEl: HTMLElement | null = $state(null)
+  let bubbleStyle = $state('visibility: hidden;')
+  let open = $state(false)
   let pinned = false
   let hovering = false
   let positionFrame: number | null = null
@@ -108,13 +116,13 @@
   }
 </script>
 
-<svelte:window on:pointerdown={handleWindowPointerDown} on:keydown={handleKeydown} />
+<svelte:window onpointerdown={handleWindowPointerDown} onkeydown={handleKeydown} />
 
 <span
   class="ui-tooltip"
   bind:this={anchorEl}
-  on:mouseenter={show}
-  on:mouseleave={hide}
+  onmouseenter={show}
+  onmouseleave={hide}
   role="presentation"
 >
   <button
@@ -124,9 +132,9 @@
     aria-label={label}
     aria-expanded={open}
     aria-describedby={open && text ? bubbleId : undefined}
-    on:click={togglePinned}
-    on:focus={show}
-    on:blur={hide}
+    onclick={togglePinned}
+    onfocus={show}
+    onblur={hide}
   >?</button>
   {#if open && text}
     <span

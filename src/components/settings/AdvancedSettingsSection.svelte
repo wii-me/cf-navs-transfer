@@ -1,3 +1,5 @@
+<svelte:options runes />
+
 <script lang="ts">
   import { tick } from 'svelte'
   import {
@@ -18,17 +20,23 @@
   import Slider from '../ui/Slider.svelte'
   import Tooltip from '../ui/Tooltip.svelte'
 
-  export let form: SettingsFormModel
-  export let saving = false
+  interface Props {
+    form: SettingsFormModel
+    saving?: boolean
+  }
 
-  $: normalizedForm = normalizeSettingsForm(form)
-  $: lightBackgroundValid = normalizedForm.backgrounds.light.value.length > 0
-  $: darkBackgroundValid = normalizedForm.backgrounds.dark.value.length > 0
-  $: uploadHost = form.image_host_url.trim()
+  // SettingsPanel 以 `bind:form` 传入；本分区与子分区（CategoryDisplay）写回整份 form。
+  let { form = $bindable(), saving = false }: Props = $props()
 
-  let activeTheme: 'light' | 'dark' = 'light'
-  $: activeBackground = activeTheme === 'light' ? form.backgrounds.light : form.backgrounds.dark
-  $: activeBackgroundValid = activeTheme === 'light' ? lightBackgroundValid : darkBackgroundValid
+  const normalizedForm = $derived(normalizeSettingsForm(form))
+  const lightBackgroundValid = $derived(normalizedForm.backgrounds.light.value.length > 0)
+  const darkBackgroundValid = $derived(normalizedForm.backgrounds.dark.value.length > 0)
+  const uploadHost = $derived(form.image_host_url.trim())
+
+  let activeTheme: 'light' | 'dark' = $state('light')
+  // form 来自 SettingsPanel 的 $state 时是深层代理：ThemeBackgroundCard 沿用这个代理，字段写入即时反映到父表单。
+  const activeBackground = $derived(activeTheme === 'light' ? form.backgrounds.light : form.backgrounds.dark)
+  const activeBackgroundValid = $derived(activeTheme === 'light' ? lightBackgroundValid : darkBackgroundValid)
 
   async function syncForm(): Promise<void> {
     await tick()
@@ -51,8 +59,8 @@
   class="advanced-settings-section"
   aria-label="高级设置"
   disabled={saving}
-  on:input={() => void syncForm()}
-  on:change={() => void syncForm()}
+  oninput={() => void syncForm()}
+  onchange={() => void syncForm()}
 >
   <div id="settings-appearance-advanced" class="advanced-content" data-testid="appearance-advanced">
     <div class="settings-subsection">
@@ -79,8 +87,8 @@
             background={activeBackground}
             valid={activeBackgroundValid}
             {uploadHost}
-            on:change={(event) => updateThemeBackground(activeTheme, event.detail)}
-            on:upload={openUpload}
+            onchange={(background) => updateThemeBackground(activeTheme, background)}
+            onupload={openUpload}
           />
         {/key}
       </div>
@@ -102,7 +110,7 @@
             disabled={form.card_style !== 'info'}
             bind:value={form.card_size.width}
             ariaLabel="详情卡片列宽下限"
-            on:input={() => void syncForm()}
+            oninput={() => void syncForm()}
           />
           {#if form.card_style === 'info' && form.card_size.width >= CARD_SIZE_LIMITS.width.min && form.card_size.width <= 68}
             <small class="warn">当前宽度下详情卡只显示图标：标题与描述的可用宽度为 0。标题约需 120 px 才完整显示。移动端仍按 150 px 安全下限渲染。</small>
@@ -125,7 +133,7 @@
             disabled={form.card_style !== 'info'}
             bind:value={form.card_size.height}
             ariaLabel="详情卡片最小高度"
-            on:input={() => void syncForm()}
+            oninput={() => void syncForm()}
           />
         </label>
         <label class="field field-number" class:disabled={form.card_style !== 'icon'} for="settings-card-icon">
@@ -141,7 +149,7 @@
             disabled={form.card_style !== 'icon'}
             bind:value={form.card_icon_size}
             ariaLabel="极简卡片图标大小"
-            on:input={() => void syncForm()}
+            oninput={() => void syncForm()}
           />
         </label>
       </div>
@@ -155,7 +163,7 @@
           <ColorAlphaInput
             bind:value={form.card_background_color}
             bind:alpha={form.card_background_opacity}
-            on:change={() => void syncForm()}
+            onchange={() => void syncForm()}
             placeholder="#ffffff"
             inputLabel="卡片表面颜色值"
             swatchTitle="选择卡片表面颜色"
@@ -171,7 +179,7 @@
             max={1}
             step={0.05}
             bind:value={form.card_background_opacity}
-            on:input={() => void syncForm()}
+            oninput={() => void syncForm()}
           />
         </div>
 
@@ -179,7 +187,7 @@
           <span>卡片文字颜色</span>
           <ColorAlphaInput
             bind:value={form.card_text_color}
-            on:change={() => void syncForm()}
+            onchange={() => void syncForm()}
             placeholder="留空跟随系统高对比色"
             inputLabel="卡片文字颜色值"
             swatchTitle="选择卡片文字颜色"

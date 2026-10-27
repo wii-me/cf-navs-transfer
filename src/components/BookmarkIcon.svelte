@@ -1,17 +1,34 @@
+<svelte:options runes />
+
 <script lang="ts">
   import { createNativeImageWatchdog } from '../lib/nativeImageWatchdog'
   type AsyncVoid<T = void> = T | Promise<T>
 
-  export let title = ''
-  export let iconUrl = ''
-  export let iconText = ''
-  export let size = 0
-  export let iconStyle = ''
-  export let hasCustomBackground = false
-  export let variant: 'info' | 'compact' = 'info'
-  export let themeOverride: 'light' | 'dark' | null = null
-  export let onError: (() => AsyncVoid) | undefined = undefined
-  export let onLoad: (() => AsyncVoid) | undefined = undefined
+  interface Props {
+    title?: string
+    iconUrl?: string
+    iconText?: string
+    size?: number
+    iconStyle?: string
+    hasCustomBackground?: boolean
+    variant?: 'info' | 'compact'
+    themeOverride?: 'light' | 'dark' | null
+    onError?: () => AsyncVoid
+    onLoad?: () => AsyncVoid
+  }
+
+  let {
+    title = '',
+    iconUrl = '',
+    iconText = '',
+    size = 0,
+    iconStyle = '',
+    hasCustomBackground = false,
+    variant = 'info',
+    themeOverride = null,
+    onError,
+    onLoad,
+  }: Props = $props()
 
   function handleError() {
     void onError?.()
@@ -45,8 +62,8 @@
       decoding="async"
       fetchpriority="low"
       use:watchObjectImage={iconUrl}
-      on:error={handleError}
-      on:load={handleLoad}
+      onerror={handleError}
+      onload={handleLoad}
     />
   {:else}
     <span class="icon-text">{iconText}</span>

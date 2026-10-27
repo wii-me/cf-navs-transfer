@@ -1,7 +1,7 @@
 import { ICON_SNAPSHOT_VERSION, needsIconSnapshotRefresh, projectBookmarkIconSnapshot } from './iconSnapshot'
 import type { AdminData } from '../../shared/types'
 import { normalizeCategories } from '../../shared/categoryHierarchy'
-import { getStoredAuthSession } from './api'
+import { getStoredAuthSession } from './authSession'
 import { isRecord } from './guards'
 import { clearSnapshots, currentSnapshotOrigin, hashSnapshotScope, pruneOtherSnapshots, readSnapshot, removeSnapshot, type SnapshotStorageConfig, writeSnapshot } from './snapshotStorage'
 

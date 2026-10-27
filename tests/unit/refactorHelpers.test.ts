@@ -3,7 +3,6 @@ import { ErrCode, type PublicBookmark, type PublicCategory } from '../../shared/
 import { ApiError } from '../../src/lib/api'
 import { toBookmarkPayload, toCategoryPayload } from '../../src/lib/adminFormAdapters'
 import {
-  applySortOrder,
   buildPublicDataAfterCategoryDelete,
   removeById,
   updateBookmarkIconBlob,
@@ -92,6 +91,7 @@ describe('refactored helper modules', () => {
       ...bookmarkA,
       title: 'Updated GitHub',
       open_method: 2,
+      created_at: 0,
     }).map((bookmark) => bookmark.title)).toEqual(['Updated GitHub'])
 
     expect(buildPublicDataAfterCategoryDelete([categoryA, categoryB], [bookmarkA, bookmarkB], 1)).toEqual({
@@ -137,7 +137,9 @@ describe('refactored helper modules', () => {
       icon_source: 'iconify',
       icon_background_color: '  #fff  ',
       description: '  Help  ',
+      description_mode: 'inherit',
       open_method: 'modal',
+      is_private: false,
     })).toMatchObject({
       category_id: 2,
       title: 'Docs',
