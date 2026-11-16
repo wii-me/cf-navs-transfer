@@ -211,6 +211,13 @@
     spotlightOpen = false
   }
 
+  async function createBookmarkFromSearch(url: string): Promise<void> {
+    closeSpotlight()
+    // 先让搜索面板归还焦点和滚动锁，再打开共用的书签表单。
+    await tick()
+    await bookmarkController.openCreate(undefined, url)
+  }
+
   function openBookmarkView(bookmark: PublicBookmark): void {
     viewBookmark = bookmark
   }
@@ -498,7 +505,6 @@
           isAuthenticated={$isAuthenticated}
           authLoading={$authStore.loading}
           onOpenCreateCategory={categoryController.openCreate}
-          onOpenCreateRootCategory={categoryController.openCreateRoot}
           focusCategoryId={homeFocusCategoryId}
           onOpenCreateBookmark={bookmarkController.openCreate}
           onEditBookmark={bookmarkController.openEdit}
@@ -620,6 +626,7 @@
         categories={publicData?.categories ?? []}
         onClose={closeSpotlight}
         onViewBookmark={openBookmarkView}
+        onCreateBookmark={createBookmarkFromSearch}
       />
     {/if}
 

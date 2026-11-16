@@ -73,7 +73,8 @@ transfersRoutes.get('/', async (c) => {
     const limitParam = Number(url.searchParams.get('limit'))
     const limit = Number.isInteger(limitParam) && limitParam > 0 ? Math.min(limitParam, 100) : 50
     const cursorParam = url.searchParams.get('cursor')
-    const cursor = cursorParam ? Number(cursorParam) : null
+    const cursorNum = cursorParam ? Number(cursorParam) : null
+    const cursor = cursorNum !== null && Number.isFinite(cursorNum) && cursorNum > 0 ? cursorNum : null
 
     const query = cursor
       ? c.env.DB.prepare(
@@ -109,7 +110,7 @@ transfersRoutes.post('/text', async (c) => {
 
   try {
     const now = Date.now()
-    const ttlDays = typeof body.ttlDays === 'number' && body.ttlDays > 0 ? body.ttlDays : null
+    const ttlDays = typeof body.ttlDays === 'number' && Number.isFinite(body.ttlDays) && body.ttlDays > 0 ? body.ttlDays : null
     const expiresAt = ttlDays ? now + ttlDays * 86_400_000 : null
     const id = `tn_${crypto.randomUUID()}`
 
@@ -151,7 +152,12 @@ transfersRoutes.post('/text', async (c) => {
 // POST /api/transfers/file - 上传图片或小文件
 transfersRoutes.post('/file', async (c) => {
   if (!c.env.STORAGE) {
-    return c.json(fail(ErrCode.SERVER_ERROR, 'R2 storage is not configured'))
+    return c.json(
+      fail(
+        ErrCode.SERVER_ERROR,
+        '当前运行环境未配置 R2 对象存储（STORAGE），无法上传文件或图片。请在 Cloudflare 绑定 R2 存储桶，或使用纯文本便笺功能。'
+      )
+    )
   }
 
   let formData: FormData
@@ -171,9 +177,10 @@ transfersRoutes.post('/file', async (c) => {
   }
 
   const ttlDaysParam = formData.get('ttlDays')
-  const ttlDays = ttlDaysParam ? Number(ttlDaysParam) : null
+  const ttlDaysNum = ttlDaysParam ? Number(ttlDaysParam) : null
+  const ttlDays = ttlDaysNum !== null && Number.isFinite(ttlDaysNum) && ttlDaysNum > 0 ? ttlDaysNum : null
   const now = Date.now()
-  const expiresAt = ttlDays && ttlDays > 0 ? now + ttlDays * 86_400_000 : null
+  const expiresAt = ttlDays ? now + ttlDays * 86_400_000 : null
   const id = `tn_${crypto.randomUUID()}`
   const isImage = file.type.startsWith('image/')
   const type = isImage ? 'image' : 'file'
@@ -245,7 +252,9 @@ transfersRoutes.get('/file/:id', async (c) => {
     }
 
     if (!c.env.STORAGE) {
-      return new Response('Storage Unconfigured', { status: 500 })
+      return new Response('Storage Unconfigured: 当前运行环境未配置 R2 对象存储（STORAGE），无法获取该文件。', {
+        status: 503,
+      })
     }
 
     const object = await c.env.STORAGE.get(note.file_key)
@@ -342,7 +351,7 @@ transfersRoutes.post('/clear', async (c) => {
     }
 
     const deleteRes = await c.env.DB.prepare('DELETE FROM transfer_notes').run()
-    const deletedCount = (deleteRes?.meta as any)?.changes ?? 0
+    const deletedCount = (deleteRes?.meta as { changes?: number } | undefined)?.changes ?? 0
 
     const resp: TransferClearResp = {
       success: true,

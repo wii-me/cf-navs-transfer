@@ -1,4 +1,5 @@
 import type {
+  ApiResponse,
   TransferClearResp,
   TransferNote,
   TransferNotesResp,
@@ -33,7 +34,7 @@ export const transferService = {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     })
-    const json = (await res.json()) as any
+    const json = (await res.json()) as ApiResponse<TransferNotesResp>
     if (json.code !== 0) throw new ApiError(json.msg || 'Failed to list transfers')
     return json.data
   },
@@ -49,7 +50,7 @@ export const transferService = {
       },
       body: JSON.stringify({ content, ttlDays }),
     })
-    const json = (await res.json()) as any
+    const json = (await res.json()) as ApiResponse<TransferNote>
     if (json.code !== 0) throw new ApiError(json.msg || 'Failed to send text')
     return json.data
   },
@@ -89,7 +90,7 @@ export const transferService = {
         body: formData,
         signal,
       })
-      const json = (await res.json()) as any
+      const json = (await res.json()) as ApiResponse<TransferNote>
       if (json.code !== 0) throw new ApiError(json.msg || 'Failed to upload file')
       return json.data
     }
@@ -183,7 +184,7 @@ export const transferService = {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     })
-    const json = (await res.json()) as any
+    const json = (await res.json()) as ApiResponse<{ deleted: boolean }>
     if (json.code !== 0) throw new ApiError(json.msg || 'Failed to delete transfer')
   },
 
@@ -196,7 +197,7 @@ export const transferService = {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     })
-    const json = (await res.json()) as any
+    const json = (await res.json()) as ApiResponse<TransferClearResp>
     if (json.code !== 0) throw new ApiError(json.msg || 'Failed to clear transfers')
     return json.data
   },

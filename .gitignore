@@ -47,3 +47,4 @@ docs/screenshots/test-*
 # IDE configuration
 .idea/
 .vscode/
+dist-server/

@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { cleanup, render, screen, fireEvent } from '@testing-library/svelte'
 import TransferDrawer from '../../src/components/TransferDrawer.svelte'
-import { transferStore } from '../../src/lib/stores/transferStore'
+import { transferStore, type TransferState } from '../../src/lib/stores/transferStore'
 
 afterEach(cleanup)
 
@@ -29,7 +29,7 @@ describe('TransferDrawer Component', () => {
     transferStore.openDrawer()
 
     // populate a note
-    const state = {
+    const state: TransferState = {
       notes: [
         {
           id: 't1',
@@ -45,13 +45,13 @@ describe('TransferDrawer Component', () => {
       ],
       loading: false,
       uploading: false,
+      uploadProgress: null,
       hasMore: false,
       drawerOpen: true,
       activeLightboxImage: null,
       error: null,
     }
-    // @ts-ignore
-    transferStore.set ? transferStore.set(state) : null
+    transferStore.set(state)
 
     render(TransferDrawer)
     expect(screen.getByText('Secret code: 123456')).toBeDefined()
@@ -60,7 +60,7 @@ describe('TransferDrawer Component', () => {
 
   it('renders image note with preview img and download button', () => {
     transferStore.openDrawer()
-    const state = {
+    const state: TransferState = {
       notes: [
         {
           id: 'img_1',
@@ -76,13 +76,13 @@ describe('TransferDrawer Component', () => {
       ],
       loading: false,
       uploading: false,
+      uploadProgress: null,
       hasMore: false,
       drawerOpen: true,
       activeLightboxImage: null,
       error: null,
     }
-    // @ts-ignore
-    transferStore.set ? transferStore.set(state) : null
+    transferStore.set(state)
 
     render(TransferDrawer)
     const img = screen.getByAltText('test.png') as HTMLImageElement
@@ -128,7 +128,7 @@ describe('TransferDrawer Component', () => {
 
   it('disables delete button and prevents repeated clicks during in-flight deletion and cooldown', async () => {
     transferStore.openDrawer()
-    const state = {
+    const state: TransferState = {
       notes: [
         {
           id: 'note_1',
@@ -155,13 +155,13 @@ describe('TransferDrawer Component', () => {
       ],
       loading: false,
       uploading: false,
+      uploadProgress: null,
       hasMore: false,
       drawerOpen: true,
       activeLightboxImage: null,
       error: null,
     }
-    // @ts-ignore
-    transferStore.set ? transferStore.set(state) : null
+    transferStore.set(state)
 
     render(TransferDrawer)
 
@@ -204,7 +204,7 @@ describe('TransferDrawer Component', () => {
 
   it('renders upload progress card with progress info and cancel button', async () => {
     transferStore.openDrawer()
-    const state = {
+    const state: TransferState = {
       notes: [],
       loading: false,
       uploading: true,
@@ -223,8 +223,7 @@ describe('TransferDrawer Component', () => {
       activeLightboxImage: null,
       error: null,
     }
-    // @ts-ignore
-    transferStore.set ? transferStore.set(state) : null
+    transferStore.set(state)
 
     render(TransferDrawer)
 
@@ -242,7 +241,7 @@ describe('TransferDrawer Component', () => {
 
   it('renders saving indicator in progress card when stage is saving', () => {
     transferStore.openDrawer()
-    const state = {
+    const state: TransferState = {
       notes: [],
       loading: false,
       uploading: true,
@@ -261,8 +260,7 @@ describe('TransferDrawer Component', () => {
       activeLightboxImage: null,
       error: null,
     }
-    // @ts-ignore
-    transferStore.set ? transferStore.set(state) : null
+    transferStore.set(state)
 
     render(TransferDrawer)
 

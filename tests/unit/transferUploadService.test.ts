@@ -52,15 +52,14 @@ describe('transferService uploadFile with XHR and progress', () => {
       })
       status = 200
       responseText = ''
-      addEventListener = vi.fn((event: string, handler: any) => {
+      addEventListener = vi.fn((event: string, handler: () => void) => {
         if (event === 'load') loadHandler = handler
       })
       removeEventListener = vi.fn()
       abort = vi.fn()
     }
 
-    // @ts-ignore
-    window.XMLHttpRequest = MockXMLHttpRequest
+    vi.stubGlobal('XMLHttpRequest', MockXMLHttpRequest)
 
     const file = new File(['hello'], 'doc.txt', { type: 'text/plain' })
     const note = await transferService.uploadFile(file, {
@@ -74,7 +73,7 @@ describe('transferService uploadFile with XHR and progress', () => {
   })
 
   it('aborts upload when AbortSignal triggers', async () => {
-    let abortHandler: any
+    let abortHandler: (() => void) | undefined
     const abortSpy = vi.fn()
 
     class MockXMLHttpRequest {
@@ -84,15 +83,14 @@ describe('transferService uploadFile with XHR and progress', () => {
       send = vi.fn()
       status = 0
       responseText = ''
-      addEventListener = vi.fn((event: string, handler: any) => {
+      addEventListener = vi.fn((event: string, handler: () => void) => {
         if (event === 'abort') abortHandler = handler
       })
       removeEventListener = vi.fn()
       abort = abortSpy
     }
 
-    // @ts-ignore
-    window.XMLHttpRequest = MockXMLHttpRequest
+    vi.stubGlobal('XMLHttpRequest', MockXMLHttpRequest)
 
     const controller = new AbortController()
     const file = new File(['content'], 'cancel.dat')

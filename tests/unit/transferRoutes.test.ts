@@ -6,7 +6,7 @@ import type { TransferNote } from '../../shared/types'
 
 describe('Transfer Routes', () => {
   let notes: TransferNote[] = []
-  let storageObjects: Map<string, { body: Uint8Array; contentType: string }> = new Map()
+  const storageObjects: Map<string, { body: Uint8Array; contentType: string }> = new Map()
 
   const createMockDb = () => {
     return {
@@ -64,7 +64,7 @@ describe('Transfer Routes', () => {
               const [id, type, content, file_key, file_name, file_size, mime_type, created_at, expires_at] = boundParams
               const newNote: TransferNote = {
                 id: String(id),
-                type: type as any,
+                type: type as TransferNote['type'],
                 content: (content as string) ?? null,
                 file_key: (file_key as string) ?? null,
                 file_name: (file_name as string) ?? null,
@@ -298,5 +298,160 @@ describe('Transfer Routes', () => {
     expect(res.status).toBe(200)
     expect(notes).toHaveLength(0)
     expect(storageObjects.size).toBe(0)
+  })
+
+  describe('when STORAGE binding is undefined (Node / Docker / Cloudflare without R2)', () => {
+    let nodeApp: Hono<HonoEnv>
+
+    beforeEach(() => {
+      notes = []
+      storageObjects.clear()
+
+      nodeApp = new Hono<HonoEnv>()
+      nodeApp.use('*', async (c, next) => {
+        c.env = {
+          DB: createMockDb() as any,
+          STORAGE: undefined,
+        } as any
+        await next()
+      })
+      nodeApp.route('/api/transfers', transfersRoutes)
+    })
+
+    it('gracefully rejects file upload with friendly Chinese error message instead of crashing', async () => {
+      const formData = new FormData()
+      formData.append('file', new File(['test'], 'doc.pdf', { type: 'application/pdf' }))
+
+      const res = await nodeApp.request('/api/transfers/file', {
+        method: 'POST',
+        body: formData,
+      })
+
+      expect(res.status).toBe(200)
+      const body = await res.json<{ code: number; msg: string; data: unknown }>()
+      expect(body.code).not.toBe(0)
+      expect(body.msg).toContain('未配置 R2 对象存储（STORAGE）')
+      expect(body.data).toBeNull()
+    })
+
+    it('returns 503 Service Unavailable when requesting a file without STORAGE', async () => {
+      notes.push({
+        id: 'file_node_1',
+        type: 'file',
+        content: null,
+        file_key: 'transfers/doc.pdf',
+        file_name: 'doc.pdf',
+        file_size: 100,
+        mime_type: 'application/pdf',
+        created_at: Date.now(),
+        expires_at: null,
+      })
+
+      const res = await nodeApp.request('/api/transfers/file/file_node_1')
+      expect(res.status).toBe(503)
+      const text = await res.text()
+      expect(text).toContain('Storage Unconfigured')
+      expect(text).toContain('未配置 R2 对象存储')
+    })
+
+    it('deletes transfer record from DB without crashing when STORAGE is undefined', async () => {
+      notes.push({
+        id: 'file_node_2',
+        type: 'file',
+        content: null,
+        file_key: 'transfers/pic.png',
+        file_name: 'pic.png',
+        file_size: 50,
+        mime_type: 'image/png',
+        created_at: Date.now(),
+        expires_at: null,
+      })
+
+      const res = await nodeApp.request('/api/transfers/file_node_2', { method: 'DELETE' })
+      expect(res.status).toBe(200)
+      const body = await res.json<{ code: number; data: { deleted: boolean } }>()
+      expect(body.code).toBe(0)
+      expect(body.data.deleted).toBe(true)
+      expect(notes).toHaveLength(0)
+    })
+
+    it('clears all transfer records from DB without crashing when STORAGE is undefined', async () => {
+      notes.push({
+        id: 'node_n1',
+        type: 'text',
+        content: 'hello node',
+        file_key: null,
+        file_name: null,
+        file_size: null,
+        mime_type: null,
+        created_at: Date.now(),
+        expires_at: null,
+      })
+      notes.push({
+        id: 'node_n2',
+        type: 'file',
+        content: null,
+        file_key: 'transfers/f.txt',
+        file_name: 'f.txt',
+        file_size: 20,
+        mime_type: 'text/plain',
+        created_at: Date.now(),
+        expires_at: null,
+      })
+
+      const res = await nodeApp.request('/api/transfers/clear', { method: 'POST' })
+      expect(res.status).toBe(200)
+      const body = await res.json<{ code: number; data: { success: boolean; deletedCount: number } }>()
+      expect(body.code).toBe(0)
+      expect(body.data.success).toBe(true)
+      expect(notes).toHaveLength(0)
+    })
+
+    it('purges expired notes from DB during list query without crashing when STORAGE is undefined', async () => {
+      notes.push({
+        id: 'expired_node',
+        type: 'file',
+        content: null,
+        file_key: 'transfers/old.jpg',
+        file_name: 'old.jpg',
+        file_size: 10,
+        mime_type: 'image/jpeg',
+        created_at: 1000,
+        expires_at: 2000,
+      })
+      notes.push({
+        id: 'active_node',
+        type: 'text',
+        content: 'still active',
+        file_key: null,
+        file_name: null,
+        file_size: null,
+        mime_type: null,
+        created_at: Date.now(),
+        expires_at: Date.now() + 100000,
+      })
+
+      const res = await nodeApp.request('/api/transfers')
+      expect(res.status).toBe(200)
+      const body = await res.json<{ code: number; data: { items: TransferNote[] } }>()
+      expect(body.code).toBe(0)
+      expect(body.data.items).toHaveLength(1)
+      expect(body.data.items[0].id).toBe('active_node')
+      expect(notes).toHaveLength(1)
+    })
+
+    it('creates pure text transfers seamlessly in Node environment without STORAGE', async () => {
+      const res = await nodeApp.request('/api/transfers/text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: 'Seamless text under Node' }),
+      })
+
+      expect(res.status).toBe(200)
+      const body = await res.json<{ code: number; data: TransferNote }>()
+      expect(body.code).toBe(0)
+      expect(body.data.content).toBe('Seamless text under Node')
+      expect(notes).toHaveLength(1)
+    })
   })
 })

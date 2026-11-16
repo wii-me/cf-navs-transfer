@@ -257,15 +257,27 @@
     return `${days}天后过期`
   }
 
-  function renderFormattedText(text: string): string {
-    const escaped = text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;')
+  interface TextSegment {
+    isUrl: boolean
+    text: string
+  }
+
+  function parseFormattedText(text: string): TextSegment[] {
     const urlPattern = /(https?:\/\/[^\s<>&"']+)/g
-    return escaped.replace(urlPattern, (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer" class="link-url">${url}</a>`)
+    const segments: TextSegment[] = []
+    let lastIndex = 0
+    let match: RegExpExecArray | null
+    while ((match = urlPattern.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        segments.push({ isUrl: false, text: text.slice(lastIndex, match.index) })
+      }
+      segments.push({ isUrl: true, text: match[0] })
+      lastIndex = urlPattern.lastIndex
+    }
+    if (lastIndex < text.length) {
+      segments.push({ isUrl: false, text: text.slice(lastIndex) })
+    }
+    return segments
   }
 
   onMount(() => {
@@ -403,7 +415,13 @@
             <div class="note-body">
               {#if note.type === 'text'}
                 <div class="text-content">
-                  {@html renderFormattedText(note.content || '')}
+                  {#each parseFormattedText(note.content || '') as seg}
+                    {#if seg.isUrl}
+                      <a href={seg.text} target="_blank" rel="noopener noreferrer" class="link-url">{seg.text}</a>
+                    {:else}
+                      {seg.text}
+                    {/if}
+                  {/each}
                 </div>
                 <div class="card-footer">
                   <button

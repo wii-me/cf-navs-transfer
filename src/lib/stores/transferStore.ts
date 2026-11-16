@@ -128,8 +128,11 @@ export function createTransferStore(service = transferService) {
         }))
         currentUploadAbortController = null
         return true
-      } catch (err: any) {
-        const isAborted = err?.name === 'AbortError' || currentUploadAbortController?.signal.aborted
+      } catch (err: unknown) {
+        const isAborted =
+          (err instanceof Error && err.name === 'AbortError') ||
+          (typeof err === 'object' && err !== null && 'name' in err && (err as { name: string }).name === 'AbortError') ||
+          Boolean(currentUploadAbortController?.signal.aborted)
         currentUploadAbortController = null
         update((s) => ({
           ...s,

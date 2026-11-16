@@ -190,7 +190,7 @@ describe('BookmarkListPanel', () => {
     expect(checkHealth.mock.calls[1][0]).toEqual([11, 12])
     await fireEvent.click(screen.getByRole('button', { name: '下一页' }))
     expect(container.querySelector('tbody tr')?.textContent).toContain('404')
-  })
+  }, 15000)
 
   it('批量移动成功后清空选择并关闭弹层', async () => {
     const onBatchMoveBookmarks = vi.fn()

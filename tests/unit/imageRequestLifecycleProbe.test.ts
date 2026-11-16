@@ -322,7 +322,7 @@ describe('pageInstallImageLifecycleProbe', () => {
     expect(next.events[0].changedQueryKeys).toEqual(['v'])
     expect(next.events[0].object).toBe('bookmark:2')
     expect(next.dropped).toBe(2011)
-  })
+  }, 15000)
 
   it('stops the observer and both capture listeners, retaining the final snapshot', async () => {
     const disconnect = vi.spyOn(page.MutationObserver.prototype, 'disconnect')

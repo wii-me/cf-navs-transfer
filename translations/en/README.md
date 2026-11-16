@@ -22,6 +22,9 @@
   <a href="https://github.com/lbjxr/CF-Navs/fork">
     <img src="https://img.shields.io/badge/Fork_on_GitHub-181717?logo=github&logoColor=white" alt="Fork on GitHub">
   </a>
+  <a href="https://github.com/lbjxr/CF-Navs">
+    <img src="https://img.shields.io/badge/%E2%AD%90_Star-FFC107?style=flat" alt="Star this project on GitHub">
+  </a>
 </div>
 
 **Languages:** [简体中文](../../README.md)
@@ -41,7 +44,7 @@
 | 🔒 | Private Bookmarks | When adding or editing a bookmark, you can mark it as a "Private Link (visible only to logged-in users)." Regular visitors will not receive data for private bookmarks, while administrators can view and manage them normally after logging in. |
 | 🗂️ | Private Categories | A category can be set to "Hidden from visitors (visible only to logged-in users)." Visitors will not see the category, its subcategories, or the bookmarks within them. Administrators can still manage them normally after logging in. |
 | ↕️ | Cross-Category Reordering | Supports moving bookmarks between primary, secondary, and empty categories, as well as adjusting their order within a category. Use drag-and-drop on PC, or the "Move to Category" option on mobile. Save or cancel all changes at once. |
-| 🔄 | Browser Bookmark Sync | One-way sync can be enabled in the backend. The Chrome/Edge extension will place any newly added bookmarks into the "Browser Additions" collection, without altering existing categories or deleting bookmarks on the navigation page. |
+| 🔄 | Browser Bookmark Sync | One-way sync can be enabled in the backend. The Chrome/Edge extension opens a category picker in the browser's upper-right area for new bookmarks, lets you edit the title and URL before confirmation, and writes to the selected category without changing the category structure or deleting navigation bookmarks. |
 | 📊 | Access Analytics | Clicks on homepage bookmarks are tallied. The backend provides statistics on total clicks, visited vs. unvisited bookmarks, a Top 20 list of most visited bookmarks, and a paginated list of unvisited bookmarks. The latest data is refreshed when you enter the analytics page. |
 | 🎨 | Appearance Customization | Includes 22 built-in themes, light/dark mode, background and accent color options. Font size and icon size for categories can be set separately for primary and secondary levels. Card size, transparency, and footer HTML / CSS / JavaScript are all customizable. CSS and footers support isolated previews. |
 | 🔎 | Search & Icons | Offers site-wide group search, configurable external search engines, and support for displaying bookmark Favicons / Iconify icons, category images, text, and emoji icons. |
@@ -58,7 +61,7 @@ Prefer a compact layout? The minimum width for desktop detail cards can be set t
 - **Private Categories**: Administrators can check the "Hidden from visitors (visible only to logged-in users)" box when editing a category in the backend. Unauthenticated visitors will not receive data for this category, its subcategories, or the bookmarks within them. Administrators can still view and manage them normally after logging in. Existing categories remain visible to visitors by default.
 - **Cross-Category Drag-and-Drop**: After logging in as an administrator, click "Reorder" on any category on the homepage to enter a unified reordering session. On PC, you can drag bookmarks into primary, secondary, or empty categories and adjust their positions. On mobile, you can select a target category via "Move to Category." Click "Save Reorder" at the bottom to save all category and order changes, or "Cancel" to discard the current session's modifications.
 - **Batch Movement**: When a large number of bookmarks need to be reorganized, you can filter and select multiple bookmarks in the backend, choose a target category, confirm the full path, and complete the move in one go—no need to open individual edit forms.
-- **Browser Bookmark Sync**: After enabling "Browser Bookmark Sync" under "Settings → Site Settings" in the backend, a "Browser Additions" category will be created automatically. Once you install and log in with the Chrome/Edge extension from [`browser-extension`](../../browser-extension/), any new web bookmarks added in your browser will be synced to this category. They will be saved with icon candidates following the default icon strategy (`https://favicon.im/<hostname>?larger=true`). The extension does not create navigation categories based on browser bookmark folders; it only performs a one-way addition from "Browser → Navigation Page" without deleting or overwriting existing bookmarks on the navigation page. You can then drag them to other categories directly in the homepage's reorder mode.
+- **Browser Bookmark Sync**: Enable "Browser Bookmark Sync" under "Settings → Site Settings", then install and log in with the Chrome/Edge extension from [`browser-extension`](../../browser-extension/). Once connected, the extension home page collapses the address, username, and password fields into a connection summary; click "Edit login information" to expand them, while an expired or missing session automatically expands the form. New browser bookmarks show a floating category picker in the current page's upper-right area; click the extension icon to show or hide the panel, or click the surrounding webpage to dismiss it. Edit the title and URL before confirming the selected primary or secondary category. They receive the default icon candidate (`https://favicon.im/<hostname>?larger=true`). Unconfirmed bookmarks remain in a pending list where users can select, defer, or manually delete records; the list dynamically marks records that no longer exist in browser bookmarks. The extension does not create navigation categories based on browser folders; it only adds bookmarks one-way without deleting or overwriting existing navigation bookmarks. After updating an installed extension, reload it and refresh open webpages as described in the [extension update instructions](../../browser-extension/README.md#更新已安装的扩展).
 
 ## Interface Preview
 
@@ -94,11 +97,23 @@ More interface screenshots can be found in [`docs/screenshots`](../../docs/scree
 
 ## Quick Deployment
 
-**Don't want to bother with servers? We recommend starting with a console-based deployment.** Prepare your GitHub and Cloudflare accounts, then complete the deployment by following "Fork → Link Repository → Set Installation Token → Initialize via Webpage." A normal installation does not require manual SQL execution or entering a Cloudflare API Token.
+**Don't want to mess with servers? We recommend starting with a console deployment.** Prepare your GitHub and Cloudflare accounts, then complete the deployment by following "Fork → Associate Repository → Set Installation Token → Initialize via Web". A normal installation does not require manually executing SQL or entering a Cloudflare API Token. If Workers Builds / Git import is unavailable, you can use the [GitHub Actions Alternative Deployment](../../docs/guides/DEPLOYMENT.md#方式三github-actions备选); however, associating a Cloudflare account is still the recommended default method.
 
 You can start with Cloudflare's free plan, but the free tier is not unlimited. Requests, databases, and KV operations each have quotas. For details, refer to the official documentation for [Workers](https://developers.cloudflare.com/workers/platform/pricing/), [D1](https://developers.cloudflare.com/d1/platform/pricing/), and [KV](https://developers.cloudflare.com/kv/platform/pricing/).
 
-When using it for the first time, please complete one deployment method in its entirety. Do not mix the two processes. Both methods will ultimately initialize the database and administrator account via `/install`.
+For your first use, please select a deployment method and complete the entire process. Do not mix the two procedures. Regardless of the method you use, the database and administrator account will ultimately be initialized via `/install`.
+
+### Self-hosted (Docker)
+
+You can also self-host without using Cloudflare: this repository also provides a Docker deployment for Node + SQLite (runtime is in `server/`, deployment assets are in `docker/`). The application features are identical to the Cloudflare version, and there is a ready-made import tool for migrating data from Cloudflare:
+
+```bash
+git clone https://github.com/lbjxr/CF-Navs.git
+cd CF-Navs/docker
+```
+
+For deployment, reverse proxy, data migration, backup and recovery, and security boundaries, see
+[DOCKER_DEPLOY.md](../../docs/guides/DOCKER_DEPLOY.md).
 
 CF-Navs requires the following Cloudflare resources:
 
@@ -112,11 +127,12 @@ CF-Navs requires the following Cloudflare resources:
 
 This method is suitable for users who want to operate entirely in the browser and avoid installing local tools. After Cloudflare links to your GitHub fork, it will automatically build and deploy from the `main` production branch. When synchronizing upstream updates later, please also update this branch.
 
-#### Step 1: Fork This Repository
+#### Step 1: Fork and Star This Repository
 
 [![Fork on GitHub](https://img.shields.io/badge/Fork-GitHub-181717?style=for-the-badge&logo=github)](https://github.com/lbjxr/CF-Navs/fork)
+[![Star this project on GitHub](https://img.shields.io/badge/%E2%AD%90_Star-FFC107?style=for-the-badge)](https://github.com/lbjxr/CF-Navs)
 
-Click the **"Fork on GitHub"** button above and give it a ⭐ Star!
+Click **Fork** to create your own copy, then click **Star** in the top-right corner of the repository page to follow updates.
 
 #### Step 2: Deploy to Cloudflare Workers
 
