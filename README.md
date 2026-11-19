@@ -9,8 +9,8 @@
   </p>
 
   <p>
-    <a href="https://github.com/lbjxr/CF-Navs"><img src="https://img.shields.io/badge/Based%20On-CF--Navs%20v0.9.5-0052CC?logo=bookmark&logoColor=white" alt="Based on CF-Navs v0.9.5"></a>
-    <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Version-v0.9.5--transfer-2ea44f?logo=git&logoColor=white" alt="Version"></a>
+    <a href="https://github.com/lbjxr/CF-Navs"><img src="https://img.shields.io/badge/Based%20On-CF--Navs%20v0.9.7-0052CC?logo=bookmark&logoColor=white" alt="Based on CF-Navs v0.9.7"></a>
+    <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Version-v0.9.7--transfer-2ea44f?logo=git&logoColor=white" alt="Version"></a>
     <a href="https://workers.cloudflare.com/"><img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare Workers"></a>
     <a href="https://developers.cloudflare.com/d1/"><img src="https://img.shields.io/badge/Cloudflare-D1-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare D1"></a>
     <a href="https://developers.cloudflare.com/kv/"><img src="https://img.shields.io/badge/Cloudflare-KV-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare KV"></a>
@@ -51,7 +51,7 @@
 > 详细历史与代码提交记录请查阅项目完整文件：[`CHANGELOG.md`](CHANGELOG.md)。
 
 <details open>
-<summary><b>🔥 最新版本亮点：v0.9.5-transfer</b></summary>
+<summary><b>🔥 最新版本亮点：v0.9.7-transfer</b></summary>
 <br>
 
 * ⚡ **跨设备传输助手核心能力**：
@@ -59,7 +59,9 @@
   * **剪贴板极速截屏上传 (`Ctrl+V`)**：窗口级监听剪贴板图片直接流式上传至 R2 对象存储，无需保存本地中转；
   * **80MB 大文件直传与防误触保护**：单文件上限放宽至 80MB；点击删除瞬时锁定并激活 400ms 位移安全冷却，杜绝连击误删；
   * **下载安全沙箱与过期自动清理**：注入严格 Anti-XSS CSP 沙箱；惰性轮询过期自动异步清理，出网流量零资费。
-* 🚀 **同步官方 v0.9.1 ~ v0.9.5 核心升级**：
+* 🚀 **同步官方 v0.9.1 ~ v0.9.7 核心升级**：
+  * **空一级分类高频书签聚合恢复**：一级分类保持选中并显示其子分类常用书签（#43）；
+  * **书签编辑即时响应反馈**：右键编辑立即显示外壳读取弹窗，按主键单条精确获取；
   * **Spotlight 搜索无结果快速新增书签**：搜索无结果时直接回车或点击“新增书签”，自动预填网址；
   * **右上角设置菜单体验升级**：入口改为齿轮图标，鼠标悬停展开并在移出后延时 3 秒收起；
   * **Docker 自托管支持**：主仓库官方 Docker 镜像与容器化支持，双运行时兼备；

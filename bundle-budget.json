@@ -1,5 +1,5 @@
 {
-  "_note": "首屏（dist/index.html 引用的入口与 modulepreload）体积预算，单位字节。由 scripts/check-bundle-size.mjs 在 CI 校验；包含传输助手样式与交互组件。基线：JS 278690 / gzip 95800，CSS 96124 / gzip 16292。",
+  "_note": "首屏（dist/index.html 引用的入口与 modulepreload）体积预算，单位字节。由 scripts/check-bundle-size.mjs 在 CI 校验；包含传输助手（TransferDrawer）与书签编辑读取外壳（BookmarkModalShell）样式及交互组件。",
   "js": { "raw": 288000, "gzip": 98500 },
-  "css": { "raw": 102000, "gzip": 18000 }
+  "css": { "raw": 103000, "gzip": 18000 }
 }

@@ -9,8 +9,8 @@
   </p>
 
   <p>
-    <a href="https://github.com/lbjxr/CF-Navs"><img src="https://img.shields.io/badge/Based%20On-CF--Navs%20v0.9.5-0052CC?logo=bookmark&logoColor=white" alt="Based on CF-Navs v0.9.5"></a>
-    <a href="../../CHANGELOG.md"><img src="https://img.shields.io/badge/Version-v0.9.5--transfer-2ea44f?logo=git&logoColor=white" alt="Version"></a>
+    <a href="https://github.com/lbjxr/CF-Navs"><img src="https://img.shields.io/badge/Based%20On-CF--Navs%20v0.9.7-0052CC?logo=bookmark&logoColor=white" alt="Based on CF-Navs v0.9.7"></a>
+    <a href="../../CHANGELOG.md"><img src="https://img.shields.io/badge/Version-v0.9.7--transfer-2ea44f?logo=git&logoColor=white" alt="Version"></a>
     <a href="https://workers.cloudflare.com/"><img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare Workers"></a>
     <a href="https://developers.cloudflare.com/d1/"><img src="https://img.shields.io/badge/Cloudflare-D1-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare D1"></a>
     <a href="https://developers.cloudflare.com/kv/"><img src="https://img.shields.io/badge/Cloudflare-KV-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare KV"></a>
@@ -51,7 +51,7 @@
 > For complete commit history and details, please refer to [`CHANGELOG.md`](../../CHANGELOG.md).
 
 <details open>
-<summary><b>🔥 Latest Highlights: v0.9.5-transfer</b></summary>
+<summary><b>🔥 Latest Highlights: v0.9.7-transfer</b></summary>
 <br>
 
 * ⚡ **Transfer Assistant Core Capabilities**:
@@ -59,7 +59,9 @@
   * **Clipboard Screenshot Upload (`Ctrl+V`)**: Window-level clipboard paste listener directly streams images to Cloudflare R2 without saving local files;
   * **80MB File Transfers & Anti-Misclick Protection**: Single file limit expanded to 80MB; delete button instantly locks with a loading spinner followed by a 400ms layout shift cooldown;
   * **Anti-XSS CSP Sandbox & Auto Cleanup**: Strict CSP sandbox on download endpoints; lazy async purging of expired transfers at zero egress bandwidth cost.
-* 🚀 **Upstream v0.9.1 ~ v0.9.5 Kernel Sync**:
+* 🚀 **Upstream v0.9.1 ~ v0.9.7 Kernel Sync**:
+  * **Restored Hot Bookmarks Aggregation on Empty Root Categories**: Keeps root category selected and aggregates subcategory bookmarks (#43);
+  * **Instant Bookmark Edit Feedback**: Immediately shows modal shell while fetching raw fields by primary key;
   * **Quick Bookmark Creation on Empty Search**: Directly create and prefill bookmarks from empty search results in Home search or Spotlight;
   * **Delayed Collapse on Settings Menu Hover**: Gear icon triggers menu on hover with a 3-second delayed collapse;
   * **Official Docker Self-Hosting Support**: Upstream Docker containerization and Node.js SQLite server support;
